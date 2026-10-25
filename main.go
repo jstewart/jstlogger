@@ -164,7 +164,7 @@ func loadSession(opts options, getenv func(string) string, stderr io.Writer) (st
 	}
 
 	if err := cfg.Validate(opts.overrides.Station); err != nil {
-		printErrors(stderr, path+": ", err)
+		printErrors(stderr, "invalid config file "+path, err)
 		if res.Created {
 			fmt.Fprintf(stderr, "jstlogger: edit %s to set callsign and gridsquare for your station\n", path)
 		}
@@ -173,21 +173,22 @@ func loadSession(opts options, getenv func(string) string, stderr io.Writer) (st
 
 	session, err := config.Resolve(cfg, opts.overrides)
 	if err != nil {
-		printErrors(stderr, "", err)
+		printErrors(stderr, "invalid flags", err)
 		return path, config.Session{}, false
 	}
 	return path, session, true
 }
 
-// printErrors writes each error joined in err to stderr on its own line,
-// as "jstlogger: <prefix><err>".
-func printErrors(stderr io.Writer, prefix string, err error) {
+// printErrors writes a "jstlogger: <header>:" line to stderr, followed by
+// each error joined in err on its own indented line.
+func printErrors(stderr io.Writer, header string, err error) {
 	errs := []error{err}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		errs = joined.Unwrap()
 	}
+	fmt.Fprintf(stderr, "jstlogger: %s:\n", header)
 	for _, e := range errs {
-		fmt.Fprintf(stderr, "jstlogger: %s%v\n", prefix, e)
+		fmt.Fprintf(stderr, "  %v\n", e)
 	}
 }
 

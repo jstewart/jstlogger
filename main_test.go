@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,8 +160,9 @@ func TestRunFirstRunCreatesConfig(t *testing.T) {
 			assert.Equal(t, 1, r.code)
 			assert.FileExists(t, want)
 			assert.Contains(t, r.stderr, "created "+want)
-			assert.Contains(t, r.stderr, "jstlogger: "+want+": stations.home.callsign: required\n")
-			assert.Contains(t, r.stderr, "jstlogger: "+want+": stations.home.gridsquare: required\n")
+			assert.Contains(t, r.stderr, "jstlogger: invalid config file "+want+":\n"+
+				"  stations.home.callsign: required\n"+
+				"  stations.home.gridsquare: required\n")
 			assert.Contains(t, r.stderr, "edit "+want+" to set callsign and gridsquare")
 			assert.Empty(t, r.stdout)
 			assert.False(t, r.tuiCalled)
@@ -217,7 +219,8 @@ func TestRunValidationAndOverrideErrors(t *testing.T) {
 		config string
 		args   []string
 		// fromFile reports whether the errors concern the config file and
-		// so are prefixed with its path; flag errors are not.
+		// so are listed under its path; flag errors are listed under
+		// "invalid flags".
 		fromFile   bool
 		wantStderr []string
 	}{
@@ -253,12 +256,14 @@ func TestRunValidationAndOverrideErrors(t *testing.T) {
 			args := append([]string{"-c", p, "--check-config"}, tt.args...)
 			r := invoke(t, nil, nil, args...)
 			assert.Equal(t, 1, r.code)
-			prefix := "jstlogger: "
+			header := "jstlogger: invalid flags:\n"
 			if tt.fromFile {
-				prefix += p + ": "
+				header = "jstlogger: invalid config file " + p + ":\n"
 			}
+			assert.True(t, strings.HasPrefix(r.stderr, header), "stderr %q should start with %q", r.stderr, header)
+			assert.Equal(t, 1, strings.Count(r.stderr, "jstlogger: "), "only the header is prefixed")
 			for _, want := range tt.wantStderr {
-				assert.Contains(t, r.stderr, prefix+want)
+				assert.Contains(t, r.stderr, "\n  "+want)
 			}
 			assert.NotContains(t, r.stderr, "edit ")
 			assert.Empty(t, r.stdout)
