@@ -48,8 +48,9 @@ type Session struct {
 	RigEnabled bool
 	// Config is the effective config: the input with overrides applied to
 	// the selected station, DefaultStation set to it, and the rig selection
-	// recorded so that loading it again resolves the same session. It
-	// shares no mutable state with the input.
+	// recorded so that loading it again resolves the same session. Its
+	// Stations map and the selected station are copies; everything else is
+	// shared with the input and must not be modified.
 	Config Config
 }
 
