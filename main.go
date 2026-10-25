@@ -118,6 +118,10 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 		fmt.Fprintf(stderr, "jstlogger: %v\nRun 'jstlogger --help' for usage.\n", err)
 		return opts, exitUsage, false
 	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "jstlogger: unexpected argument %q\nRun 'jstlogger --help' for usage.\n", fs.Arg(0))
+		return opts, exitUsage, false
+	}
 	opts.overrides.OperatorSet = fs.Changed("operator")
 
 	var modes []string
@@ -183,9 +187,6 @@ func printErrors(stderr io.Writer, prefix string, err error) {
 		errs = joined.Unwrap()
 	}
 	for _, e := range errs {
-		if ve, ok := errors.AsType[*config.ValidationError](e); ok {
-			e = ve
-		}
 		fmt.Fprintf(stderr, "jstlogger: %s%v\n", prefix, e)
 	}
 }

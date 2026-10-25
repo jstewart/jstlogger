@@ -118,6 +118,8 @@ func TestRunFlagErrors(t *testing.T) {
 		{name: "unknown flag", args: []string{"--bogus"}, wantCode: 2, wantStderr: "unknown flag"},
 		{name: "mode flags exclusive", args: []string{"--version", "--check-config"}, wantCode: 2, wantStderr: "mutually exclusive"},
 		{name: "three mode flags", args: []string{"--print-config", "--print-default-config", "--version"}, wantCode: 2, wantStderr: "mutually exclusive"},
+		{name: "positional argument", args: []string{"check-config"}, wantCode: 2, wantStderr: `unexpected argument "check-config"`},
+		{name: "argument after flag value", args: []string{"--grid", "CM87", "extra"}, wantCode: 2, wantStderr: `unexpected argument "extra"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
