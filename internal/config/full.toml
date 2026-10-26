@@ -1,0 +1,48 @@
+default_station = "home"   # Station used when --station is not given
+
+[stations.home]
+name        = "Home QTH"
+callsign    = "N0CALL"
+dxcc        = 291          # ADIF entity code (291 = USA)
+cq_zone     = 3
+itu_zone    = 6
+gridsquare  = "CM87WJ"
+state       = "CA"         # Primary subdivision; only for some countries
+city        = "Your City"
+rig_profile = "ic7300"     # Falls back to rig.profile when unset
+
+[stations.portable]
+name        = "Portable"
+callsign    = "N0CALL/P"
+dxcc        = 291
+cq_zone     = 3
+itu_zone    = 6
+gridsquare  = "CM88"
+rig_profile = "portable"
+# Default xOTA references for this station.
+# Override at runtime with --pota, --sota, --iota, --wwff.
+pota_references = ["US-1234", "US-5678"]   # Multiple parks ("two-fer")
+sota_reference  = "W6/NC-001"
+iota_reference  = "NA-146"
+wwff_reference  = "KFF-1234"
+
+[rig]
+profile       = "ic7300"   # Used when the station sets no rig_profile
+poll_interval = "1s"
+
+[rig.profiles.ic7300]
+backend = "rigctld"        # "none" | "rigctld"  (later: "flrig")
+host    = "localhost"
+port    = 4532
+
+  # Optional: let jstlogger start rigctld itself.
+  # Leave this out if you already run rigctld (e.g. for WSJT-X).
+  [rig.profiles.ic7300.spawn]
+  model  = 3073                       # Hamlib model number; list with `rigctl -l`
+  device = "/dev/cu.SLAB_USBtoUART"   # Linux: /dev/ttyUSB0
+  baud   = 19200
+
+[rig.profiles.portable]
+backend = "rigctld"
+host    = "localhost"
+port    = 4533

@@ -1,0 +1,9 @@
+# jstlogger configuration
+# Run `jstlogger --print-default-config` to see every available option.
+
+default_station = "home"
+
+[stations.home]
+name       = "Home QTH"
+callsign   = ""   # Required, e.g. "N0CALL"
+gridsquare = ""   # Required, e.g. "CM87WJ"
