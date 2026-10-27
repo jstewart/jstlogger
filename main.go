@@ -2,16 +2,22 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/pflag"
 
 	"jstlogger/internal/config"
+	"jstlogger/internal/rig"
 	"jstlogger/internal/tui"
 )
 
@@ -19,11 +25,54 @@ import (
 // -ldflags "-X main.version=...".
 var version = "dev"
 
-// runTUI starts the terminal UI and blocks until it exits. Tests replace it
-// so the TUI never starts.
-var runTUI = func() error {
-	_, err := tea.NewProgram(tui.New()).Run()
+// runTUI starts the terminal UI, and the rig when the session enables one,
+// and blocks until the UI exits. Rig events are logged to logger and sent to
+// the UI. Tests replace it so the TUI never starts.
+var runTUI = func(ctx context.Context, session config.Session, logger *slog.Logger) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	opts, ok := rigOptions(session)
+	if !ok {
+		_, err := tea.NewProgram(tui.New(), tea.WithContext(ctx)).Run()
+		return err
+	}
+
+	r := rig.New(opts)
+	p := tea.NewProgram(tui.New(tui.WithRig(r)), tea.WithContext(ctx))
+	emit := func(event any) {
+		logEvent(logger, event)
+		p.Send(event)
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		if err := r.Run(ctx, emit); err != nil {
+			// Rig control failed to start; the logger keeps running without it.
+			emit(rig.ConnectionChanged{Status: rig.Disconnected, Err: err})
+		}
+	})
+	_, err := p.Run()
+	cancel()
+	wg.Wait()
 	return err
+}
+
+// rigOptions returns the rig options for session, and false when the
+// session has rig control disabled.
+func rigOptions(session config.Session) (rig.Options, bool) {
+	if !session.RigEnabled {
+		return rig.Options{}, false
+	}
+	p := session.Config.Rig.Profiles[session.RigProfileName]
+	opts := rig.Options{
+		Addr:         net.JoinHostPort(p.Host, strconv.Itoa(p.Port)),
+		PollInterval: session.Config.Rig.PollInterval,
+	}
+	if p.Spawn != nil {
+		opts.Spawn = &rig.Spawn{Model: p.Spawn.Model, Device: p.Spawn.Device, Baud: p.Spawn.Baud}
+	}
+	return opts, true
 }
 
 // Exit codes returned by run.
@@ -41,6 +90,7 @@ type options struct {
 	printConfig        bool
 	printDefaultConfig bool
 	version            bool
+	debug              bool
 }
 
 func main() {
@@ -77,9 +127,18 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return report(stderr, config.WriteTOML(stdout, session.Config))
 	}
 
-	// The session is not yet passed to the TUI.
-	_ = session
-	return report(stderr, runTUI())
+	logger, closeLog := slog.New(slog.DiscardHandler), func() error { return nil }
+	if opts.debug {
+		var err error
+		if logger, closeLog, err = openDebugLog(getenv); err != nil {
+			return report(stderr, err)
+		}
+	}
+	err := runTUI(context.Background(), session, logger)
+	if cerr := closeLog(); cerr != nil {
+		err = errors.Join(err, fmt.Errorf("closing debug log: %w", cerr))
+	}
+	return report(stderr, err)
 }
 
 // newFlagSet returns the jstlogger flag set, writing parsed values to opts
@@ -104,6 +163,7 @@ func newFlagSet(opts *options, stderr io.Writer) *pflag.FlagSet {
 	fs.BoolVar(&opts.printConfig, "print-config", false, "print the effective config as TOML and exit")
 	fs.BoolVar(&opts.printDefaultConfig, "print-default-config", false, "print the full commented default config and exit")
 	fs.BoolVar(&opts.version, "version", false, "print the version and exit")
+	fs.BoolVar(&opts.debug, "debug", false, "write a debug log to $XDG_STATE_HOME/jstlogger/debug.log")
 	return fs
 }
 
