@@ -5,9 +5,9 @@ in Go with the [Charm](https://charm.land) TUI toolkit.
 
 Created by Jason Stewart - K8JST
 
-> **Status:** early development. The app currently has a full-screen layout
-> (header, body, help footer) and global keybindings. QSO entry and logging
-> are not implemented yet.
+> **Status:** early development. The app has a full-screen layout (header,
+> body, help footer), global keybindings and rig control through Hamlib's
+> rigctld. QSO entry and logging are not implemented yet.
 
 ## Planned Features
 
@@ -16,7 +16,6 @@ Some of the features that I envision for jstlogger. These are the ones that are 
 ### Offline Features
 
 - A [mutt-like](http://www.mutt.org/) interface for logging QSOs
-- hamlib, rigctl integration
 - Offline mode will store qsos in an outbox until online, then sync with your logging services
 
 ### Online Features
@@ -61,8 +60,42 @@ The app opens full-screen in the terminal's alternate screen.
 
 | Key            | Action                  |
 | -------------- | ----------------------- |
+| `f`            | Set the rig frequency   |
+| `m`            | Set the rig mode        |
 | `?`            | Show or hide full help  |
 | `q` / `ctrl+c` | Quit                    |
+
+`f` and `m` are only available when rig control is on. In the prompt, press
+`enter` to submit or `esc` to cancel.
+
+### Rig control
+
+jstlogger talks to your radio through Hamlib's `rigctld`. It shows the
+rig's frequency, mode and connection status in the header, and keeps
+retrying if rigctld goes away. Pick a rig profile in the config file (run
+`jstlogger --print-default-config` for a commented example), or choose one
+with `--rig <profile>`. Use `--no-rig` to turn rig control off for a session.
+
+If the profile has a `spawn` table, jstlogger starts rigctld itself and
+stops it on exit. Otherwise it connects to a rigctld that is already
+running.
+
+- **Frequency:** type it in MHz (`14.074`), kHz (`14074`) or Hz
+  (`14074000`), or add a unit (`7074 khz`).
+- **Mode:** type a Hamlib mode name with an optional passband in Hz, such as
+  `USB` or `PKTUSB 3000`. Leave the passband out to use the rig's default.
+
+**Using WSJT-X at the same time:** only one program can own the radio's
+serial port. Let rigctld own it, and point both jstlogger and WSJT-X at the
+same rigctld. In WSJT-X, choose the "Hamlib NET rigctl" rig with the
+rigctld address (for example `localhost:4532`).
+
+### Debug log
+
+Run `jstlogger --debug` to log rig events (state changes, connection
+changes and commands) to `$XDG_STATE_HOME/jstlogger/debug.log`
+(`~/.local/state/jstlogger/debug.log` by default). Watch it with
+`tail -f` in another terminal.
 
 ## Development
 
@@ -76,7 +109,9 @@ just --list    # list all recipes
 ### Project layout
 
 ```
-main.go            entry point; starts the Bubble Tea program
+main.go            entry point; parses flags, loads config and starts the app
+internal/config/   config file loading, validation and session overrides
+internal/rig/      rigctld client: polls the rig and sends it commands
 internal/tui/      Bubble Tea models, keybindings and styles for the UI
 ```
 
@@ -87,7 +122,7 @@ Direct dependencies (see `go.mod`):
 | Module                                                   | Purpose                                                        |
 | -------------------------------------------------------- | -------------------------------------------------------------- |
 | [`charm.land/bubbletea/v2`](https://charm.land/bubbletea) | TUI framework (Elm-style model / update / view)                |
-| [`charm.land/bubbles/v2`](https://charm.land/bubbles)     | Ready-made TUI components (keybindings, help footer)           |
+| [`charm.land/bubbles/v2`](https://charm.land/bubbles)     | Ready-made TUI components (keybindings, help footer, text input) |
 | [`charm.land/lipgloss/v2`](https://charm.land/lipgloss)   | Terminal styling and layout                                    |
 | [`github.com/stretchr/testify`](https://github.com/stretchr/testify) | Test assertions (`assert`, `require`); tests only   |
 
