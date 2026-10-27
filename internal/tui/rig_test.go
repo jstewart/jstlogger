@@ -198,21 +198,21 @@ func TestRigStatus(t *testing.T) {
 		{
 			name: "connecting with state",
 			msgs: []tea.Msg{state},
-			want: []string{"14.074.000 USB 2400", "connecting"},
+			want: []string{"14.074.000 USB", "connecting"},
 		},
 		{
 			name: "connected",
 			msgs: []tea.Msg{rig.ConnectionChanged{Status: rig.Connected}, state},
-			want: []string{"14.074.000 USB 2400", "connected"},
+			want: []string{"14.074.000 USB", "connected"},
 		},
 		{
-			name: "connected default passband",
+			name: "passband is not shown",
 			msgs: []tea.Msg{
 				rig.ConnectionChanged{Status: rig.Connected},
-				rig.StateChanged{State: rig.State{Freq: 7074000, Mode: "PKTUSB"}},
+				rig.StateChanged{State: rig.State{Freq: 7074000, Mode: "PKTUSB", Passband: 3000}},
 			},
 			want:    []string{"7.074.000 PKTUSB", "connected"},
-			wantNot: []string{"PKTUSB 0"},
+			wantNot: []string{"3000"},
 		},
 		{
 			name: "disconnected with retry",
@@ -220,7 +220,7 @@ func TestRigStatus(t *testing.T) {
 				state,
 				rig.ConnectionChanged{Status: rig.Disconnected, Err: errors.New("refused"), RetryIn: 4 * time.Second},
 			},
-			want: []string{"14.074.000 USB 2400", "disconnected · retry 4s"},
+			want: []string{"14.074.000 USB", "disconnected · retry 4s"},
 		},
 		{
 			name:    "disconnected without retry",
@@ -235,7 +235,7 @@ func TestRigStatus(t *testing.T) {
 				state,
 				rig.CommandResult{Command: "set_freq 1", Err: errors.New("boom")},
 			},
-			want:    []string{"14.074.000 USB 2400", "connected"},
+			want:    []string{"14.074.000 USB", "connected"},
 			wantNot: []string{"boom"},
 		},
 	}

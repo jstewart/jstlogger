@@ -170,15 +170,14 @@ func (m Model) promptView() string {
 }
 
 // rigStatusView renders the rig frequency, mode and connection status. The
-// frequency and mode are shown stale unless the rig is connected.
+// frequency and mode are shown stale unless the rig is connected. The
+// passband is not shown: many Hamlib backends report a nominal width for
+// the selected filter rather than the rig's real setting.
 func (m Model) rigStatusView() string {
 	s := m.rigState
 	setting := "—"
 	if s.haveState {
 		setting = formatFreq(s.state.Freq) + " " + s.state.Mode
-		if s.state.Passband != 0 {
-			setting += " " + strconv.Itoa(s.state.Passband)
-		}
 	}
 
 	var status string
