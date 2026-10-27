@@ -39,7 +39,7 @@ var runTUI = func(ctx context.Context, session config.Session, logger *slog.Logg
 	}
 
 	r := rig.New(opts)
-	p := tea.NewProgram(tui.New(tui.WithRig(r)), tea.WithContext(ctx))
+	p := tea.NewProgram(tui.New(tui.WithRig(session.RigProfileName, r)), tea.WithContext(ctx))
 	emit := func(event any) {
 		logEvent(logger, event)
 		p.Send(event)

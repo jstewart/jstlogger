@@ -26,10 +26,12 @@ type RigController interface {
 // Option configures a Model built by New.
 type Option func(*Model)
 
-// WithRig connects the UI to a rig: it shows the rig status in the header and
-// enables the frequency and mode prompts, which send commands to c.
-func WithRig(c RigController) Option {
+// WithRig connects the UI to the rig called name: it shows the rig status in
+// the header and enables the frequency and mode prompts, which send commands
+// to c.
+func WithRig(name string, c RigController) Option {
 	return func(m *Model) {
+		m.rigName = name
 		m.rig = c
 	}
 }
@@ -187,11 +189,7 @@ func (m Model) rigStatusView() string {
 		status = m.styles.connected.Render(s.conn.Status.String())
 	case rig.Disconnected:
 		setting = m.styles.stale.Render(setting)
-		text := s.conn.Status.String()
-		if s.conn.RetryIn > 0 {
-			text += " · retry " + s.conn.RetryIn.Round(time.Second).String()
-		}
-		status = m.styles.err.Render(text)
+		status = m.styles.err.Render(m.rigName + " not connected")
 	default:
 		setting = m.styles.stale.Render(setting)
 		status = m.styles.muted.Render(s.conn.Status.String())

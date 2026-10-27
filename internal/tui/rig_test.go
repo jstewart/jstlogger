@@ -51,7 +51,7 @@ var (
 func newRigModel(t *testing.T) (Model, *fakeRig) {
 	t.Helper()
 	f := &fakeRig{}
-	m, _ := update(t, New(WithRig(f)), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m, _ := update(t, New(WithRig("ic7300", f)), tea.WindowSizeMsg{Width: 80, Height: 24})
 	return m, f
 }
 
@@ -215,18 +215,18 @@ func TestRigStatus(t *testing.T) {
 			wantNot: []string{"3000"},
 		},
 		{
-			name: "disconnected with retry",
+			name: "disconnected while retrying",
 			msgs: []tea.Msg{
 				state,
 				rig.ConnectionChanged{Status: rig.Disconnected, Err: errors.New("refused"), RetryIn: 4 * time.Second},
 			},
-			want: []string{"14.074.000 USB", "disconnected · retry 4s"},
+			want:    []string{"14.074.000 USB", "ic7300 not connected"},
+			wantNot: []string{"retry", "refused"},
 		},
 		{
-			name:    "disconnected without retry",
-			msgs:    []tea.Msg{rig.ConnectionChanged{Status: rig.Disconnected}},
-			want:    []string{"—", "disconnected"},
-			wantNot: []string{"retry"},
+			name: "disconnected",
+			msgs: []tea.Msg{rig.ConnectionChanged{Status: rig.Disconnected}},
+			want: []string{"—", "ic7300 not connected"},
 		},
 		{
 			name: "command results are ignored",
@@ -400,22 +400,15 @@ func TestControllerErrorShown(t *testing.T) {
 	assert.NotContains(t, m.View().Content, "rig busy")
 }
 
-func TestConnectionErrorShown(t *testing.T) {
+// Running without the rig attached is common, so the reason is left to the
+// debug log.
+func TestConnectionErrorHidden(t *testing.T) {
 	m, _ := newRigModel(t)
-	reason := errors.New("start rigctld: executable file not found")
+	reason := errors.New("connect to rigctld at localhost:4532: connection refused")
 
 	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Disconnected, Err: reason})
-	assert.Contains(t, m.View().Content, "rig: start rigctld: executable file not found")
-
-	// A command error takes the footer while it is shown.
-	m, _ = update(t, m, rigResultMsg{err: errors.New("rig busy")})
-	assert.Contains(t, m.View().Content, "rig busy")
-	assert.NotContains(t, m.View().Content, "executable file not found")
-
-	// Reconnecting clears the reason.
-	m, _ = update(t, m, rigResultMsg{})
-	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Connected})
-	assert.NotContains(t, m.View().Content, "rig:")
+	assert.Contains(t, m.View().Content, "ic7300 not connected")
+	assert.NotContains(t, m.View().Content, "connection refused")
 }
 
 func TestNoControllerRigKeysDisabled(t *testing.T) {
@@ -447,7 +440,7 @@ func TestWindowSizeWithRig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := New(WithRig(&fakeRig{}))
+			m := New(WithRig("ic7300", &fakeRig{}))
 			m.help.ShowAll = tt.showAll
 			msgs := append([]tea.Msg{
 				tea.WindowSizeMsg{Width: tt.width, Height: tt.height}, state, disc,
