@@ -131,17 +131,20 @@ func (m Model) headerView() string {
 		Render(title + strings.Repeat(" ", gap) + status)
 }
 
-// footerView renders the help line, preceded by the open prompt or the last
-// rig command error.
+// footerView renders the help line, preceded by the open prompt, the last
+// rig command error, or the reason the rig is disconnected.
 func (m Model) footerView() string {
 	var lines []string
 	var keys help.KeyMap = m.keys
+	conn := m.rigState.conn
 	switch {
 	case m.promptOpen():
 		lines = append(lines, m.promptView())
 		keys = m.promptKeys
 	case m.rigErr != nil:
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
+	case conn.Status == rig.Disconnected && conn.Err != nil:
+		lines = append(lines, m.styles.err.Render("rig: "+conn.Err.Error()))
 	}
 	lines = append(lines, m.help.View(keys))
 	return m.styles.footer.

@@ -400,6 +400,24 @@ func TestControllerErrorShown(t *testing.T) {
 	assert.NotContains(t, m.View().Content, "rig busy")
 }
 
+func TestConnectionErrorShown(t *testing.T) {
+	m, _ := newRigModel(t)
+	reason := errors.New("start rigctld: executable file not found")
+
+	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Disconnected, Err: reason})
+	assert.Contains(t, m.View().Content, "rig: start rigctld: executable file not found")
+
+	// A command error takes the footer while it is shown.
+	m, _ = update(t, m, rigResultMsg{err: errors.New("rig busy")})
+	assert.Contains(t, m.View().Content, "rig busy")
+	assert.NotContains(t, m.View().Content, "executable file not found")
+
+	// Reconnecting clears the reason.
+	m, _ = update(t, m, rigResultMsg{})
+	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Connected})
+	assert.NotContains(t, m.View().Content, "rig:")
+}
+
 func TestNoControllerRigKeysDisabled(t *testing.T) {
 	m, _ := update(t, New(), tea.WindowSizeMsg{Width: 80, Height: 24})
 	for _, r := range []rune{'f', 'm'} {
