@@ -37,3 +37,19 @@ func DebugLogPath(getenv func(string) string) (string, error) {
 	}
 	return filepath.Join(base, "jstlogger", "debug.log"), nil
 }
+
+// LogbookPath returns the default logbook database location,
+// $XDG_DATA_HOME/jstlogger/logbook.db, falling back to
+// $HOME/.local/share/jstlogger/logbook.db when XDG_DATA_HOME is unset or
+// empty. getenv is usually os.Getenv; tests inject their own.
+func LogbookPath(getenv func(string) string) (string, error) {
+	base := getenv("XDG_DATA_HOME")
+	if base == "" {
+		home := getenv("HOME")
+		if home == "" {
+			return "", errors.New("cannot determine data directory: neither $XDG_DATA_HOME nor $HOME is set")
+		}
+		base = filepath.Join(home, ".local", "share")
+	}
+	return filepath.Join(base, "jstlogger", "logbook.db"), nil
+}

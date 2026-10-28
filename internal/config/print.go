@@ -13,6 +13,14 @@ type tomlConfig struct {
 	DefaultStation string                 `toml:"default_station"`
 	Stations       map[string]tomlStation `toml:"stations"`
 	Rig            tomlRig                `toml:"rig"`
+	Logbook        tomlLogbook            `toml:"logbook"`
+}
+
+// tomlLogbook mirrors Logbook for encoding, omitting an empty path so the
+// printed config keeps using the default location.
+type tomlLogbook struct {
+	Path         string `toml:"path,omitempty"`
+	DistanceUnit string `toml:"distance_unit"`
 }
 
 // tomlStation mirrors Station for encoding. It must stay convertible to and
@@ -42,7 +50,8 @@ type tomlRig struct {
 }
 
 // WriteTOML writes c to w as TOML that Load accepts, with rig.poll_interval
-// as a duration string (e.g. "1s"). Absent [spawn] tables are omitted.
+// as a duration string (e.g. "1s"). Absent [spawn] tables and an empty
+// logbook.path are omitted.
 func WriteTOML(w io.Writer, c Config) error {
 	tc := tomlConfig{
 		DefaultStation: c.DefaultStation,
@@ -52,6 +61,7 @@ func WriteTOML(w io.Writer, c Config) error {
 			PollInterval: c.Rig.PollInterval.String(),
 			Profiles:     c.Rig.Profiles,
 		},
+		Logbook: tomlLogbook(c.Logbook),
 	}
 	for name, s := range c.Stations {
 		tc.Stations[name] = tomlStation(s)

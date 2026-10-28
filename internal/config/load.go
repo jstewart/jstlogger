@@ -54,6 +54,7 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 	v.SetConfigType("toml")
 	v.SetDefault("default_station", DefaultStationName)
 	v.SetDefault("rig.poll_interval", DefaultPollInterval)
+	v.SetDefault("logbook.distance_unit", DefaultDistanceUnit)
 
 	if err := v.ReadInConfig(); err != nil {
 		return Config{}, res, fmt.Errorf("reading config %s: %w", path, err)
@@ -133,10 +134,12 @@ func parsePollInterval(raw any) (time.Duration, error) {
 
 // applyEntryDefaults fills per-entry defaults that viper cannot express
 // (the table key is dynamic), recovers empty tables that viper drops from
-// Unmarshal, and lowercases values that refer to station or profile names.
+// Unmarshal, lowercases values that refer to station or profile names, and
+// normalises logbook.distance_unit.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)
+	c.Logbook.DistanceUnit = strings.ToLower(strings.TrimSpace(c.Logbook.DistanceUnit))
 
 	for name := range v.GetStringMap("stations") {
 		if _, ok := c.Stations[name]; !ok {

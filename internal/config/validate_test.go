@@ -170,10 +170,26 @@ func TestValidate(t *testing.T) {
 			wantKeys: nil,
 		},
 		{
+			name:     "distance_unit mi is valid",
+			mutate:   func(c *Config) { c.Logbook.DistanceUnit = DistanceUnitMi },
+			wantKeys: nil,
+		},
+		{
+			name:     "distance_unit must be km or mi",
+			mutate:   func(c *Config) { c.Logbook.DistanceUnit = "furlongs" },
+			wantKeys: []string{"logbook.distance_unit"},
+		},
+		{
+			name:     "distance_unit must not be empty",
+			mutate:   func(c *Config) { c.Logbook.DistanceUnit = "" },
+			wantKeys: []string{"logbook.distance_unit"},
+		},
+		{
 			name: "multiple failures in sorted key order",
 			mutate: func(c *Config) {
 				setProfile(c, "portable", func(p *RigProfile) { p.Port = 0 })
 				setProfile(c, "ic7300", func(p *RigProfile) { p.Backend = "bogus" })
+				c.Logbook.DistanceUnit = "bogus"
 				for _, n := range []string{"portable", "home"} {
 					s := c.Stations[n]
 					s.Gridsquare = "bad"
@@ -185,6 +201,7 @@ func TestValidate(t *testing.T) {
 				"stations.portable.gridsquare",
 				"rig.profiles.ic7300.backend",
 				"rig.profiles.portable.port",
+				"logbook.distance_unit",
 			},
 		},
 	}
