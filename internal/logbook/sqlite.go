@@ -149,16 +149,11 @@ func (s *SQLiteStore) get(ctx context.Context, id int64) (QSO, error) {
 	if err != nil {
 		return QSO{}, err
 	}
-	if q.Fields, err = s.loadFields(ctx, id); err != nil {
+	qs := []QSO{q}
+	if err := s.loadChildren(ctx, qs); err != nil {
 		return QSO{}, err
 	}
-	if q.Confirmations, err = s.loadConfirmations(ctx, id); err != nil {
-		return QSO{}, err
-	}
-	if q.Tags, err = s.loadTags(ctx, id); err != nil {
-		return QSO{}, err
-	}
-	return q, nil
+	return qs[0], nil
 }
 
 // Update replaces the stored QSO with q.ID, keeping its UUID and creation
@@ -329,83 +324,129 @@ func scanQSO(r scanner) (QSO, error) {
 	return q, nil
 }
 
-// loadFields returns the ADIF fields of the QSO with the given ID, or nil if
-// it has none.
-func (s *SQLiteStore) loadFields(ctx context.Context, id int64) (fields map[string]string, err error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT name, value FROM qso_adif_field WHERE qso_id = ?", id)
-	if err != nil {
-		return nil, fmt.Errorf("query fields: %w", err)
+// loadChildren fills in the ADIF fields, confirmations and tags of each QSO
+// in qs, which must have distinct IDs. It runs one query per child table
+// whatever the number of QSOs.
+func (s *SQLiteStore) loadChildren(ctx context.Context, qs []QSO) error {
+	if len(qs) == 0 {
+		return nil
 	}
-	defer func() { err = errors.Join(err, closeRows(rows)) }()
-	for rows.Next() {
-		var name, value string
-		if err := rows.Scan(&name, &value); err != nil {
-			return nil, fmt.Errorf("scan field: %w", err)
+	ids := make([]any, len(qs))
+	index := make(map[int64]int, len(qs))
+	for i, q := range qs {
+		ids[i] = q.ID
+		index[q.ID] = i
+	}
+	in := "(" + placeholders(len(ids)) + ")"
+	if err := s.loadFields(ctx, in, ids, func(id int64, name, value string) {
+		q := &qs[index[id]]
+		if q.Fields == nil {
+			q.Fields = make(map[string]string)
 		}
-		if fields == nil {
-			fields = make(map[string]string)
-		}
-		fields[name] = value
+		q.Fields[name] = value
+	}); err != nil {
+		return err
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("query fields: %w", err)
+	if err := s.loadConfirmations(ctx, in, ids, func(id int64, c Confirmation) {
+		q := &qs[index[id]]
+		q.Confirmations = append(q.Confirmations, c)
+	}); err != nil {
+		return err
 	}
-	return fields, nil
+	return s.loadTags(ctx, in, ids, func(id int64, name string) {
+		q := &qs[index[id]]
+		q.Tags = append(q.Tags, name)
+	})
 }
 
-// loadConfirmations returns the confirmations of the QSO with the given ID
-// ordered by service, or nil if it has none.
-func (s *SQLiteStore) loadConfirmations(ctx context.Context, id int64) (confs []Confirmation, err error) {
+// loadFields calls add for each ADIF field of the QSOs whose IDs are given;
+// in is the matching "(?, …)" placeholder list.
+func (s *SQLiteStore) loadFields(ctx context.Context, in string, ids []any, add func(id int64, name, value string)) (err error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT service, sent, sent_date, rcvd, rcvd_date FROM qso_confirmation
-		WHERE qso_id = ? ORDER BY service`, id)
+		"SELECT qso_id, name, value FROM qso_adif_field WHERE qso_id IN "+in, ids...)
 	if err != nil {
-		return nil, fmt.Errorf("query confirmations: %w", err)
+		return fmt.Errorf("query fields: %w", err)
 	}
 	defer func() { err = errors.Join(err, closeRows(rows)) }()
 	for rows.Next() {
 		var (
-			c              Confirmation
-			sent, received sql.Null[string]
+			id          int64
+			name, value string
 		)
-		if err := rows.Scan(&c.Service, &c.Sent, &sent, &c.Rcvd, &received); err != nil {
-			return nil, fmt.Errorf("scan confirmation: %w", err)
+		if err := rows.Scan(&id, &name, &value); err != nil {
+			return fmt.Errorf("scan field: %w", err)
 		}
-		if c.SentDate, err = parseNullTime(sent); err != nil {
-			return nil, fmt.Errorf("scan confirmation %s sent_date: %w", c.Service, err)
-		}
-		if c.RcvdDate, err = parseNullTime(received); err != nil {
-			return nil, fmt.Errorf("scan confirmation %s rcvd_date: %w", c.Service, err)
-		}
-		confs = append(confs, c)
+		add(id, name, value)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("query confirmations: %w", err)
+		return fmt.Errorf("query fields: %w", err)
 	}
-	return confs, nil
+	return nil
 }
 
-// loadTags returns the tag names of the QSO with the given ID ordered by
-// name, or nil if it has none.
-func (s *SQLiteStore) loadTags(ctx context.Context, id int64) (tags []string, err error) {
+// loadConfirmations calls add for each confirmation of the QSOs whose IDs
+// are given, in service order per QSO; in is the matching "(?, …)"
+// placeholder list.
+func (s *SQLiteStore) loadConfirmations(ctx context.Context, in string, ids []any, add func(id int64, c Confirmation)) (err error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT t.name FROM tag t JOIN qso_tag qt ON qt.tag_id = t.id
-		WHERE qt.qso_id = ? ORDER BY t.name`, id)
+		`SELECT qso_id, service, sent, sent_date, rcvd, rcvd_date FROM qso_confirmation
+		WHERE qso_id IN `+in+` ORDER BY qso_id, service`, ids...)
 	if err != nil {
-		return nil, fmt.Errorf("query tags: %w", err)
+		return fmt.Errorf("query confirmations: %w", err)
 	}
 	defer func() { err = errors.Join(err, closeRows(rows)) }()
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan tag: %w", err)
+		var (
+			id             int64
+			c              Confirmation
+			sent, received sql.Null[string]
+		)
+		if err := rows.Scan(&id, &c.Service, &c.Sent, &sent, &c.Rcvd, &received); err != nil {
+			return fmt.Errorf("scan confirmation: %w", err)
 		}
-		tags = append(tags, name)
+		if c.SentDate, err = parseNullTime(sent); err != nil {
+			return fmt.Errorf("scan confirmation %s sent_date: %w", c.Service, err)
+		}
+		if c.RcvdDate, err = parseNullTime(received); err != nil {
+			return fmt.Errorf("scan confirmation %s rcvd_date: %w", c.Service, err)
+		}
+		add(id, c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("query tags: %w", err)
+		return fmt.Errorf("query confirmations: %w", err)
 	}
-	return tags, nil
+	return nil
+}
+
+// loadTags calls add for each tag name of the QSOs whose IDs are given, in
+// name order per QSO; in is the matching "(?, …)" placeholder list.
+func (s *SQLiteStore) loadTags(ctx context.Context, in string, ids []any, add func(id int64, name string)) (err error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT qt.qso_id, t.name FROM tag t JOIN qso_tag qt ON qt.tag_id = t.id
+		WHERE qt.qso_id IN `+in+` ORDER BY qt.qso_id, t.name`, ids...)
+	if err != nil {
+		return fmt.Errorf("query tags: %w", err)
+	}
+	defer func() { err = errors.Join(err, closeRows(rows)) }()
+	for rows.Next() {
+		var (
+			id   int64
+			name string
+		)
+		if err := rows.Scan(&id, &name); err != nil {
+			return fmt.Errorf("scan tag: %w", err)
+		}
+		add(id, name)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("query tags: %w", err)
+	}
+	return nil
+}
+
+// placeholders returns n comma-separated "?" placeholders; n must be > 0.
+func placeholders(n int) string {
+	return strings.Repeat("?, ", n-1) + "?"
 }
 
 // closeRows closes rows, wrapping any error.
