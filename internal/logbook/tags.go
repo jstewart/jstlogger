@@ -39,8 +39,8 @@ func (s *SQLiteStore) Tag(ctx context.Context, qsoIDs []int64, tags ...string) e
 }
 
 // Untag removes tags, matched ignoring case, from each of the given QSOs in
-// one transaction, then deletes any of those tags that no longer label a
-// QSO. Unknown IDs and tags are ignored.
+// one transaction, then deletes tags that no longer label any QSO. Unknown
+// IDs and tags are ignored.
 func (s *SQLiteStore) Untag(ctx context.Context, qsoIDs []int64, tags ...string) error {
 	tags = normaliseTags(tags)
 	if len(qsoIDs) == 0 || len(tags) == 0 {
@@ -56,13 +56,8 @@ func (s *SQLiteStore) Untag(ctx context.Context, qsoIDs []int64, tags ...string)
 					return fmt.Errorf("detach tag %q from qso %d: %w", name, id, err)
 				}
 			}
-			if _, err := tx.ExecContext(ctx,
-				"DELETE FROM tag WHERE name = ? AND NOT EXISTS (SELECT 1 FROM qso_tag WHERE tag_id = tag.id)",
-				name); err != nil {
-				return fmt.Errorf("delete unused tag %q: %w", name, err)
-			}
 		}
-		return nil
+		return deleteUnusedTags(ctx, tx)
 	})
 	if err != nil {
 		return fmt.Errorf("logbook: untag qsos: %w", err)
@@ -90,4 +85,14 @@ func (s *SQLiteStore) Tags(ctx context.Context) (tags []Tag, err error) {
 		return nil, fmt.Errorf("logbook: list tags: %w", err)
 	}
 	return tags, nil
+}
+
+// deleteUnusedTags deletes every tag that no longer labels a QSO, so Tags
+// lists only tags in use.
+func deleteUnusedTags(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx,
+		"DELETE FROM tag WHERE NOT EXISTS (SELECT 1 FROM qso_tag WHERE tag_id = tag.id)"); err != nil {
+		return fmt.Errorf("delete unused tags: %w", err)
+	}
+	return nil
 }

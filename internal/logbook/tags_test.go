@@ -133,3 +133,25 @@ func TestSQLiteStoreTagsOrderedIgnoringCase(t *testing.T) {
 
 	assert.Equal(t, []string{"A", "b", "Ba", "c"}, tagNames(t, s))
 }
+
+func TestSQLiteStoreDeleteRemovesUnusedTags(t *testing.T) {
+	s := newTestStore(t)
+	qs := seed(t, s,
+		QSO{StartUTC: queryT0, Call: "A", Tags: []string{"pota", "dx"}},
+		QSO{StartUTC: queryT0.Add(time.Minute), Call: "B", Tags: []string{"pota"}},
+	)
+
+	require.NoError(t, s.Delete(t.Context(), qs[0].ID))
+
+	assert.Equal(t, []string{"pota"}, tagNames(t, s), "dx labelled only the deleted QSO")
+}
+
+func TestSQLiteStoreUpdateRemovesUnusedTags(t *testing.T) {
+	s := newTestStore(t)
+	q := seed(t, s, QSO{StartUTC: queryT0, Call: "A", Tags: []string{"pota", "dx"}})[0]
+
+	q.Tags = []string{"pota"}
+	require.NoError(t, s.Update(t.Context(), q))
+
+	assert.Equal(t, []string{"pota"}, tagNames(t, s))
+}

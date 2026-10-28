@@ -194,7 +194,10 @@ func (s *SQLiteStore) Update(ctx context.Context, q QSO) error {
 				return fmt.Errorf("clear %s: %w", table, err)
 			}
 		}
-		return insertChildren(ctx, tx, q.ID, q)
+		if err := insertChildren(ctx, tx, q.ID, q); err != nil {
+			return err
+		}
+		return deleteUnusedTags(ctx, tx)
 	})
 	if err != nil {
 		return fmt.Errorf("logbook: update qso %d: %w", q.ID, err)
@@ -206,11 +209,17 @@ func (s *SQLiteStore) Update(ctx context.Context, q QSO) error {
 // fields, confirmations and tag links. It returns an error wrapping
 // ErrNotFound if there is no such QSO.
 func (s *SQLiteStore) Delete(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM qso WHERE id = ?", id)
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, "DELETE FROM qso WHERE id = ?", id)
+		if err != nil {
+			return err
+		}
+		if err := requireOneRow(res); err != nil {
+			return err
+		}
+		return deleteUnusedTags(ctx, tx)
+	})
 	if err != nil {
-		return fmt.Errorf("logbook: delete qso %d: %w", id, err)
-	}
-	if err := requireOneRow(res); err != nil {
 		return fmt.Errorf("logbook: delete qso %d: %w", id, err)
 	}
 	return nil
