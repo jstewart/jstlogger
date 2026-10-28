@@ -4,7 +4,7 @@ import "context"
 
 // Store persists QSOs, their confirmations and tags.
 //
-//go:generate go run go.uber.org/mock/mockgen -destination=mock/store.go -package=mock jstlogger/internal/logbook Store
+//go:generate go tool mockgen -source=store.go -destination=mock/store.go -package=mock
 type Store interface {
 	// Add stores a new QSO and returns it with its ID, UUID and derived
 	// fields filled in.
