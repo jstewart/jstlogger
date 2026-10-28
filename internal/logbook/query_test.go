@@ -104,6 +104,7 @@ func TestSQLiteStoreFilter(t *testing.T) {
 		{"continent", Filter{Continents: []string{"eu", "As"}}, []string{"C", "B"}},
 		{"one tag", Filter{Tags: []string{"pota"}}, []string{"B", "A"}},
 		{"all tags", Filter{Tags: []string{"POTA", "dx"}}, []string{"A"}},
+		{"blank tag ignored", Filter{Tags: []string{" ", "pota"}}, []string{"B", "A"}},
 		{"min distance excludes null", Filter{MinDistanceKm: valid(100.0)}, []string{"B", "A"}},
 		{"max distance excludes null", Filter{MaxDistanceKm: valid(100.0)}, []string{"D", "A"}},
 		{"distance range", Filter{MinDistanceKm: valid(1.0), MaxDistanceKm: valid(1000.0)}, []string{"A"}},
@@ -111,6 +112,7 @@ func TestSQLiteStoreFilter(t *testing.T) {
 		{"confirmed yes", Filter{Confirmed: ConfirmedYes}, []string{"B", "A"}},
 		{"confirmed no", Filter{Confirmed: ConfirmedNo}, []string{"D", "C"}},
 		{"confirmed yes lotw", Filter{Confirmed: ConfirmedYes, ConfirmedService: ServiceLoTW}, []string{"A"}},
+		{"confirmed service ignores case", Filter{Confirmed: ConfirmedYes, ConfirmedService: " LoTW "}, []string{"A"}},
 		{"confirmed no lotw", Filter{Confirmed: ConfirmedNo, ConfirmedService: ServiceLoTW}, []string{"D", "C", "B"}},
 		{"band and mode", Filter{Bands: []string{"20m"}, Modes: []string{"SSB"}}, []string{"A"}},
 		{"dxcc and from", Filter{DXCC: []int{291}, From: queryT0.Add(time.Hour)}, []string{"D"}},
@@ -175,7 +177,7 @@ func TestFilterSQLKeepsValuesInArgs(t *testing.T) {
 	}
 	assert.Equal(t, strings.Count(clause, "?"), len(args), "one arg per placeholder")
 	assert.Contains(t, args, evil+"tag2")
-	assert.Contains(t, args, evil+"service")
+	assert.Contains(t, args, strings.ToLower(evil+"service"))
 	assert.Contains(t, args, 98765)
 }
 

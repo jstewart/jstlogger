@@ -31,6 +31,9 @@ func TestPrepareNormalisesCase(t *testing.T) {
 	q.MyGridsquare = " jo01 "
 	q.Cont = "na"
 	q.Band = " 20M "
+	q.Mode = " ft8 "
+	q.Submode = "ft4"
+	q.Confirmations = []Confirmation{{Service: " LoTW ", Rcvd: "Y"}}
 
 	got, err := prepare(q, "")
 	require.NoError(t, err)
@@ -40,6 +43,9 @@ func TestPrepareNormalisesCase(t *testing.T) {
 	assert.Equal(t, "JO01", got.MyGridsquare)
 	assert.Equal(t, "NA", got.Cont)
 	assert.Equal(t, "20m", got.Band)
+	assert.Equal(t, "FT8", got.Mode)
+	assert.Equal(t, "FT4", got.Submode)
+	assert.Equal(t, ServiceLoTW, got.Confirmations[0].Service)
 }
 
 func TestPrepareConvertsTimesToUTC(t *testing.T) {

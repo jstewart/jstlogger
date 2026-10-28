@@ -141,17 +141,17 @@ func filterSQL(f Filter) (string, []any, error) {
 	}
 	in("dxcc", toArgs(f.DXCC, func(v int) any { return v }))
 	in("itu_region", toArgs(f.ITURegions, func(v int) any { return v }))
-	// Mode and country are stored as given, so compare ignoring case.
-	// Bands and continents are normalised on write, so normalise the filter
-	// values the same way and keep the column indexes usable.
-	in("mode COLLATE NOCASE", toArgs(f.Modes, func(v string) any { return strings.TrimSpace(v) }))
+	// Mode, band and continent are normalised on write, so normalise the
+	// filter values the same way and keep the column indexes usable. Country
+	// is stored as given, so compare ignoring case.
+	in("mode", toArgs(f.Modes, func(v string) any { return upper(v) }))
 	in("band", toArgs(f.Bands, func(v string) any { return strings.ToLower(strings.TrimSpace(v)) }))
 	in("country COLLATE NOCASE", toArgs(f.Countries, func(v string) any { return strings.TrimSpace(v) }))
 	in("cont", toArgs(f.Continents, func(v string) any { return upper(v) }))
-	for _, tag := range f.Tags {
+	for _, tag := range normaliseTags(f.Tags) {
 		// tag.name is COLLATE NOCASE, so this matches ignoring case.
 		add(`EXISTS (SELECT 1 FROM qso_tag qt JOIN tag t ON t.id = qt.tag_id
-			WHERE qt.qso_id = qso.id AND t.name = ?)`, strings.TrimSpace(tag))
+			WHERE qt.qso_id = qso.id AND t.name = ?)`, tag)
 	}
 	// A comparison with NULL is never true, so either bound excludes QSOs
 	// without a distance.
@@ -166,7 +166,7 @@ func filterSQL(f Filter) (string, []any, error) {
 		var subArgs []any
 		if f.ConfirmedService != "" {
 			sub += " AND c.service = ?"
-			subArgs = append(subArgs, f.ConfirmedService)
+			subArgs = append(subArgs, normaliseService(f.ConfirmedService))
 		}
 		sub += ")"
 		if f.Confirmed == ConfirmedNo {

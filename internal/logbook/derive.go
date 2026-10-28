@@ -55,6 +55,8 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 	q.Gridsquare = upper(q.Gridsquare)
 	q.MyGridsquare = upper(q.MyGridsquare)
 	q.Cont = upper(q.Cont)
+	q.Mode = upper(q.Mode)
+	q.Submode = upper(q.Submode)
 
 	if strings.TrimSpace(q.Band) == "" && q.FreqHz.Valid {
 		q.Band, _ = BandForFreq(q.FreqHz.V)
@@ -82,6 +84,7 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 	if q.Confirmations != nil {
 		confs := make([]Confirmation, len(q.Confirmations))
 		for i, c := range q.Confirmations {
+			c.Service = normaliseService(c.Service)
 			c.SentDate = utcNull(c.SentDate)
 			c.RcvdDate = utcNull(c.RcvdDate)
 			confs[i] = c
@@ -147,6 +150,12 @@ func normaliseTags(tags []string) []string {
 		out = append(out, t)
 	}
 	return out
+}
+
+// normaliseService trims a confirmation service name and lower-cases it, to
+// match the Service constants.
+func normaliseService(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
 }
 
 // upper trims s and upper-cases it.
