@@ -16,7 +16,8 @@ import (
 // must close the store.
 func openLogbook(ctx context.Context, session config.Session) (*logbook.SQLiteStore, error) {
 	path := session.Config.Logbook.Path
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	// The log is personal data, so keep the directory private.
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("opening logbook: %w", err)
 	}
 	store, err := logbook.Open(ctx, path, logbook.Options{StationGrid: session.Station.Gridsquare})
