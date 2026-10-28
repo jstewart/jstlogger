@@ -47,3 +47,39 @@ func TestDefaultPathNoHome(t *testing.T) {
 	_, err := DefaultPath(fakeEnv(nil))
 	assert.Error(t, err)
 }
+
+func TestDebugLogPath(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "XDG_STATE_HOME set",
+			env:  map[string]string{"XDG_STATE_HOME": "/xdg", "HOME": "/home/me"},
+			want: "/xdg/jstlogger/debug.log",
+		},
+		{
+			name: "XDG_STATE_HOME unset falls back to HOME",
+			env:  map[string]string{"HOME": "/home/me"},
+			want: "/home/me/.local/state/jstlogger/debug.log",
+		},
+		{
+			name: "XDG_STATE_HOME empty falls back to HOME",
+			env:  map[string]string{"XDG_STATE_HOME": "", "HOME": "/home/me"},
+			want: "/home/me/.local/state/jstlogger/debug.log",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DebugLogPath(fakeEnv(tt.env))
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDebugLogPathNoHome(t *testing.T) {
+	_, err := DebugLogPath(fakeEnv(nil))
+	assert.Error(t, err)
+}

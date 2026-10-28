@@ -21,3 +21,19 @@ func DefaultPath(getenv func(string) string) (string, error) {
 	}
 	return filepath.Join(base, "jstlogger", "config.toml"), nil
 }
+
+// DebugLogPath returns the location of the --debug log,
+// $XDG_STATE_HOME/jstlogger/debug.log, falling back to
+// $HOME/.local/state/jstlogger/debug.log when XDG_STATE_HOME is unset or
+// empty. getenv is usually os.Getenv; tests inject their own.
+func DebugLogPath(getenv func(string) string) (string, error) {
+	base := getenv("XDG_STATE_HOME")
+	if base == "" {
+		home := getenv("HOME")
+		if home == "" {
+			return "", errors.New("cannot determine state directory: neither $XDG_STATE_HOME nor $HOME is set")
+		}
+		base = filepath.Join(home, ".local", "state")
+	}
+	return filepath.Join(base, "jstlogger", "debug.log"), nil
+}

@@ -2,14 +2,20 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"jstlogger/internal/config"
+	"jstlogger/internal/rig"
 )
 
 // validConfig is a minimal config that passes validation, with a rig profile
@@ -46,15 +52,27 @@ func writeConfig(t *testing.T, content string) string {
 	return p
 }
 
-// stubTUI replaces runTUI for the duration of the test and reports whether
-// it was called.
-func stubTUI(t *testing.T, err error) *bool {
+// tuiCall records the arguments of a stubbed runTUI call.
+type tuiCall struct {
+	called  bool
+	session config.Session
+	logger  *slog.Logger
+}
+
+// stubTUI replaces runTUI for the duration of the test and records its
+// call. The stub logs "tui started" so tests can see where logs go.
+func stubTUI(t *testing.T, err error) *tuiCall {
 	t.Helper()
-	called := new(bool)
+	call := new(tuiCall)
 	orig := runTUI
-	runTUI = func() error { *called = true; return err }
+	runTUI = func(ctx context.Context, session config.Session, logger *slog.Logger) error {
+		require.NotNil(t, ctx)
+		*call = tuiCall{called: true, session: session, logger: logger}
+		logger.Info("tui started")
+		return err
+	}
 	t.Cleanup(func() { runTUI = orig })
-	return called
+	return call
 }
 
 // result captures one run invocation.
@@ -62,6 +80,7 @@ type result struct {
 	code           int
 	stdout, stderr string
 	tuiCalled      bool
+	tui            tuiCall
 }
 
 // invoke calls run with args and an environment pointing at an empty temp
@@ -71,10 +90,10 @@ func invoke(t *testing.T, vars map[string]string, tuiErr error, args ...string) 
 	if vars == nil {
 		vars = map[string]string{"XDG_CONFIG_HOME": t.TempDir()}
 	}
-	called := stubTUI(t, tuiErr)
+	call := stubTUI(t, tuiErr)
 	var stdout, stderr bytes.Buffer
 	code := run(args, env(vars), &stdout, &stderr)
-	return result{code: code, stdout: stdout.String(), stderr: stderr.String(), tuiCalled: *called}
+	return result{code: code, stdout: stdout.String(), stderr: stderr.String(), tuiCalled: call.called, tui: *call}
 }
 
 func TestRunNoFilesystemModes(t *testing.T) {
@@ -302,6 +321,121 @@ func TestRunStartsTUI(t *testing.T) {
 			} else {
 				assert.Empty(t, r.stderr)
 			}
+		})
+	}
+}
+
+func TestRunPassesSessionToTUI(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantEnabled bool
+		wantProfile string
+	}{
+		{name: "default profile", wantEnabled: true, wantProfile: "ic7300"},
+		{name: "no rig", args: []string{"--no-rig"}, wantEnabled: false, wantProfile: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := writeConfig(t, validConfig)
+			r := invoke(t, nil, nil, append([]string{"-c", p}, tt.args...)...)
+			require.Equal(t, 0, r.code, r.stderr)
+			require.True(t, r.tuiCalled)
+			assert.Equal(t, tt.wantEnabled, r.tui.session.RigEnabled)
+			assert.Equal(t, tt.wantProfile, r.tui.session.RigProfileName)
+			assert.Equal(t, "N0CALL", r.tui.session.Operator)
+		})
+	}
+}
+
+func TestRunDebugLog(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	state := t.TempDir()
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_STATE_HOME": state}
+
+	r := invoke(t, vars, nil, "-c", p, "--debug")
+	require.Equal(t, 0, r.code, r.stderr)
+	assert.Empty(t, r.stderr)
+
+	data, err := os.ReadFile(filepath.Join(state, "jstlogger", "debug.log"))
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `msg="tui started"`)
+}
+
+func TestRunNoDebugLog(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	state := t.TempDir()
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_STATE_HOME": state}
+
+	r := invoke(t, vars, nil, "-c", p)
+	require.Equal(t, 0, r.code, r.stderr)
+	require.True(t, r.tuiCalled)
+	assert.NoFileExists(t, filepath.Join(state, "jstlogger", "debug.log"))
+	assert.Empty(t, r.stderr, "logs must never reach the terminal")
+}
+
+func TestRunDebugLogError(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	state := t.TempDir()
+	// A file where the jstlogger directory should be makes the log unopenable.
+	require.NoError(t, os.WriteFile(filepath.Join(state, "jstlogger"), nil, 0o644))
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_STATE_HOME": state}
+
+	r := invoke(t, vars, nil, "-c", p, "--debug")
+	assert.Equal(t, 1, r.code)
+	assert.Contains(t, r.stderr, "debug log")
+	assert.False(t, r.tuiCalled)
+}
+
+func TestRigOptions(t *testing.T) {
+	base := config.Config{Rig: config.Rig{
+		PollInterval: 2 * time.Second,
+		Profiles: map[string]config.RigProfile{
+			"ic7300": {Backend: config.BackendRigctld, Host: "localhost", Port: 4532},
+			"spawned": {
+				Backend: config.BackendRigctld, Host: "127.0.0.1", Port: 4533,
+				Spawn: &config.Spawn{Model: 3073, Device: "/dev/ttyUSB0", Baud: 19200},
+			},
+			"ipv6": {Backend: config.BackendRigctld, Host: "::1", Port: 4532},
+		},
+	}}
+	tests := []struct {
+		name    string
+		session config.Session
+		want    rig.Options
+		wantOK  bool
+	}{
+		{
+			name:    "disabled",
+			session: config.Session{RigEnabled: false, RigProfileName: "ic7300", Config: base},
+		},
+		{
+			name:    "rigctld",
+			session: config.Session{RigEnabled: true, RigProfileName: "ic7300", Config: base},
+			want:    rig.Options{Addr: "localhost:4532", PollInterval: 2 * time.Second},
+			wantOK:  true,
+		},
+		{
+			name:    "spawn",
+			session: config.Session{RigEnabled: true, RigProfileName: "spawned", Config: base},
+			want: rig.Options{
+				Addr: "127.0.0.1:4533", PollInterval: 2 * time.Second,
+				Spawn: &rig.Spawn{Model: 3073, Device: "/dev/ttyUSB0", Baud: 19200},
+			},
+			wantOK: true,
+		},
+		{
+			name:    "ipv6 host",
+			session: config.Session{RigEnabled: true, RigProfileName: "ipv6", Config: base},
+			want:    rig.Options{Addr: "[::1]:4532", PollInterval: 2 * time.Second},
+			wantOK:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := rigOptions(tt.session)
+			assert.Equal(t, tt.wantOK, ok)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
