@@ -119,6 +119,18 @@ func TestMigrateSchemaTooNew(t *testing.T) {
 	assert.False(t, schemaObjectExists(t, db, "table", "a"))
 }
 
+func TestMigrateNegativeVersion(t *testing.T) {
+	db := openRawDB(t)
+	ctx := t.Context()
+	_, err := db.ExecContext(ctx, "PRAGMA user_version = -1")
+	require.NoError(t, err)
+
+	err = migrate(ctx, db, testMigrations())
+
+	require.Error(t, err)
+	assert.False(t, schemaObjectExists(t, db, "table", "a"))
+}
+
 func TestMigrateRejectsBadSets(t *testing.T) {
 	sql1 := &fstest.MapFile{Data: []byte("CREATE TABLE a (x INTEGER);")}
 	tests := []struct {

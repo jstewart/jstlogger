@@ -38,6 +38,9 @@ func migrate(ctx context.Context, db *sql.DB, fsys fs.FS) error {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("logbook: migrate: read user_version: %w", err)
 	}
+	if current < 0 {
+		return fmt.Errorf("logbook: migrate: invalid database version %d", current)
+	}
 	if current > len(ms) {
 		return fmt.Errorf("logbook: migrate: database at version %d, latest known is %d: %w",
 			current, len(ms), ErrSchemaTooNew)
