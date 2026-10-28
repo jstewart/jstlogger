@@ -58,24 +58,24 @@ func seedFilterSet(t *testing.T, s *SQLiteStore) {
 	seed(t, s,
 		QSO{
 			StartUTC: queryT0, Call: "A", Band: "20m", Mode: "SSB",
-			DXCC: valid(291), Country: "United States", Cont: "NA", ITURegion: valid(2),
+			DXCC: valid(291), Country: "United States", Cont: "NA", ITUZ: valid(8),
 			DistanceKm: valid(100.0), Tags: []string{"pota", "dx"},
 			Confirmations: []Confirmation{{Service: ServiceLoTW, Rcvd: "Y"}},
 		},
 		QSO{
 			StartUTC: queryT0.Add(time.Hour), Call: "B", Band: "40m", Mode: "cw",
-			DXCC: valid(223), Country: "England", Cont: "EU", ITURegion: valid(1),
+			DXCC: valid(223), Country: "England", Cont: "EU", ITUZ: valid(27),
 			DistanceKm: valid(5000.0), Tags: []string{"pota"},
 			Confirmations: []Confirmation{{Service: ServiceEQSL, Rcvd: "Y"}},
 		},
 		QSO{
 			StartUTC: queryT0.Add(2 * time.Hour), Call: "C", Band: "20M", Mode: "FT8",
-			DXCC: valid(339), Country: "Japan", Cont: "AS", ITURegion: valid(3),
+			DXCC: valid(339), Country: "Japan", Cont: "AS", ITUZ: valid(45),
 			Confirmations: []Confirmation{{Service: ServiceLoTW, Sent: "Y", Rcvd: "N"}},
 		},
 		QSO{
 			StartUTC: queryT0.Add(3 * time.Hour), Call: "D", Band: "15m", Mode: "SSB",
-			DXCC: valid(291), Country: "united states", Cont: "na", ITURegion: valid(2),
+			DXCC: valid(291), Country: "united states", Cont: "na", ITUZ: valid(8),
 			DistanceKm: valid(0.0), Tags: []string{"DX"},
 		},
 	)

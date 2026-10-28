@@ -56,8 +56,6 @@ func TestPrepareConvertsTimesToUTC(t *testing.T) {
 	q := baseQSO(t)
 	q.StartUTC = start
 	q.EndUTC = sql.Null[time.Time]{V: end, Valid: true}
-	q.CreatedAt = start
-	q.UpdatedAt = end
 	q.Confirmations = []Confirmation{{
 		Service:  ServiceLoTW,
 		Rcvd:     "Y",
@@ -73,8 +71,6 @@ func TestPrepareConvertsTimesToUTC(t *testing.T) {
 	require.True(t, got.EndUTC.Valid)
 	assert.Equal(t, time.UTC, got.EndUTC.V.Location())
 	assert.True(t, got.EndUTC.V.Equal(end))
-	assert.Equal(t, time.UTC, got.CreatedAt.Location())
-	assert.Equal(t, time.UTC, got.UpdatedAt.Location())
 	require.Len(t, got.Confirmations, 1)
 	assert.Equal(t, time.UTC, got.Confirmations[0].RcvdDate.V.Location())
 	assert.Equal(t, time.UTC, got.Confirmations[0].SentDate.V.Location())
@@ -122,7 +118,8 @@ func TestPrepareITURegion(t *testing.T) {
 		{name: "grid only", grid: "PM95", want: sql.Null[int]{V: 3, Valid: true}},
 		{name: "invalid grid and no zone", grid: "ZZ99", want: sql.Null[int]{}},
 		{name: "nothing known", want: sql.Null[int]{}},
-		{name: "explicit kept", explicit: sql.Null[int]{V: 2, Valid: true}, ituz: sql.Null[int]{V: 27, Valid: true}, want: sql.Null[int]{V: 2, Valid: true}},
+		{name: "stale value re-derived", explicit: sql.Null[int]{V: 2, Valid: true}, ituz: sql.Null[int]{V: 27, Valid: true}, want: sql.Null[int]{V: 1, Valid: true}},
+		{name: "stale value cleared", explicit: sql.Null[int]{V: 2, Valid: true}, want: sql.Null[int]{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -284,4 +281,22 @@ func TestCursorIsZero(t *testing.T) {
 	assert.True(t, Cursor{}.IsZero())
 	assert.False(t, Cursor{ID: 1}.IsZero())
 	assert.False(t, Cursor{StartUTC: time.Unix(0, 0)}.IsZero())
+}
+
+func TestPrepareRejectsBadConfirmations(t *testing.T) {
+	tests := []struct {
+		name  string
+		confs []Confirmation
+	}{
+		{"empty service", []Confirmation{{Service: " ", Rcvd: "Y"}}},
+		{"duplicate service", []Confirmation{{Service: ServiceLoTW}, {Service: " LoTW "}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := baseQSO(t)
+			q.Confirmations = tt.confs
+			_, err := prepare(q, "")
+			assert.ErrorIs(t, err, ErrInvalidConfirmation)
+		})
+	}
 }

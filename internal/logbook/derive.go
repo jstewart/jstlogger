@@ -18,6 +18,9 @@ var (
 	// ErrInvalidField is returned (wrapped) when QSO.Fields holds an empty
 	// field name, or two names that are equal after normalisation.
 	ErrInvalidField = errors.New("logbook: invalid ADIF field name")
+	// ErrInvalidConfirmation is returned (wrapped) when QSO.Confirmations
+	// holds an empty service or the same service more than once.
+	ErrInvalidConfirmation = errors.New("logbook: invalid confirmation")
 )
 
 // promotedFields lists the ADIF field names stored in QSO fields or
@@ -47,8 +50,6 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 
 	q.StartUTC = q.StartUTC.UTC()
 	q.EndUTC = utcNull(q.EndUTC)
-	q.CreatedAt = q.CreatedAt.UTC()
-	q.UpdatedAt = q.UpdatedAt.UTC()
 
 	q.Call = upper(q.Call)
 	q.StationCallsign = upper(q.StationCallsign)
@@ -63,15 +64,11 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 	}
 	q.Band = strings.ToLower(strings.TrimSpace(q.Band))
 
-	if !q.ITURegion.Valid {
-		q.ITURegion = deriveITURegion(q)
-	}
+	// ITU region is not an ADIF field, so it is always derived; a stale value
+	// from an earlier read is never kept.
+	q.ITURegion = deriveITURegion(q)
 
-	myGrid := q.MyGridsquare
-	if myGrid == "" {
-		myGrid = upper(stationGrid)
-	}
-	if km, err := GridDistanceKm(q.Gridsquare, myGrid); err == nil {
+	if km, ok := gridDistance(q.Gridsquare, q.MyGridsquare, stationGrid); ok {
 		q.DistanceKm = sql.Null[float64]{V: km, Valid: true}
 	}
 
@@ -85,6 +82,12 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 		confs := make([]Confirmation, len(q.Confirmations))
 		for i, c := range q.Confirmations {
 			c.Service = normaliseService(c.Service)
+			if c.Service == "" {
+				return QSO{}, fmt.Errorf("logbook: prepare qso: empty service: %w", ErrInvalidConfirmation)
+			}
+			if slices.ContainsFunc(confs[:i], func(o Confirmation) bool { return o.Service == c.Service }) {
+				return QSO{}, fmt.Errorf("logbook: prepare qso: service %q given more than once: %w", c.Service, ErrInvalidConfirmation)
+			}
 			c.SentDate = utcNull(c.SentDate)
 			c.RcvdDate = utcNull(c.RcvdDate)
 			confs[i] = c
@@ -94,6 +97,17 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 
 	q.Tags = normaliseTags(q.Tags)
 	return q, nil
+}
+
+// gridDistance returns the distance between grid and myGrid, using
+// stationGrid when myGrid is empty, and false when either grid is missing or
+// invalid.
+func gridDistance(grid, myGrid, stationGrid string) (float64, bool) {
+	if upper(myGrid) == "" {
+		myGrid = stationGrid
+	}
+	km, err := GridDistanceKm(upper(grid), upper(myGrid))
+	return km, err == nil
 }
 
 // deriveITURegion returns the ITU region from q's ITU zone if that zone lies

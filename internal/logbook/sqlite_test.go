@@ -233,6 +233,37 @@ func TestSQLiteStoreUpdate(t *testing.T) {
 	assert.Equal(t, 1, countRows(t, s, "qso_tag"))
 }
 
+func TestSQLiteStoreUpdateClearsComputedDistance(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	added, err := s.Add(ctx, QSO{StartUTC: queryT0, Call: "G4ABC", Gridsquare: "JO01", MyGridsquare: "FN31"})
+	require.NoError(t, err)
+	require.True(t, added.DistanceKm.Valid)
+
+	upd := added
+	upd.Gridsquare = ""
+	require.NoError(t, s.Update(ctx, upd))
+
+	got, err := s.Get(ctx, added.ID)
+	require.NoError(t, err)
+	assert.False(t, got.DistanceKm.Valid, "a distance computed from a removed grid must not survive")
+}
+
+func TestSQLiteStoreUpdateKeepsImportedDistance(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	added, err := s.Add(ctx, QSO{StartUTC: queryT0, Call: "G4ABC", DistanceKm: valid(1234.0)})
+	require.NoError(t, err)
+
+	upd := added
+	upd.Comment = "edited"
+	require.NoError(t, s.Update(ctx, upd))
+
+	got, err := s.Get(ctx, added.ID)
+	require.NoError(t, err)
+	assert.Equal(t, valid(1234.0), got.DistanceKm)
+}
+
 func TestSQLiteStoreDeleteCascades(t *testing.T) {
 	s := newTestStore(t)
 	ctx := t.Context()

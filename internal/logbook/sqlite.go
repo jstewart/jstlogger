@@ -35,8 +35,12 @@ type SQLiteStore struct {
 
 var _ Store = (*SQLiteStore)(nil)
 
-// dsnPragmas are applied by the driver to every new connection.
-const dsnPragmas = "_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+// dsnPragmas are applied by the driver to every new connection. _txlock
+// makes transactions take the write lock when they begin: in WAL mode a
+// deferred transaction that reads and then writes fails at once with
+// SQLITE_BUSY if another connection wrote in between, and busy_timeout does
+// not retry that.
+const dsnPragmas = "_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_txlock=immediate"
 
 // Open opens, creating if needed, the SQLite logbook at path and migrates it
 // to the latest schema.
@@ -167,6 +171,22 @@ func (s *SQLiteStore) Update(ctx context.Context, q QSO) error {
 	q.UpdatedAt = s.now()
 
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
+		var oldGrid, oldMyGrid string
+		err := tx.QueryRowContext(ctx, "SELECT gridsquare, my_gridsquare FROM qso WHERE id = ?", q.ID).
+			Scan(&oldGrid, &oldMyGrid)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("read qso: %w", err)
+		}
+		// A stored distance computed from grids that are now gone is stale;
+		// only an imported distance (one no grids produced) outlives them.
+		_, wasComputed := gridDistance(oldGrid, oldMyGrid, s.opts.StationGrid)
+		if _, computed := gridDistance(q.Gridsquare, q.MyGridsquare, s.opts.StationGrid); wasComputed && !computed {
+			q.DistanceKm = sql.Null[float64]{}
+		}
+
 		res, err := tx.ExecContext(ctx, `UPDATE qso SET
 			start_utc = ?, end_utc = ?, call = ?, station_callsign = ?,
 			freq_hz = ?, freq_rx_hz = ?, band = ?, mode = ?, submode = ?,

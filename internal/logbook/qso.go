@@ -73,7 +73,8 @@ type QSO struct {
 	// ITUZ is the ITU zone (ADIF ITUZ).
 	ITUZ sql.Null[int]
 	// ITURegion is the ITU region, 1, 2 or 3. It is not an ADIF field; it is
-	// derived on write when not given.
+	// derived on every write from ITUZ or Gridsquare, and any value set by
+	// the caller is ignored.
 	ITURegion sql.Null[int]
 	// DistanceKm is the great-circle distance to the contacted station in km
 	// (ADIF DISTANCE). It is computed from the grids on write when possible.
