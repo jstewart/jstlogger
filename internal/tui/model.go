@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"jstlogger/internal/logbook"
 	"jstlogger/internal/rig"
 )
 
@@ -28,6 +29,9 @@ type Model struct {
 	// rigErr is the error from the last rig command, shown until the next
 	// successful command or key press.
 	rigErr error
+
+	// logbook is nil when no logbook is open.
+	logbook logbook.Store
 
 	prompt    promptKind
 	input     textinput.Model
