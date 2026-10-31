@@ -2,6 +2,7 @@ package logbook
 
 import (
 	"database/sql"
+	"strconv"
 	"testing"
 	"time"
 
@@ -80,6 +81,12 @@ func TestQSOFromRecordErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestQSOFromRecordErrorKeepsCause(t *testing.T) {
+	_, err := QSOFromRecord(minimal(t, "CQZ", "99999999999999999999"))
+	require.ErrorIs(t, err, ErrInvalidRecord)
+	assert.ErrorIs(t, err, strconv.ErrRange, "the parse error is wrapped, not dropped")
 }
 
 func TestQSOFromRecordEndTime(t *testing.T) {

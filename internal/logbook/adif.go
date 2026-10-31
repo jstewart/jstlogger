@@ -126,7 +126,7 @@ func QSOFromRecord(r adif.Record) (QSO, error) {
 			q.Fields[name] = v
 		}
 		if err != nil {
-			return QSO{}, invalidValue(name, v)
+			return QSO{}, invalidValue(name, v, err)
 		}
 	}
 
@@ -291,19 +291,23 @@ func missingField(name string) error {
 	return fmt.Errorf("%w: field %s is required", ErrInvalidRecord, name)
 }
 
-// invalidValue returns an error for a field whose value cannot be parsed.
-func invalidValue(name, v string) error {
-	return fmt.Errorf("%w: field %s: invalid value %q", ErrInvalidRecord, name, v)
+// invalidValue returns an error for a field whose value cannot be parsed,
+// wrapping cause when there is one.
+func invalidValue(name, v string, cause error) error {
+	if cause == nil {
+		return fmt.Errorf("%w: field %s: invalid value %q", ErrInvalidRecord, name, v)
+	}
+	return fmt.Errorf("%w: field %s: invalid value %q: %w", ErrInvalidRecord, name, v, cause)
 }
 
 // parseDate parses an ADIF date (YYYYMMDD) as midnight UTC.
 func parseDate(name, v string) (time.Time, error) {
 	if len(v) != len(adifDate) || !allDigits(v) {
-		return time.Time{}, invalidValue(name, v)
+		return time.Time{}, invalidValue(name, v, nil)
 	}
 	t, err := time.Parse(adifDate, v)
 	if err != nil {
-		return time.Time{}, invalidValue(name, v)
+		return time.Time{}, invalidValue(name, v, err)
 	}
 	return t, nil
 }
@@ -328,11 +332,11 @@ func parseClock(name, v string) (time.Duration, error) {
 		layout = adifShortTime
 	}
 	if len(v) != len(layout) || !allDigits(v) {
-		return 0, invalidValue(name, v)
+		return 0, invalidValue(name, v, nil)
 	}
 	t, err := time.Parse(layout, v)
 	if err != nil {
-		return 0, invalidValue(name, v)
+		return 0, invalidValue(name, v, err)
 	}
 	h, m, s := t.Clock()
 	return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(s)*time.Second, nil
