@@ -51,6 +51,8 @@ const (
 	promptNone promptKind = iota
 	promptFreq
 	promptMode
+	// promptJump asks for a QSO index row number.
+	promptJump
 )
 
 // rigState is the rig status as last reported by the rig events.
@@ -87,6 +89,9 @@ func (m Model) openPrompt(kind promptKind) (Model, tea.Cmd) {
 	case promptMode:
 		m.input.Prompt = "mode> "
 		m.input.Placeholder = "USB 2400…"
+	case promptJump:
+		m.input.Prompt = "Jump to: "
+		m.input.Placeholder = ""
 	}
 	m.sizeInput()
 	return m, m.input.Focus()
@@ -145,6 +150,11 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 		cmd = rigCmd(fmt.Sprintf("set mode %s", mode), func(ctx context.Context) error {
 			return m.rig.SetMode(ctx, mode, passband)
 		})
+	case promptJump:
+		if err := m.jump(m.input.Value()); err != nil {
+			m.promptErr = err
+			return m, nil
+		}
 	}
 	return m.closePrompt(), cmd
 }

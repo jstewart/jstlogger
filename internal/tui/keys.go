@@ -1,6 +1,9 @@
 package tui
 
-import "charm.land/bubbles/v2/key"
+import (
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+)
 
 // keyMap holds the global keybindings. It implements help.KeyMap so the
 // footer and the full help overlay stay in sync with the actual bindings.
@@ -76,4 +79,136 @@ func (k promptKeyMap) ShortHelp() []key.Binding {
 
 func (k promptKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.Submit, k.Cancel, k.Quit}}
+}
+
+// indexKeyMap holds the QSO index keybindings, modeled on NeoMutt's generic
+// menu.
+type indexKeyMap struct {
+	Next       key.Binding
+	Prev       key.Binding
+	NextPage   key.Binding
+	PrevPage   key.Binding
+	HalfDown   key.Binding
+	HalfUp     key.Binding
+	NextLine   key.Binding
+	PrevLine   key.Binding
+	TopPage    key.Binding
+	MiddlePage key.Binding
+	BottomPage key.Binding
+	First      key.Binding
+	Last       key.Binding
+	Jump       key.Binding
+	Mark       key.Binding
+	Reload     key.Binding
+}
+
+// defaultIndexKeys returns the index keybindings, disabled, and so hidden
+// from help, unless enabled is true.
+func defaultIndexKeys(enabled bool) indexKeyMap {
+	k := indexKeyMap{
+		Next: key.NewBinding(
+			key.WithKeys("j", "down"),
+			key.WithHelp("j/↓", "next"),
+		),
+		Prev: key.NewBinding(
+			key.WithKeys("k", "up"),
+			key.WithHelp("k/↑", "prev"),
+		),
+		NextPage: key.NewBinding(
+			key.WithKeys("z", "pgdown", "right"),
+			key.WithHelp("z/pgdn", "next page"),
+		),
+		PrevPage: key.NewBinding(
+			key.WithKeys("Z", "pgup", "left"),
+			key.WithHelp("Z/pgup", "prev page"),
+		),
+		HalfDown: key.NewBinding(
+			key.WithKeys("]"),
+			key.WithHelp("]", "half page down"),
+		),
+		HalfUp: key.NewBinding(
+			key.WithKeys("["),
+			key.WithHelp("[", "half page up"),
+		),
+		NextLine: key.NewBinding(
+			key.WithKeys(">"),
+			key.WithHelp(">", "scroll down"),
+		),
+		PrevLine: key.NewBinding(
+			key.WithKeys("<"),
+			key.WithHelp("<", "scroll up"),
+		),
+		TopPage: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "top of page"),
+		),
+		MiddlePage: key.NewBinding(
+			key.WithKeys("M"),
+			key.WithHelp("M", "middle of page"),
+		),
+		BottomPage: key.NewBinding(
+			key.WithKeys("L"),
+			key.WithHelp("L", "bottom of page"),
+		),
+		First: key.NewBinding(
+			key.WithKeys("=", "home"),
+			key.WithHelp("=/home", "newest"),
+		),
+		Last: key.NewBinding(
+			key.WithKeys("*", "end"),
+			key.WithHelp("*/end", "oldest"),
+		),
+		Jump: key.NewBinding(
+			key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9"),
+			key.WithHelp("1-9", "jump to QSO"),
+		),
+		Mark: key.NewBinding(
+			key.WithKeys("t"),
+			key.WithHelp("t", "mark"),
+		),
+		Reload: key.NewBinding(
+			key.WithKeys("ctrl+l"),
+			key.WithHelp("ctrl+l", "reload"),
+		),
+	}
+	for _, b := range []*key.Binding{
+		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
+		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
+		&k.First, &k.Last, &k.Jump, &k.Mark, &k.Reload,
+	} {
+		b.SetEnabled(enabled)
+	}
+	return k
+}
+
+func (k indexKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Next, k.Prev, k.Mark, k.Jump}
+}
+
+func (k indexKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Next, k.Prev, k.NextLine, k.PrevLine},
+		{k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp},
+		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
+		{k.First, k.Last, k.Mark, k.Reload},
+	}
+}
+
+// joinedKeyMap shows several key maps' help as one, in order.
+type joinedKeyMap []help.KeyMap
+
+func (j joinedKeyMap) ShortHelp() []key.Binding {
+	var out []key.Binding
+	for _, k := range j {
+		out = append(out, k.ShortHelp()...)
+	}
+	return out
+}
+
+func (j joinedKeyMap) FullHelp() [][]key.Binding {
+	var out [][]key.Binding
+	for _, k := range j {
+		out = append(out, k.FullHelp()...)
+	}
+	return out
 }
