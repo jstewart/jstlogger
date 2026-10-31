@@ -23,7 +23,7 @@ func TestPrepareRequiresStartUTC(t *testing.T) {
 	assert.ErrorIs(t, err, ErrMissingStart)
 }
 
-func TestPrepareNormalisesCase(t *testing.T) {
+func TestPrepareNormalizesCase(t *testing.T) {
 	q := baseQSO(t)
 	q.Call = " k1abc/p "
 	q.StationCallsign = "n0call"
@@ -230,7 +230,7 @@ func TestPrepareFieldsRejectsBadNames(t *testing.T) {
 		fields map[string]string
 	}{
 		{name: "empty name", fields: map[string]string{"  ": "x"}},
-		{name: "duplicate after normalisation", fields: map[string]string{"contest_id": "a", "CONTEST_ID": "b"}},
+		{name: "duplicate after normalization", fields: map[string]string{"contest_id": "a", "CONTEST_ID": "b"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

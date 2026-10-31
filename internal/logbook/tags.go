@@ -12,7 +12,7 @@ import (
 // case. If any ID is unknown it returns an error wrapping ErrNotFound and
 // changes nothing. No IDs or no tags is a no-op.
 func (s *SQLiteStore) Tag(ctx context.Context, qsoIDs []int64, tags ...string) error {
-	tags = normaliseTags(tags)
+	tags = normalizeTags(tags)
 	if len(qsoIDs) == 0 || len(tags) == 0 {
 		return nil
 	}
@@ -42,7 +42,7 @@ func (s *SQLiteStore) Tag(ctx context.Context, qsoIDs []int64, tags ...string) e
 // one transaction, then deletes tags that no longer label any QSO. Unknown
 // IDs and tags are ignored.
 func (s *SQLiteStore) Untag(ctx context.Context, qsoIDs []int64, tags ...string) error {
-	tags = normaliseTags(tags)
+	tags = normalizeTags(tags)
 	if len(qsoIDs) == 0 || len(tags) == 0 {
 		return nil
 	}

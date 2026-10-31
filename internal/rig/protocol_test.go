@@ -97,7 +97,7 @@ func TestClientSet(t *testing.T) {
 		require.NoError(t, c.setFreq(context.Background(), 7074000))
 		assert.Equal(t, "+\\set_freq 7074000\n", <-sent)
 	})
-	t.Run("set_mode normalises case", func(t *testing.T) {
+	t.Run("set_mode normalizes case", func(t *testing.T) {
 		c, sent := pipeClient(t, "set_mode: LSB 1800\nRPRT 0\n")
 		require.NoError(t, c.setMode(context.Background(), "lsb", 1800))
 		assert.Equal(t, "+\\set_mode LSB 1800\n", <-sent)

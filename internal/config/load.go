@@ -135,7 +135,7 @@ func parsePollInterval(raw any) (time.Duration, error) {
 // applyEntryDefaults fills per-entry defaults that viper cannot express
 // (the table key is dynamic), recovers empty tables that viper drops from
 // Unmarshal, lowercases values that refer to station or profile names, and
-// normalises logbook.distance_unit.
+// normalizes logbook.distance_unit.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)

@@ -16,7 +16,7 @@ var (
 	// field that has its own QSO field or confirmation.
 	ErrPromotedField = errors.New("logbook: promoted ADIF field in Fields")
 	// ErrInvalidField is returned (wrapped) when QSO.Fields holds an empty
-	// field name, or two names that are equal after normalisation.
+	// field name, or two names that are equal after normalization.
 	ErrInvalidField = errors.New("logbook: invalid ADIF field name")
 	// ErrInvalidConfirmation is returned (wrapped) when QSO.Confirmations
 	// holds an empty service or the same service more than once.
@@ -39,7 +39,7 @@ var promotedFields = []string{
 	"EQSL_QSL_SENT", "EQSL_QSL_RCVD", "EQSL_QSLSDATE", "EQSL_QSLRDATE",
 }
 
-// prepare normalises q and derives values before it is written, returning a
+// prepare normalizes q and derives values before it is written, returning a
 // copy; the caller's maps and slices are not modified. stationGrid is the
 // configured station locator, used for the distance when q.MyGridsquare is
 // empty. It is never stored in the QSO.
@@ -72,7 +72,7 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 		q.DistanceKm = sql.Null[float64]{V: km, Valid: true}
 	}
 
-	fields, err := normaliseFields(q.Fields)
+	fields, err := normalizeFields(q.Fields)
 	if err != nil {
 		return QSO{}, fmt.Errorf("logbook: prepare qso: %w", err)
 	}
@@ -81,7 +81,7 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 	if q.Confirmations != nil {
 		confs := make([]Confirmation, len(q.Confirmations))
 		for i, c := range q.Confirmations {
-			c.Service = normaliseService(c.Service)
+			c.Service = normalizeService(c.Service)
 			if c.Service == "" {
 				return QSO{}, fmt.Errorf("logbook: prepare qso: empty service: %w", ErrInvalidConfirmation)
 			}
@@ -95,7 +95,7 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 		q.Confirmations = confs
 	}
 
-	q.Tags = normaliseTags(q.Tags)
+	q.Tags = normalizeTags(q.Tags)
 	return q, nil
 }
 
@@ -124,10 +124,10 @@ func deriveITURegion(q QSO) sql.Null[int] {
 	return sql.Null[int]{}
 }
 
-// normaliseFields returns a copy of fields with trimmed, upper-case names and
+// normalizeFields returns a copy of fields with trimmed, upper-case names and
 // trimmed values. It rejects empty names, names that collide after
-// normalisation and promoted ADIF fields.
-func normaliseFields(fields map[string]string) (map[string]string, error) {
+// normalization and promoted ADIF fields.
+func normalizeFields(fields map[string]string) (map[string]string, error) {
 	if fields == nil {
 		return nil, nil
 	}
@@ -148,10 +148,10 @@ func normaliseFields(fields map[string]string) (map[string]string, error) {
 	return out, nil
 }
 
-// normaliseTags returns trimmed, non-empty tags with case-insensitive
+// normalizeTags returns trimmed, non-empty tags with case-insensitive
 // duplicates removed, keeping the first spelling of each. It returns nil when
 // no tags remain.
-func normaliseTags(tags []string) []string {
+func normalizeTags(tags []string) []string {
 	var out []string
 	for _, t := range tags {
 		t = strings.TrimSpace(t)
@@ -166,9 +166,9 @@ func normaliseTags(tags []string) []string {
 	return out
 }
 
-// normaliseService trims a confirmation service name and lower-cases it, to
+// normalizeService trims a confirmation service name and lower-cases it, to
 // match the Service constants.
-func normaliseService(s string) string {
+func normalizeService(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
