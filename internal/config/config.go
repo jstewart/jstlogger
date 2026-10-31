@@ -25,7 +25,7 @@ const (
 	// DefaultStationName is the default value of default_station.
 	DefaultStationName = "home"
 	// DefaultDistanceUnit is the default logbook.distance_unit.
-	DefaultDistanceUnit = DistanceUnitKm
+	DefaultDistanceUnit = DistanceUnitMi
 )
 
 // Distance units accepted in logbook.distance_unit.

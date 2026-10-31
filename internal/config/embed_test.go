@@ -73,7 +73,7 @@ port    = 4533
 
 [logbook]
 # path = "/path/to/logbook.db"   # Default: $XDG_DATA_HOME/jstlogger/logbook.db
-distance_unit = "km"             # "km" | "mi"
+distance_unit = "mi"             # "mi" | "km"
 `
 
 func TestDefaultTemplateMatchesIssue(t *testing.T) {
@@ -135,6 +135,6 @@ func TestFullExampleLoads(t *testing.T) {
 				"portable": {Backend: BackendRigctld, Host: "localhost", Port: 4533},
 			},
 		},
-		Logbook: Logbook{DistanceUnit: DistanceUnitKm},
+		Logbook: Logbook{DistanceUnit: DistanceUnitMi},
 	}, c)
 }

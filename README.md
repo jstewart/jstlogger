@@ -103,7 +103,7 @@ QSOs are stored in a SQLite database at `$XDG_DATA_HOME/jstlogger/logbook.db`
 (`~/.local/share/jstlogger/logbook.db` by default). It is created on first
 run and its schema is upgraded automatically at startup. Set
 `[logbook] path` in the config to keep it somewhere else, and
-`distance_unit = "mi"` to work in miles instead of kilometres.
+`distance_unit = "km"` to work in kilometers instead of miles.
 
 ## Development
 

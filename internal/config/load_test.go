@@ -103,12 +103,12 @@ func TestLoadLogbook(t *testing.T) {
 		{
 			name:    "section absent uses defaults",
 			content: "",
-			want:    Logbook{DistanceUnit: DistanceUnitKm},
+			want:    Logbook{DistanceUnit: DistanceUnitMi},
 		},
 		{
 			name:    "path and unit set",
-			content: "[logbook]\npath = \"/data/log.db\"\ndistance_unit = \"mi\"\n",
-			want:    Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitMi},
+			content: "[logbook]\npath = \"/data/log.db\"\ndistance_unit = \"km\"\n",
+			want:    Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitKm},
 		},
 		{
 			name:    "unit is lowercased and trimmed",
