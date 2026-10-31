@@ -71,6 +71,7 @@ func fullQSO() QSO {
 		EndUTC:          valid(start.Add(3*time.Minute + 500*time.Millisecond)),
 		Call:            "K1ABC",
 		StationCallsign: "N0CALL",
+		Operator:        "W1OP",
 		FreqHz:          valid[int64](14_074_000),
 		FreqRxHz:        valid[int64](14_075_000),
 		Band:            "20m",
@@ -134,6 +135,7 @@ func TestSQLiteStoreAddGetRoundTrip(t *testing.T) {
 	assert.Equal(t, want, got)
 	assert.Equal(t, got, added, "Add returns what Get returns")
 	assert.NotEqual(t, 1.0, got.DistanceKm.V, "distance is recomputed from the grids")
+	assert.Equal(t, "W1OP", got.Operator)
 }
 
 func TestSQLiteStoreAddKeepsGivenUUID(t *testing.T) {
@@ -324,7 +326,7 @@ func TestSQLiteStoreReopenKeepsData(t *testing.T) {
 
 	var v int
 	require.NoError(t, second.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v))
-	assert.Equal(t, 1, v)
+	assert.Equal(t, 2, v)
 }
 
 func TestSQLiteStoreEnablesPragmas(t *testing.T) {

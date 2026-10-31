@@ -37,6 +37,8 @@ var promotedFields = []string{
 	"QSL_SENT", "QSL_RCVD", "QSLSDATE", "QSLRDATE",
 	"LOTW_QSL_SENT", "LOTW_QSL_RCVD", "LOTW_QSLSDATE", "LOTW_QSLRDATE",
 	"EQSL_QSL_SENT", "EQSL_QSL_RCVD", "EQSL_QSLSDATE", "EQSL_QSLRDATE",
+	// jstlogger's own application-defined field, which carries QSO.UUID.
+	"APP_JSTLOGGER_UUID",
 }
 
 // prepare normalizes q and derives values before it is written, returning a
@@ -53,6 +55,7 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 
 	q.Call = upper(q.Call)
 	q.StationCallsign = upper(q.StationCallsign)
+	q.Operator = upper(q.Operator)
 	q.Gridsquare = upper(q.Gridsquare)
 	q.MyGridsquare = upper(q.MyGridsquare)
 	q.Cont = upper(q.Cont)

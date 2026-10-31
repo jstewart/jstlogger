@@ -38,6 +38,8 @@ type QSO struct {
 	Call string
 	// StationCallsign is the callsign we used (ADIF STATION_CALLSIGN).
 	StationCallsign string
+	// Operator is the callsign of the person who operated our station (ADIF OPERATOR).
+	Operator string
 	// FreqHz is the transmit frequency in Hz (ADIF FREQ).
 	FreqHz sql.Null[int64]
 	// FreqRxHz is the receive frequency in Hz when split (ADIF FREQ_RX).

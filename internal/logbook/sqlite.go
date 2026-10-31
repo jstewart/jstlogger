@@ -87,7 +87,7 @@ func (s *SQLiteStore) Close() error {
 
 // qsoColumns lists the qso table's columns in the order scanQSO reads them.
 const qsoColumns = `id, uuid, start_utc, end_utc, call, station_callsign,
-	freq_hz, freq_rx_hz, band, mode, submode, rst_sent, rst_rcvd, tx_pwr,
+	operator, freq_hz, freq_rx_hz, band, mode, submode, rst_sent, rst_rcvd, tx_pwr,
 	name, qth, gridsquare, my_gridsquare, dxcc, country, cont, cqz, ituz,
 	itu_region, distance_km, state, cnty, comment, created_at, updated_at`
 
@@ -106,12 +106,12 @@ func (s *SQLiteStore) Add(ctx context.Context, q QSO) (QSO, error) {
 	var id int64
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `INSERT INTO qso (
-			uuid, start_utc, end_utc, call, station_callsign,
+			uuid, start_utc, end_utc, call, station_callsign, operator,
 			freq_hz, freq_rx_hz, band, mode, submode, rst_sent, rst_rcvd, tx_pwr,
 			name, qth, gridsquare, my_gridsquare, dxcc, country, cont, cqz, ituz,
 			itu_region, distance_km, state, cnty, comment, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			q.UUID, formatTime(q.StartUTC), nullTime(q.EndUTC), q.Call, q.StationCallsign,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			q.UUID, formatTime(q.StartUTC), nullTime(q.EndUTC), q.Call, q.StationCallsign, q.Operator,
 			nullArg(q.FreqHz), nullArg(q.FreqRxHz), q.Band, q.Mode, q.Submode, q.RSTSent, q.RSTRcvd, nullArg(q.TxPwr),
 			q.Name, q.QTH, q.Gridsquare, q.MyGridsquare, nullArg(q.DXCC), q.Country, q.Cont, nullArg(q.CQZ), nullArg(q.ITUZ),
 			nullArg(q.ITURegion), nullArg(q.DistanceKm), q.State, q.Cnty, q.Comment,
@@ -188,14 +188,14 @@ func (s *SQLiteStore) Update(ctx context.Context, q QSO) error {
 		}
 
 		res, err := tx.ExecContext(ctx, `UPDATE qso SET
-			start_utc = ?, end_utc = ?, call = ?, station_callsign = ?,
+			start_utc = ?, end_utc = ?, call = ?, station_callsign = ?, operator = ?,
 			freq_hz = ?, freq_rx_hz = ?, band = ?, mode = ?, submode = ?,
 			rst_sent = ?, rst_rcvd = ?, tx_pwr = ?, name = ?, qth = ?,
 			gridsquare = ?, my_gridsquare = ?, dxcc = ?, country = ?, cont = ?,
 			cqz = ?, ituz = ?, itu_region = ?, distance_km = ?, state = ?,
 			cnty = ?, comment = ?, updated_at = ?
 			WHERE id = ?`,
-			formatTime(q.StartUTC), nullTime(q.EndUTC), q.Call, q.StationCallsign,
+			formatTime(q.StartUTC), nullTime(q.EndUTC), q.Call, q.StationCallsign, q.Operator,
 			nullArg(q.FreqHz), nullArg(q.FreqRxHz), q.Band, q.Mode, q.Submode,
 			q.RSTSent, q.RSTRcvd, nullArg(q.TxPwr), q.Name, q.QTH,
 			q.Gridsquare, q.MyGridsquare, nullArg(q.DXCC), q.Country, q.Cont,
@@ -332,7 +332,7 @@ func scanQSO(r scanner) (QSO, error) {
 		end                     sql.Null[string]
 	)
 	err := r.Scan(&q.ID, &q.UUID, &start, &end, &q.Call, &q.StationCallsign,
-		&q.FreqHz, &q.FreqRxHz, &q.Band, &q.Mode, &q.Submode, &q.RSTSent, &q.RSTRcvd, &q.TxPwr,
+		&q.Operator, &q.FreqHz, &q.FreqRxHz, &q.Band, &q.Mode, &q.Submode, &q.RSTSent, &q.RSTRcvd, &q.TxPwr,
 		&q.Name, &q.QTH, &q.Gridsquare, &q.MyGridsquare, &q.DXCC, &q.Country, &q.Cont, &q.CQZ, &q.ITUZ,
 		&q.ITURegion, &q.DistanceKm, &q.State, &q.Cnty, &q.Comment, &created, &updated)
 	if err != nil {

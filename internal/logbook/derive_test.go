@@ -27,6 +27,7 @@ func TestPrepareNormalizesCase(t *testing.T) {
 	q := baseQSO(t)
 	q.Call = " k1abc/p "
 	q.StationCallsign = "n0call"
+	q.Operator = " w1op "
 	q.Gridsquare = "fn31pr"
 	q.MyGridsquare = " jo01 "
 	q.Cont = "na"
@@ -39,6 +40,7 @@ func TestPrepareNormalizesCase(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "K1ABC/P", got.Call)
 	assert.Equal(t, "N0CALL", got.StationCallsign)
+	assert.Equal(t, "W1OP", got.Operator)
 	assert.Equal(t, "FN31PR", got.Gridsquare)
 	assert.Equal(t, "JO01", got.MyGridsquare)
 	assert.Equal(t, "NA", got.Cont)
@@ -209,6 +211,7 @@ func TestPrepareFieldsRejectsPromoted(t *testing.T) {
 		{name: "lower-case freq", key: "freq"},
 		{name: "padded gridsquare", key: " gridsquare "},
 		{name: "operator", key: "OPERATOR"},
+		{name: "jstlogger uuid", key: "app_jstlogger_uuid"},
 		{name: "distance", key: "DISTANCE"},
 		{name: "lotw received", key: "LOTW_QSL_RCVD"},
 		{name: "eqsl sent date", key: "EQSL_QSLSDATE"},
