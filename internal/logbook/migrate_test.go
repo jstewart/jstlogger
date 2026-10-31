@@ -3,6 +3,7 @@ package logbook
 import (
 	"context"
 	"database/sql"
+	"io/fs"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
@@ -165,7 +166,7 @@ func TestMigrateRealMigrations(t *testing.T) {
 
 	require.NoError(t, migrate(context.Background(), db, migrations.FS))
 
-	assert.Equal(t, 1, userVersion(t, db))
+	assert.Equal(t, 2, userVersion(t, db))
 	for _, table := range []string{"qso", "qso_adif_field", "qso_confirmation", "tag", "qso_tag"} {
 		assert.True(t, schemaObjectExists(t, db, "table", table), "table %s", table)
 	}
@@ -176,4 +177,21 @@ func TestMigrateRealMigrations(t *testing.T) {
 	} {
 		assert.True(t, schemaObjectExists(t, db, "index", index), "index %s", index)
 	}
+}
+
+func TestMigrateAddsOperatorColumn(t *testing.T) {
+	db := openRawDB(t)
+	ctx := t.Context()
+	body, err := fs.ReadFile(migrations.FS, "0001_init.sql")
+	require.NoError(t, err)
+	require.NoError(t, migrate(ctx, db, fstest.MapFS{"0001_init.sql": {Data: body}}))
+	_, err = db.ExecContext(ctx,
+		"INSERT INTO qso (uuid, start_utc, call, created_at, updated_at) VALUES ('u', 't', 'W1AW', 't', 't')")
+	require.NoError(t, err)
+
+	require.NoError(t, migrate(ctx, db, migrations.FS))
+
+	var operator string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT operator FROM qso").Scan(&operator))
+	assert.Empty(t, operator, "existing rows default to no operator")
 }

@@ -85,6 +85,20 @@ func (mr *MockStoreMockRecorder) Delete(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockStore)(nil).Delete), ctx, id)
 }
 
+// Each mocks base method.
+func (m *MockStore) Each(ctx context.Context, f logbook.Filter, fn func(logbook.QSO) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Each", ctx, f, fn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Each indicates an expected call of Each.
+func (mr *MockStoreMockRecorder) Each(ctx, f, fn any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Each", reflect.TypeOf((*MockStore)(nil).Each), ctx, f, fn)
+}
+
 // Get mocks base method.
 func (m *MockStore) Get(ctx context.Context, id int64) (logbook.QSO, error) {
 	m.ctrl.T.Helper()
@@ -98,6 +112,21 @@ func (m *MockStore) Get(ctx context.Context, id int64) (logbook.QSO, error) {
 func (mr *MockStoreMockRecorder) Get(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockStore)(nil).Get), ctx, id)
+}
+
+// Import mocks base method.
+func (m *MockStore) Import(ctx context.Context, qsos []logbook.QSO, tags []string) (logbook.ImportResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Import", ctx, qsos, tags)
+	ret0, _ := ret[0].(logbook.ImportResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Import indicates an expected call of Import.
+func (mr *MockStoreMockRecorder) Import(ctx, qsos, tags any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Import", reflect.TypeOf((*MockStore)(nil).Import), ctx, qsos, tags)
 }
 
 // List mocks base method.

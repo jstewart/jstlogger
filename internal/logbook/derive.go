@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ var promotedFields = []string{
 	"QSL_SENT", "QSL_RCVD", "QSLSDATE", "QSLRDATE",
 	"LOTW_QSL_SENT", "LOTW_QSL_RCVD", "LOTW_QSLSDATE", "LOTW_QSLRDATE",
 	"EQSL_QSL_SENT", "EQSL_QSL_RCVD", "EQSL_QSLSDATE", "EQSL_QSLRDATE",
+	// jstlogger's own application-defined field, which carries QSO.UUID.
+	"APP_JSTLOGGER_UUID",
 }
 
 // prepare normalizes q and derives values before it is written, returning a
@@ -53,6 +56,7 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 
 	q.Call = upper(q.Call)
 	q.StationCallsign = upper(q.StationCallsign)
+	q.Operator = upper(q.Operator)
 	q.Gridsquare = upper(q.Gridsquare)
 	q.MyGridsquare = upper(q.MyGridsquare)
 	q.Cont = upper(q.Cont)
@@ -68,8 +72,13 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 	// from an earlier read is never kept.
 	q.ITURegion = deriveITURegion(q)
 
-	if km, ok := gridDistance(q.Gridsquare, q.MyGridsquare, stationGrid); ok {
-		q.DistanceKm = sql.Null[float64]{V: km, Valid: true}
+	// A supplied distance (e.g. an imported ADIF DISTANCE) is kept as is;
+	// programs calculate it differently, so recalculating it would break a
+	// round trip. Update recalculates it when the grids change.
+	if !q.DistanceKm.Valid {
+		if km, ok := gridDistance(q.Gridsquare, q.MyGridsquare, stationGrid); ok {
+			q.DistanceKm = sql.Null[float64]{V: km, Valid: true}
+		}
 	}
 
 	fields, err := normalizeFields(q.Fields)
@@ -99,15 +108,18 @@ func prepare(q QSO, stationGrid string) (QSO, error) {
 	return q, nil
 }
 
-// gridDistance returns the distance between grid and myGrid, using
-// stationGrid when myGrid is empty, and false when either grid is missing or
-// invalid.
+// gridDistance returns the distance between grid and myGrid in km, rounded
+// to 0.1 km, using stationGrid when myGrid is empty, and false when either
+// grid is missing or invalid.
 func gridDistance(grid, myGrid, stationGrid string) (float64, bool) {
 	if upper(myGrid) == "" {
 		myGrid = stationGrid
 	}
 	km, err := GridDistanceKm(upper(grid), upper(myGrid))
-	return km, err == nil
+	if err != nil {
+		return 0, false
+	}
+	return math.Round(km*10) / 10, true
 }
 
 // deriveITURegion returns the ITU region from q's ITU zone if that zone lies

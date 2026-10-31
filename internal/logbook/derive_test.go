@@ -2,6 +2,7 @@ package logbook
 
 import (
 	"database/sql"
+	"math"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ func TestPrepareNormalizesCase(t *testing.T) {
 	q := baseQSO(t)
 	q.Call = " k1abc/p "
 	q.StationCallsign = "n0call"
+	q.Operator = " w1op "
 	q.Gridsquare = "fn31pr"
 	q.MyGridsquare = " jo01 "
 	q.Cont = "na"
@@ -39,6 +41,7 @@ func TestPrepareNormalizesCase(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "K1ABC/P", got.Call)
 	assert.Equal(t, "N0CALL", got.StationCallsign)
+	assert.Equal(t, "W1OP", got.Operator)
 	assert.Equal(t, "FN31PR", got.Gridsquare)
 	assert.Equal(t, "JO01", got.MyGridsquare)
 	assert.Equal(t, "NA", got.Cont)
@@ -134,26 +137,34 @@ func TestPrepareITURegion(t *testing.T) {
 	}
 }
 
+// roundedDistance returns the distance between two grids rounded to 0.1 km,
+// as the store calculates it.
+func roundedDistance(t *testing.T, grid, myGrid string) float64 {
+	t.Helper()
+	km, err := GridDistanceKm(grid, myGrid)
+	require.NoError(t, err)
+	return math.Round(km*10) / 10
+}
+
 func TestPrepareDistance(t *testing.T) {
-	imported := sql.Null[float64]{V: 1234, Valid: true}
+	imported := sql.Null[float64]{V: 1234.56, Valid: true}
+	calculated := roundedDistance(t, "JO01", "FN31PR")
 	tests := []struct {
 		name        string
 		grid, mine  string
 		stationGrid string
 		supplied    sql.Null[float64]
-		wantValid   bool
-		want        float64
-		tol         float64
+		want        sql.Null[float64]
 	}{
-		{name: "computed from both grids", grid: "JO01", mine: "FN31pr", wantValid: true, want: 5489, tol: 5},
-		{name: "computed wins over imported", grid: "JO01", mine: "FN31pr", supplied: imported, wantValid: true, want: 5489, tol: 5},
-		{name: "station grid fallback", grid: "JO01", stationGrid: "fn31pr", wantValid: true, want: 5489, tol: 5},
-		{name: "my grid preferred over station grid", grid: "JO01", mine: "JO01", stationGrid: "FN31pr", wantValid: true, want: 0, tol: 1e-6},
-		{name: "imported kept without their grid", mine: "FN31pr", supplied: imported, wantValid: true, want: 1234},
-		{name: "imported kept without my grid", grid: "JO01", supplied: imported, wantValid: true, want: 1234},
-		{name: "imported kept when grid invalid", grid: "ZZ99", mine: "FN31", supplied: imported, wantValid: true, want: 1234},
-		{name: "zero distance import kept", grid: "JO01", supplied: sql.Null[float64]{Valid: true}, wantValid: true, want: 0, tol: 1e-6},
-		{name: "nothing known", grid: "JO01", wantValid: false},
+		{name: "calculated from both grids", grid: "JO01", mine: "FN31pr", want: valid(calculated)},
+		{name: "imported wins over calculated", grid: "JO01", mine: "FN31pr", supplied: imported, want: imported},
+		{name: "station grid fallback", grid: "JO01", stationGrid: "fn31pr", want: valid(calculated)},
+		{name: "my grid preferred over station grid", grid: "JO01", mine: "JO01", stationGrid: "FN31pr", want: valid(0.0)},
+		{name: "imported kept without their grid", mine: "FN31pr", supplied: imported, want: imported},
+		{name: "imported kept without my grid", grid: "JO01", supplied: imported, want: imported},
+		{name: "imported kept when grid invalid", grid: "ZZ99", mine: "FN31", supplied: imported, want: imported},
+		{name: "zero distance import kept", grid: "JO01", mine: "FN31pr", supplied: valid(0.0), want: valid(0.0)},
+		{name: "nothing known", grid: "JO01", want: sql.Null[float64]{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -163,10 +174,7 @@ func TestPrepareDistance(t *testing.T) {
 			q.DistanceKm = tt.supplied
 			got, err := prepare(q, tt.stationGrid)
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantValid, got.DistanceKm.Valid)
-			if tt.wantValid {
-				assert.InDelta(t, tt.want, got.DistanceKm.V, tt.tol)
-			}
+			assert.Equal(t, tt.want, got.DistanceKm)
 		})
 	}
 }
@@ -209,6 +217,7 @@ func TestPrepareFieldsRejectsPromoted(t *testing.T) {
 		{name: "lower-case freq", key: "freq"},
 		{name: "padded gridsquare", key: " gridsquare "},
 		{name: "operator", key: "OPERATOR"},
+		{name: "jstlogger uuid", key: "app_jstlogger_uuid"},
 		{name: "distance", key: "DISTANCE"},
 		{name: "lotw received", key: "LOTW_QSL_RCVD"},
 		{name: "eqsl sent date", key: "EQSL_QSLSDATE"},

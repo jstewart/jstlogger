@@ -38,6 +38,8 @@ type QSO struct {
 	Call string
 	// StationCallsign is the callsign we used (ADIF STATION_CALLSIGN).
 	StationCallsign string
+	// Operator is the callsign of the person who operated our station (ADIF OPERATOR).
+	Operator string
 	// FreqHz is the transmit frequency in Hz (ADIF FREQ).
 	FreqHz sql.Null[int64]
 	// FreqRxHz is the receive frequency in Hz when split (ADIF FREQ_RX).
@@ -77,7 +79,9 @@ type QSO struct {
 	// the caller is ignored.
 	ITURegion sql.Null[int]
 	// DistanceKm is the great-circle distance to the contacted station in km
-	// (ADIF DISTANCE). It is computed from the grids on write when possible.
+	// (ADIF DISTANCE). A supplied distance is kept as is. When there is none,
+	// it is calculated from the grids on write when possible, rounded to
+	// 0.1 km. Update recalculates it when Gridsquare or MyGridsquare changes.
 	DistanceKm sql.Null[float64]
 	// State is the contacted station's state or province (ADIF STATE).
 	State string

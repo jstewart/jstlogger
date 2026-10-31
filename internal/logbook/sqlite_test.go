@@ -71,6 +71,7 @@ func fullQSO() QSO {
 		EndUTC:          valid(start.Add(3*time.Minute + 500*time.Millisecond)),
 		Call:            "K1ABC",
 		StationCallsign: "N0CALL",
+		Operator:        "W1OP",
 		FreqHz:          valid[int64](14_074_000),
 		FreqRxHz:        valid[int64](14_075_000),
 		Band:            "20m",
@@ -89,7 +90,7 @@ func fullQSO() QSO {
 		CQZ:             valid(5),
 		ITUZ:            valid(8),
 		ITURegion:       valid(2),
-		DistanceKm:      valid(1.0), // recomputed from the grids
+		DistanceKm:      valid(1.0), // supplied, so kept rather than calculated
 		State:           "MA",
 		Cnty:            "MA,Suffolk",
 		Comment:         "nice signal",
@@ -133,7 +134,8 @@ func TestSQLiteStoreAddGetRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
 	assert.Equal(t, got, added, "Add returns what Get returns")
-	assert.NotEqual(t, 1.0, got.DistanceKm.V, "distance is recomputed from the grids")
+	assert.Equal(t, valid(1.0), got.DistanceKm, "a supplied distance is kept")
+	assert.Equal(t, "W1OP", got.Operator)
 }
 
 func TestSQLiteStoreAddKeepsGivenUUID(t *testing.T) {
@@ -184,10 +186,8 @@ func TestSQLiteStorePersistsDerivedValues(t *testing.T) {
 	got, err := s.Get(ctx, added.ID)
 	require.NoError(t, err)
 
-	wantKm, err := GridDistanceKm("IO91", testStationGrid)
-	require.NoError(t, err)
 	assert.Equal(t, "40m", got.Band)
-	assert.Equal(t, valid(wantKm), got.DistanceKm, "distance from the station grid")
+	assert.Equal(t, valid(roundedDistance(t, "IO91", testStationGrid)), got.DistanceKm, "distance from the station grid")
 	assert.Empty(t, got.MyGridsquare, "station grid is not stored in the QSO")
 	assert.Equal(t, valid(1), got.ITURegion)
 }
@@ -216,9 +216,7 @@ func TestSQLiteStoreUpdate(t *testing.T) {
 	got, err := s.Get(ctx, added.ID)
 	require.NoError(t, err)
 
-	wantKm, err := GridDistanceKm("PM95", "JO01")
-	require.NoError(t, err)
-	assert.Equal(t, valid(wantKm), got.DistanceKm, "distance follows the new grid")
+	assert.Equal(t, valid(roundedDistance(t, "PM95", "JO01")), got.DistanceKm, "distance follows the new grid")
 	assert.NotEqual(t, added.DistanceKm, got.DistanceKm)
 	assert.Equal(t, valid(3), got.ITURegion, "region is re-derived")
 	assert.Equal(t, map[string]string{"SIG": "POTA"}, got.Fields)
@@ -262,6 +260,52 @@ func TestSQLiteStoreUpdateKeepsImportedDistance(t *testing.T) {
 	got, err := s.Get(ctx, added.ID)
 	require.NoError(t, err)
 	assert.Equal(t, valid(1234.0), got.DistanceKm)
+}
+
+func TestSQLiteStoreAddKeepsSuppliedDistance(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+
+	added, err := s.Add(ctx, QSO{StartUTC: queryT0, Call: "G4ABC", Gridsquare: "JO01", MyGridsquare: "FN31", DistanceKm: valid(3111.23)})
+	require.NoError(t, err)
+
+	assert.Equal(t, valid(3111.23), added.DistanceKm, "a supplied distance is neither recalculated nor rounded")
+}
+
+func TestSQLiteStoreUpdateDistance(t *testing.T) {
+	const supplied = 3111.23
+	tests := []struct {
+		name string
+		edit func(q *QSO)
+		want sql.Null[float64]
+	}{
+		{name: "unchanged grids keep it", edit: func(q *QSO) { q.Comment = "edited" }, want: valid(supplied)},
+		{name: "grid case change keeps it", edit: func(q *QSO) { q.Gridsquare = "jo01" }, want: valid(supplied)},
+		{name: "new grid recalculates", edit: func(q *QSO) { q.Gridsquare = "PM95" }, want: valid(roundedDistance(t, "PM95", "FN31"))},
+		{name: "new my grid recalculates", edit: func(q *QSO) { q.MyGridsquare = "IO91" }, want: valid(roundedDistance(t, "JO01", "IO91"))},
+		{name: "new grid wins over an edited distance", edit: func(q *QSO) {
+			q.Gridsquare = "PM95"
+			q.DistanceKm = valid(1.0)
+		}, want: valid(roundedDistance(t, "PM95", "FN31"))},
+		{name: "edited distance kept with unchanged grids", edit: func(q *QSO) { q.DistanceKm = valid(42.0) }, want: valid(42.0)},
+		{name: "cleared distance is calculated", edit: func(q *QSO) { q.DistanceKm = sql.Null[float64]{} }, want: valid(roundedDistance(t, "JO01", "FN31"))},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestStore(t)
+			ctx := t.Context()
+			added, err := s.Add(ctx, QSO{StartUTC: queryT0, Call: "G4ABC", Gridsquare: "JO01", MyGridsquare: "FN31", DistanceKm: valid(supplied)})
+			require.NoError(t, err)
+
+			upd := added
+			tt.edit(&upd)
+			require.NoError(t, s.Update(ctx, upd))
+
+			got, err := s.Get(ctx, added.ID)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.DistanceKm)
+		})
+	}
 }
 
 func TestSQLiteStoreDeleteCascades(t *testing.T) {
@@ -324,7 +368,7 @@ func TestSQLiteStoreReopenKeepsData(t *testing.T) {
 
 	var v int
 	require.NoError(t, second.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v))
-	assert.Equal(t, 1, v)
+	assert.Equal(t, 2, v)
 }
 
 func TestSQLiteStoreEnablesPragmas(t *testing.T) {
