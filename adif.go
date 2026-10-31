@@ -101,15 +101,30 @@ func writeFileAtomic(path string, write func(io.Writer) (int, error)) (n int, er
 	}
 	defer func() {
 		if err != nil {
-			// Best effort: the file may already be closed, and its removal
-			// failing must not hide the error that caused it.
+			// The file may already be closed, so a second Close error says
+			// nothing; a failed removal is reported alongside the cause.
 			_ = tmp.Close()
-			_ = os.Remove(tmp.Name())
+			if rerr := os.Remove(tmp.Name()); rerr != nil {
+				err = errors.Join(err, fmt.Errorf("remove temporary file: %w", rerr))
+			}
 		}
 	}()
 
 	if n, err = write(tmp); err != nil {
 		return 0, err
+	}
+	// CreateTemp makes the file private; give it the mode of the file it
+	// replaces, or the usual mode of a new file.
+	mode := os.FileMode(0o644)
+	if fi, serr := os.Stat(path); serr == nil {
+		mode = fi.Mode().Perm()
+	}
+	if err = tmp.Chmod(mode); err != nil {
+		return 0, fmt.Errorf("set temporary file mode: %w", err)
+	}
+	// Sync before the rename so a crash cannot leave a short file in place.
+	if err = tmp.Sync(); err != nil {
+		return 0, fmt.Errorf("sync temporary file: %w", err)
 	}
 	if err = tmp.Close(); err != nil {
 		return 0, fmt.Errorf("close temporary file: %w", err)

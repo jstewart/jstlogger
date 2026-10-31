@@ -145,6 +145,26 @@ func TestExportOverwritesExistingFile(t *testing.T) {
 	assert.Equal(t, "out.adi", entries[0].Name())
 }
 
+func TestExportFileMode(t *testing.T) {
+	cfg := logbookConfig(t)
+	require.Equal(t, 0, runMode(t, cfg, "--import-adif", roundTripFixture).code)
+	dir := t.TempDir()
+
+	fresh := filepath.Join(dir, "fresh.adi")
+	require.Equal(t, 0, runMode(t, cfg, "--export-adif", fresh).code)
+	fi, err := os.Stat(fresh)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), fi.Mode().Perm(), "a new export has the usual file mode")
+
+	private := filepath.Join(dir, "private.adi")
+	require.NoError(t, os.WriteFile(private, nil, 0o600))
+	require.NoError(t, os.Chmod(private, 0o600))
+	require.Equal(t, 0, runMode(t, cfg, "--export-adif", private).code)
+	fi, err = os.Stat(private)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm(), "an overwritten export keeps its mode")
+}
+
 func TestExportStdout(t *testing.T) {
 	cfg := logbookConfig(t)
 	require.Equal(t, 0, runMode(t, cfg, "--import-adif", roundTripFixture).code)
