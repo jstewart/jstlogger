@@ -180,12 +180,7 @@ func (s *SQLiteStore) Update(ctx context.Context, q QSO) error {
 		if err != nil {
 			return fmt.Errorf("read qso: %w", err)
 		}
-		// A stored distance computed from grids that are now gone is stale;
-		// only an imported distance (one no grids produced) outlives them.
-		_, wasComputed := gridDistance(oldGrid, oldMyGrid, s.opts.StationGrid)
-		if _, computed := gridDistance(q.Gridsquare, q.MyGridsquare, s.opts.StationGrid); wasComputed && !computed {
-			q.DistanceKm = sql.Null[float64]{}
-		}
+		q.DistanceKm = s.updatedDistance(q, oldGrid, oldMyGrid)
 
 		res, err := tx.ExecContext(ctx, `UPDATE qso SET
 			start_utc = ?, end_utc = ?, call = ?, station_callsign = ?, operator = ?,
@@ -223,6 +218,26 @@ func (s *SQLiteStore) Update(ctx context.Context, q QSO) error {
 		return fmt.Errorf("logbook: update qso %d: %w", q.ID, err)
 	}
 	return nil
+}
+
+// updatedDistance returns the distance to store when q replaces a QSO whose
+// stored grids were oldGrid and oldMyGrid. prepare has already filled in
+// q.DistanceKm if it was missing. If neither grid changed, q's distance is
+// kept. If a grid changed, a distance calculated from the new grids replaces
+// it; when none can be calculated, a distance the old grids produced is stale
+// and is cleared, while one no grids could produce (an imported distance) is
+// kept.
+func (s *SQLiteStore) updatedDistance(q QSO, oldGrid, oldMyGrid string) sql.Null[float64] {
+	if upper(oldGrid) == q.Gridsquare && upper(oldMyGrid) == q.MyGridsquare {
+		return q.DistanceKm
+	}
+	if km, ok := gridDistance(q.Gridsquare, q.MyGridsquare, s.opts.StationGrid); ok {
+		return sql.Null[float64]{V: km, Valid: true}
+	}
+	if _, wasCalculated := gridDistance(oldGrid, oldMyGrid, s.opts.StationGrid); wasCalculated {
+		return sql.Null[float64]{}
+	}
+	return q.DistanceKm
 }
 
 // Delete removes the QSO with the given ID and, through foreign keys, its
