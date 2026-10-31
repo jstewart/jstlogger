@@ -159,6 +159,9 @@ normalizations:
 - Header `USERDEF` definitions are not kept. Their fields still come
   through.
 - `BAND` is added when it can be worked out from `FREQ`.
+- `DISTANCE` is added, in km to 0.1 km, when a record has none but has a
+  `GRIDSQUARE`; it is measured from `MY_GRIDSQUARE`, or from your station's
+  grid when that is missing. A `DISTANCE` in the file is always kept.
 - `APP_JSTLOGGER_UUID` is added to every record.
 
 ## Development
