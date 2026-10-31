@@ -245,13 +245,15 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// reloadIndex reloads the QSO count and rows, keeping the cursor on the same
-// QSO when it still exists. Loads already under way are dropped.
+// reloadIndex clears and redraws the screen, and reloads the QSO count and
+// rows, keeping the cursor on the same QSO when it still exists. Loads
+// already under way are dropped. The redraw repairs a screen the terminal
+// has drawn wrong.
 func (m Model) reloadIndex() (Model, tea.Cmd) {
 	m.idx.gen++
 	var id int64
 	if q, ok := m.idx.current(); ok {
 		id = q.ID
 	}
-	return m, loadIndexCmd(m.logbook, m.idx.gen, id, m.idx.cursor)
+	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, id, m.idx.cursor))
 }

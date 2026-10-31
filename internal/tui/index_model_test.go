@@ -370,6 +370,15 @@ func TestIndexReloadKeepsCursorAndMarks(t *testing.T) {
 	assert.Equal(t, "QSO 5/103 · 1 marked", statusLine(t, m))
 }
 
+func TestIndexReloadRedrawsScreen(t *testing.T) {
+	m, _ := newIndexModel(t, 10, 80, 24)
+
+	_, cmd := update(t, m, keyPress('l', tea.ModCtrl))
+
+	require.NotNil(t, cmd)
+	assert.Contains(t, runQuit(cmd), tea.ClearScreen(), "ctrl+l clears the screen so it is drawn again in full")
+}
+
 func TestIndexReloadAfterDelete(t *testing.T) {
 	m, s := newIndexModel(t, 10, 80, 24)
 	m = press(t, m, special(tea.KeyEnd))

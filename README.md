@@ -91,16 +91,17 @@ The index keys follow NeoMutt's generic menu.
 | `*` / `End`               | Last (oldest) QSO                                  |
 | `1`–`9`                   | Jump to a QSO by its row number                    |
 | `t`                       | Mark or unmark the QSO, then move to the next one  |
-| `ctrl+l`                  | Reload the index from the logbook                  |
+| `ctrl+l`                  | Reload the index and redraw the screen             |
 | `f`                       | Set the rig frequency                              |
 | `m`                       | Set the rig mode                                   |
 | `?`                       | Show or hide full help                             |
 | `q` / `ctrl+c`            | Quit                                               |
 
 Keys are case-sensitive: `M` is the middle of the page and `m` sets the
-mode. `ctrl+l` keeps the cursor on the same QSO if it still exists. `f`
-and `m` are only available when rig control is on. In a prompt, press
-`enter` to submit or `esc` to cancel.
+mode. `ctrl+l` keeps the cursor on the same QSO if it still exists, and
+redraws the whole screen, which fixes a display the terminal has drawn
+wrong. `f` and `m` are only available when rig control is on. In a prompt,
+press `enter` to submit or `esc` to cancel.
 
 ### Rig control
 
