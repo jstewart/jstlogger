@@ -63,8 +63,8 @@ func TestGridCenterPrecision(t *testing.T) {
 	lat6, lon6, err := GridCenter("FN31pr")
 	require.NoError(t, err)
 
-	// FN31pr lies in the north-east of FN31, so its centre is north and
-	// east of the square's centre, but still inside the 2°x1° square.
+	// FN31pr lies in the north-east of FN31, so its center is north and
+	// east of the square's center, but still inside the 2°x1° square.
 	assert.Greater(t, lat6, lat4)
 	assert.Greater(t, lon6, lon4)
 	assert.Less(t, lat6-lat4, 0.5)
@@ -101,8 +101,8 @@ func TestGridDistanceKm(t *testing.T) {
 		a, b      string
 		want, tol float64
 	}{
-		// Centre to centre; London itself (51.51N 0.13W) is ~5,410 km away,
-		// but JO01's centre is at 51.5N 1E.
+		// Center to center; London itself (51.51N 0.13W) is ~5,410 km away,
+		// but JO01's center is at 51.5N 1E.
 		{name: "FN31pr to JO01", a: "FN31pr", b: "JO01", want: 5489, tol: 5},
 		{name: "case-insensitive", a: "fn31PR", b: "jo01", want: 5489, tol: 5},
 		{name: "4-character home grid", a: "FN31", b: "JO01", want: 5520, tol: 5},

@@ -111,7 +111,7 @@ func gridDistance(grid, myGrid, stationGrid string) (float64, bool) {
 }
 
 // deriveITURegion returns the ITU region from q's ITU zone if that zone lies
-// in one region, else from the centre of q's grid, else NULL.
+// in one region, else from the center of q's grid, else NULL.
 func deriveITURegion(q QSO) sql.Null[int] {
 	if q.ITUZ.Valid {
 		if r, ok := ITURegionForZone(q.ITUZ.V); ok {

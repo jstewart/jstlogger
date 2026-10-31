@@ -28,8 +28,8 @@ var gridPairs = [...]struct {
 	{'9', 2.0 / 240, 1.0 / 240}, // extended square
 }
 
-// GridCenter returns the centre, in decimal degrees, of a 2, 4, 6 or 8
-// character Maidenhead locator, ignoring case. The centre is that of the
+// GridCenter returns the center, in decimal degrees, of a 2, 4, 6 or 8
+// character Maidenhead locator, ignoring case. The center is that of the
 // most precise square given. Malformed input returns an error wrapping
 // ErrInvalidGrid.
 func GridCenter(grid string) (lat, lon float64, err error) {
@@ -58,7 +58,7 @@ func GridCenter(grid string) (lat, lon float64, err error) {
 			lat += v * p.lat
 		}
 	}
-	// Centre of the most precise cell given.
+	// Center of the most precise cell given.
 	last := gridPairs[len(grid)/2-1]
 	return lat + last.lat/2, lon + last.lon/2, nil
 }
@@ -75,7 +75,7 @@ func GreatCircleKm(lat1, lon1, lat2, lon2 float64) float64 {
 	return 2 * earthRadiusKm * math.Asin(math.Sqrt(min(h, 1)))
 }
 
-// GridDistanceKm returns the great-circle distance in km between the centres
+// GridDistanceKm returns the great-circle distance in km between the centers
 // of two Maidenhead locators.
 func GridDistanceKm(a, b string) (float64, error) {
 	lat1, lon1, err := GridCenter(a)
