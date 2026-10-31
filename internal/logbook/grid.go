@@ -89,8 +89,8 @@ func GridDistanceKm(a, b string) (float64, error) {
 	return GreatCircleKm(lat1, lon1, lat2, lon2), nil
 }
 
-// KmToMiles converts kilometres to international miles.
+// KmToMiles converts kilometers to international miles.
 func KmToMiles(km float64) float64 { return km / kmPerMile }
 
-// MilesToKm converts international miles to kilometres.
+// MilesToKm converts international miles to kilometers.
 func MilesToKm(miles float64) float64 { return miles * kmPerMile }

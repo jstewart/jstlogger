@@ -30,7 +30,7 @@ const (
 
 // Distance units accepted in logbook.distance_unit.
 const (
-	// DistanceUnitKm shows distances in kilometres.
+	// DistanceUnitKm shows distances in kilometers.
 	DistanceUnitKm = "km"
 	// DistanceUnitMi shows distances in statute miles.
 	DistanceUnitMi = "mi"
