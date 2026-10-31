@@ -9,8 +9,10 @@ import (
 	"strings"
 )
 
-// Parse reads a complete ADI file. The file has a header only when its first
-// byte is not '<'. Malformed input is reported as a *ParseError.
+// Parse reads a complete ADI file. A leading UTF-8 byte order mark is
+// ignored. The file has a header when it starts with text other than '<', or
+// with blank text followed later by <EOH>. Malformed input is reported as a
+// *ParseError.
 func Parse(r io.Reader) (File, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -45,14 +47,20 @@ func (p *parser) fail(field string, err error) error {
 
 // parse walks the input tag by tag, filling p.file.
 func (p *parser) parse() (File, error) {
+	p.data = bytes.TrimPrefix(p.data, utf8BOM)
 	if len(p.data) > 0 && p.data[0] != '<' {
-		p.inHeader = true
 		end := bytes.IndexByte(p.data, '<')
 		if end < 0 {
 			end = len(p.data)
 		}
-		p.file.Header = &Header{Preamble: strings.TrimSpace(string(p.data[:end]))}
 		p.pos = end
+		// Some programs write blank lines before a headerless file; only
+		// treat blank leading text as a header when an <EOH> follows.
+		preamble := bytes.TrimSpace(p.data[:end])
+		if len(preamble) > 0 || hasEOH(p.data) {
+			p.inHeader = true
+			p.file.Header = &Header{Preamble: string(preamble)}
+		}
 	}
 
 	for {
@@ -130,4 +138,12 @@ func (p *parser) marker(name string) error {
 		return p.fail(name, errors.New("data specifier has no length"))
 	}
 	return nil
+}
+
+// utf8BOM is the byte order mark some programs write at the start of a file.
+var utf8BOM = []byte("\xef\xbb\xbf")
+
+// hasEOH reports whether data contains an <EOH> tag in any case.
+func hasEOH(data []byte) bool {
+	return bytes.Contains(bytes.ToUpper(data), []byte("<EOH>"))
 }

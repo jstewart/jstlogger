@@ -100,6 +100,28 @@ func TestParse(t *testing.T) {
 			records: nil,
 		},
 		{
+			name:    "byte order mark before records",
+			input:   "\xef\xbb\xbf<CALL:5>K1ABC<EOR>",
+			records: []Record{{{"CALL", "K1ABC"}}},
+		},
+		{
+			name:    "byte order mark before header",
+			input:   "\xef\xbb\xbfexport\n<ADIF_VER:5>3.1.4<EOH><CALL:5>K1ABC<EOR>",
+			header:  &Header{Preamble: "export", Fields: Record{{"ADIF_VER", "3.1.4"}}},
+			records: []Record{{{"CALL", "K1ABC"}}},
+		},
+		{
+			name:    "leading blank lines without a header",
+			input:   "\r\n\n<CALL:5>K1ABC<EOR>",
+			records: []Record{{{"CALL", "K1ABC"}}},
+		},
+		{
+			name:    "blank preamble with a header",
+			input:   "\n<ADIF_VER:5>3.1.4<eoh><CALL:5>K1ABC<EOR>",
+			header:  &Header{Fields: Record{{"ADIF_VER", "3.1.4"}}},
+			records: []Record{{{"CALL", "K1ABC"}}},
+		},
+		{
 			name:    "trailing whitespace after last EOR",
 			input:   "<CALL:5>K1ABC<EOR>\n\n  \r\n",
 			records: []Record{{{"CALL", "K1ABC"}}},
