@@ -251,6 +251,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // has drawn wrong.
 func (m Model) reloadIndex() (Model, tea.Cmd) {
 	m.idx.gen++
+	// The loads under way will be dropped, so they are no longer pending.
+	m.idx.pending = map[int]bool{}
 	var id int64
 	if q, ok := m.idx.current(); ok {
 		id = q.ID

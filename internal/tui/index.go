@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	// indexBlockSize is how many rows the index loads at a time.
-	indexBlockSize = 500
+	// indexBlockSize is how many rows the index loads at a time: the most
+	// one logbook query returns, so a block is never cut short.
+	indexBlockSize = logbook.MaxPageSize
 	// indexPrefetch is how many rows beyond the visible ones are kept
 	// loaded, so the next block arrives before the cursor reaches it.
 	indexPrefetch = 100

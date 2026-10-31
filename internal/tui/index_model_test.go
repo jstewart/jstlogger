@@ -24,11 +24,16 @@ type fakeIndexStore struct {
 	qsos    []logbook.QSO
 	offsets []int
 	err     error
+	// countErr fails only Count.
+	countErr error
 }
 
 func (s *fakeIndexStore) Count(_ context.Context, _ logbook.Filter) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.countErr != nil {
+		return 0, s.countErr
+	}
 	return len(s.qsos), s.err
 }
 
@@ -213,12 +218,12 @@ func TestIndexGlobalKeys(t *testing.T) {
 
 	_, cmd := update(t, m, keyPress('q', 0))
 	require.NotNil(t, cmd)
-	assert.Contains(t, runQuit(cmd), tea.QuitMsg{})
+	assert.Contains(t, collectMsgs(cmd), tea.QuitMsg{})
 }
 
-// runQuit runs cmd, expanding batches, and returns the messages that are
-// not index loads.
-func runQuit(cmd tea.Cmd) []tea.Msg {
+// collectMsgs runs cmd, expanding batches, and returns every message it
+// produces without feeding any of them back into the model.
+func collectMsgs(cmd tea.Cmd) []tea.Msg {
 	var out []tea.Msg
 	queue := []tea.Cmd{cmd}
 	for len(queue) > 0 {
@@ -376,7 +381,7 @@ func TestIndexReloadRedrawsScreen(t *testing.T) {
 	_, cmd := update(t, m, keyPress('l', tea.ModCtrl))
 
 	require.NotNil(t, cmd)
-	assert.Contains(t, runQuit(cmd), tea.ClearScreen(), "ctrl+l clears the screen so it is drawn again in full")
+	assert.Contains(t, collectMsgs(cmd), tea.ClearScreen(), "ctrl+l clears the screen so it is drawn again in full")
 }
 
 func TestIndexReloadAfterDelete(t *testing.T) {
@@ -405,6 +410,22 @@ func TestIndexReloadDropsLoadsInFlight(t *testing.T) {
 	q, ok := m.idx.current()
 	require.True(t, ok)
 	assert.Equal(t, int64(1), q.ID)
+}
+
+func TestIndexFailedReloadRetriesDroppedLoads(t *testing.T) {
+	m, s := newIndexModel(t, 2_000, 80, 24)
+	m, blockCmd := update(t, m, special(tea.KeyEnd))
+	require.NotNil(t, blockCmd)
+
+	s.mu.Lock()
+	s.countErr = assert.AnError
+	s.mu.Unlock()
+	m = press(t, m, keyPress('l', tea.ModCtrl))
+	m = runIndex(t, m, blockCmd)
+	require.ErrorIs(t, m.idx.err, assert.AnError, "the reload failed")
+
+	_, ok := m.idx.current()
+	assert.True(t, ok, "the block dropped by the reload is loaded again")
 }
 
 func TestIndexHelp(t *testing.T) {
