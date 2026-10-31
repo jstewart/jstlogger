@@ -2,3 +2,5 @@
 /dist/
 *.adi
 *.adif
+# Synthetic ADIF fixtures for tests; real logs stay ignored.
+!/testdata/*.adi

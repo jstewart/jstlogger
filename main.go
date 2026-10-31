@@ -92,6 +92,9 @@ type options struct {
 	printDefaultConfig bool
 	version            bool
 	debug              bool
+	importADIF         string
+	exportADIF         string
+	tags               []string
 }
 
 func main() {
@@ -128,6 +131,11 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return report(stderr, config.WriteTOML(stdout, session.Config))
 	}
 
+	ctx := context.Background()
+	if opts.importADIF != "" || opts.exportADIF != "" {
+		return report(stderr, runADIF(ctx, session, opts, stdout, stderr))
+	}
+
 	logger, closeLog := slog.New(slog.DiscardHandler), func() error { return nil }
 	if opts.debug {
 		var err error
@@ -135,7 +143,6 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 			return report(stderr, err)
 		}
 	}
-	ctx := context.Background()
 	store, err := openLogbook(ctx, session)
 	if err == nil {
 		err = runTUI(ctx, session, store, logger)
@@ -171,6 +178,11 @@ func newFlagSet(opts *options, stderr io.Writer) *pflag.FlagSet {
 	fs.BoolVar(&opts.printConfig, "print-config", false, "print the effective config as TOML and exit")
 	fs.BoolVar(&opts.printDefaultConfig, "print-default-config", false, "print the full commented default config and exit")
 	fs.BoolVar(&opts.version, "version", false, "print the version and exit")
+	fs.StringVar(&opts.importADIF, "import-adif", "", "import the QSOs in the ADIF (.adi) file at `path` into the logbook, then exit")
+	fs.StringVar(&opts.exportADIF, "export-adif", "", "export the logbook as ADIF to `path`, or to stdout for -, then exit")
+	fs.StringSliceVar(&opts.tags, "tag", nil, "`tags` for --import-adif or --export-adif; repeatable or comma-separated. "+
+		"On import, tags newly imported QSOs (duplicates are skipped and not tagged); "+
+		"on export, exports only QSOs carrying all of these tags")
 	fs.BoolVar(&opts.debug, "debug", false, "write a debug log to $XDG_STATE_HOME/jstlogger/debug.log")
 	return fs
 }
@@ -193,13 +205,23 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 	opts.overrides.OperatorSet = fs.Changed("operator")
 
 	var modes []string
-	for _, name := range []string{"check-config", "print-config", "print-default-config", "version"} {
+	for _, name := range []string{"check-config", "print-config", "print-default-config", "version", "import-adif", "export-adif"} {
 		if fs.Changed(name) {
 			modes = append(modes, "--"+name)
 		}
 	}
 	if len(modes) > 1 {
 		fmt.Fprintf(stderr, "jstlogger: %s are mutually exclusive\n", strings.Join(modes, ", "))
+		return opts, exitUsage, false
+	}
+	for _, name := range []string{"import-adif", "export-adif"} {
+		if fs.Changed(name) && fs.Lookup(name).Value.String() == "" {
+			fmt.Fprintf(stderr, "jstlogger: --%s requires a path\nRun 'jstlogger --help' for usage.\n", name)
+			return opts, exitUsage, false
+		}
+	}
+	if fs.Changed("tag") && !fs.Changed("import-adif") && !fs.Changed("export-adif") {
+		fmt.Fprintf(stderr, "jstlogger: --tag requires --import-adif or --export-adif\nRun 'jstlogger --help' for usage.\n")
 		return opts, exitUsage, false
 	}
 	return opts, exitOK, true

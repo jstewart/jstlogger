@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -152,6 +153,61 @@ func TestRunFlagErrors(t *testing.T) {
 			assert.Empty(t, r.stdout)
 			assert.False(t, r.tuiCalled)
 		})
+	}
+}
+
+func TestRunModeFlagsExclusive(t *testing.T) {
+	modes := [][]string{
+		{"--check-config"},
+		{"--print-config"},
+		{"--print-default-config"},
+		{"--version"},
+		{"--import-adif", "in.adi"},
+		{"--export-adif", "out.adi"},
+	}
+	for i, a := range modes {
+		for _, b := range modes[i+1:] {
+			t.Run(a[0]+" "+b[0], func(t *testing.T) {
+				r := invoke(t, nil, nil, append(slices.Clone(a), b...)...)
+				assert.Equal(t, 2, r.code)
+				assert.Contains(t, r.stderr, "mutually exclusive")
+				assert.Contains(t, r.stderr, a[0])
+				assert.Contains(t, r.stderr, b[0])
+				assert.Empty(t, r.stdout)
+				assert.False(t, r.tuiCalled)
+			})
+		}
+	}
+}
+
+func TestRunADIFFlagErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantStderr string
+	}{
+		{name: "tag alone", args: []string{"--tag", "pota"}, wantStderr: "--tag requires --import-adif or --export-adif"},
+		{name: "tag with another mode", args: []string{"--tag", "pota", "--check-config"}, wantStderr: "--tag requires --import-adif or --export-adif"},
+		{name: "empty import path", args: []string{"--import-adif", ""}, wantStderr: "--import-adif requires a path"},
+		{name: "empty export path", args: []string{"--export-adif="}, wantStderr: "--export-adif requires a path"},
+		{name: "import without path", args: []string{"--import-adif"}, wantStderr: "needs an argument"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := invoke(t, nil, nil, tt.args...)
+			assert.Equal(t, 2, r.code)
+			assert.Contains(t, r.stderr, tt.wantStderr)
+			assert.Empty(t, r.stdout)
+			assert.False(t, r.tuiCalled)
+		})
+	}
+}
+
+func TestRunHelpDescribesTag(t *testing.T) {
+	r := invoke(t, nil, nil, "--help")
+	assert.Equal(t, 0, r.code)
+	for _, want := range []string{"--import-adif", "--export-adif", "--tag", "duplicates are skipped and not tagged", "all of these tags"} {
+		assert.Contains(t, r.stderr, want)
 	}
 }
 
