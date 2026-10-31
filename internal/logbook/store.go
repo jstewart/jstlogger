@@ -25,4 +25,13 @@ type Store interface {
 	Untag(ctx context.Context, qsoIDs []int64, tags ...string) error
 	// Tags returns every tag.
 	Tags(ctx context.Context) ([]Tag, error)
+	// Import stores qsos in a single transaction, skipping duplicates, and
+	// applies tags to each QSO it stores (in addition to the QSO's own
+	// Tags). Duplicates are not updated and are not tagged. If any QSO
+	// fails, nothing is stored.
+	Import(ctx context.Context, qsos []QSO, tags []string) (ImportResult, error)
+	// Each calls fn for every QSO matching f, oldest first (StartUTC
+	// ascending, then ID ascending), with fields, confirmations and tags
+	// loaded. It stops and returns fn's error if fn fails.
+	Each(ctx context.Context, f Filter, fn func(QSO) error) error
 }
