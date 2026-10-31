@@ -57,16 +57,49 @@ go run .
 
 The app opens full-screen in the terminal's alternate screen.
 
+### QSO index
+
+jstlogger opens on the QSO index: every QSO in the logbook, newest first,
+filling the window. Each row shows the date and time (UTC), call, mode
+(the submode when there is one, so `FT4` rather than `MFSK`), the reports
+sent and received, band, country and station callsign. A `*` marks a
+marked QSO.
+
+The status line above the help shows where you are and how many QSOs are
+marked, e.g. `QSO 12/4,567 · 3 marked`, along with messages such as
+"You are on the last QSO."
+
+The index loads rows in blocks of 500 in the background as you move, so
+it stays quick on large logbooks: jumping to the oldest QSO or to row N
+reads only the rows around it. Marks are kept in memory and are lost on
+quit; nothing acts on them yet.
+
 ### Keybindings
 
-| Key            | Action                  |
-| -------------- | ----------------------- |
-| `f`            | Set the rig frequency   |
-| `m`            | Set the rig mode        |
-| `?`            | Show or hide full help  |
-| `q` / `ctrl+c` | Quit                    |
+The index keys follow NeoMutt's generic menu.
 
-`f` and `m` are only available when rig control is on. In the prompt, press
+| Key                       | Action                                             |
+| ------------------------- | -------------------------------------------------- |
+| `j` / `↓`                 | Next QSO                                           |
+| `k` / `↑`                 | Previous QSO                                       |
+| `z` / `PgDn` / `→`        | Next page                                          |
+| `Z` / `PgUp` / `←`        | Previous page                                      |
+| `]` / `[`                 | Half a page down / up                              |
+| `>` / `<`                 | Scroll the view one line down / up                 |
+| `H` / `M` / `L`           | Top / middle / bottom of the page                  |
+| `=` / `Home`              | First (newest) QSO                                 |
+| `*` / `End`               | Last (oldest) QSO                                  |
+| `1`–`9`                   | Jump to a QSO by its row number                    |
+| `t`                       | Mark or unmark the QSO, then move to the next one  |
+| `ctrl+l`                  | Reload the index from the logbook                  |
+| `f`                       | Set the rig frequency                              |
+| `m`                       | Set the rig mode                                   |
+| `?`                       | Show or hide full help                             |
+| `q` / `ctrl+c`            | Quit                                               |
+
+Keys are case-sensitive: `M` is the middle of the page and `m` sets the
+mode. `ctrl+l` keeps the cursor on the same QSO if it still exists. `f`
+and `m` are only available when rig control is on. In a prompt, press
 `enter` to submit or `esc` to cancel.
 
 ### Rig control
