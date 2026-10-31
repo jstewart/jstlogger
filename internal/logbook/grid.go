@@ -68,10 +68,10 @@ func GridCenter(grid string) (lat, lon float64, err error) {
 // mean Earth radius.
 func GreatCircleKm(lat1, lon1, lat2, lon2 float64) float64 {
 	rad := math.Pi / 180
-	φ1, φ2 := lat1*rad, lat2*rad
-	dφ := φ2 - φ1
-	dλ := (lon2 - lon1) * rad
-	h := math.Pow(math.Sin(dφ/2), 2) + math.Cos(φ1)*math.Cos(φ2)*math.Pow(math.Sin(dλ/2), 2)
+	latRad1, latRad2 := lat1*rad, lat2*rad
+	dLat := latRad2 - latRad1
+	dLon := (lon2 - lon1) * rad
+	h := math.Pow(math.Sin(dLat/2), 2) + math.Cos(latRad1)*math.Cos(latRad2)*math.Pow(math.Sin(dLon/2), 2)
 	return 2 * earthRadiusKm * math.Asin(math.Sqrt(min(h, 1)))
 }
 
