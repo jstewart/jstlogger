@@ -91,6 +91,38 @@ func TestLoadDefaultsInCode(t *testing.T) {
 	assert.Equal(t, DefaultPollInterval, c.Rig.PollInterval)
 	assert.Empty(t, c.Rig.Profile)
 	assert.Empty(t, c.Rig.Profiles)
+	assert.Equal(t, Logbook{DistanceUnit: DefaultDistanceUnit}, c.Logbook)
+}
+
+func TestLoadLogbook(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    Logbook
+	}{
+		{
+			name:    "section absent uses defaults",
+			content: "",
+			want:    Logbook{DistanceUnit: DistanceUnitMi},
+		},
+		{
+			name:    "path and unit set",
+			content: "[logbook]\npath = \"/data/log.db\"\ndistance_unit = \"km\"\n",
+			want:    Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitKm},
+		},
+		{
+			name:    "unit is lowercased and trimmed",
+			content: "[logbook]\ndistance_unit = \" MI \"\n",
+			want:    Logbook{DistanceUnit: DistanceUnitMi},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, res := load(t, tt.content)
+			assert.Empty(t, res.Warnings)
+			assert.Equal(t, tt.want, c.Logbook)
+		})
+	}
 }
 
 func TestLoadFileOverridesDefaults(t *testing.T) {

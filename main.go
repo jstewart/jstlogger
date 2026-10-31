@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"jstlogger/internal/config"
+	"jstlogger/internal/logbook"
 	"jstlogger/internal/rig"
 	"jstlogger/internal/tui"
 )
@@ -25,21 +26,21 @@ import (
 // -ldflags "-X main.version=...".
 var version = "dev"
 
-// runTUI starts the terminal UI, and the rig when the session enables one,
-// and blocks until the UI exits. Rig events are logged to logger and sent to
-// the UI. Tests replace it so the TUI never starts.
-var runTUI = func(ctx context.Context, session config.Session, logger *slog.Logger) error {
+// runTUI starts the terminal UI on store, and the rig when the session
+// enables one, and blocks until the UI exits. Rig events are logged to logger
+// and sent to the UI. Tests replace it so the TUI never starts.
+var runTUI = func(ctx context.Context, session config.Session, store logbook.Store, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	opts, ok := rigOptions(session)
 	if !ok {
-		_, err := tea.NewProgram(tui.New(), tea.WithContext(ctx)).Run()
+		_, err := tea.NewProgram(tui.New(tui.WithLogbook(store)), tea.WithContext(ctx)).Run()
 		return err
 	}
 
 	r := rig.New(opts)
-	p := tea.NewProgram(tui.New(tui.WithRig(session.RigProfileName, r)), tea.WithContext(ctx))
+	p := tea.NewProgram(tui.New(tui.WithLogbook(store), tui.WithRig(session.RigProfileName, r)), tea.WithContext(ctx))
 	emit := func(event any) {
 		logEvent(logger, event)
 		p.Send(event)
@@ -134,7 +135,14 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 			return report(stderr, err)
 		}
 	}
-	err := runTUI(context.Background(), session, logger)
+	ctx := context.Background()
+	store, err := openLogbook(ctx, session)
+	if err == nil {
+		err = runTUI(ctx, session, store, logger)
+		if cerr := store.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("closing logbook: %w", cerr))
+		}
+	}
 	if cerr := closeLog(); cerr != nil {
 		err = errors.Join(err, fmt.Errorf("closing debug log: %w", cerr))
 	}
@@ -197,9 +205,10 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 	return opts, exitOK, true
 }
 
-// loadSession finds, loads and validates the config and applies the
-// session overrides, reporting warnings and errors to stderr. It returns
-// the config path and the resolved session; ok is false on any error.
+// loadSession finds, loads and validates the config, applies the session
+// overrides and fills in the default logbook path, reporting warnings and
+// errors to stderr. It returns the config path and the resolved session; ok
+// is false on any error.
 func loadSession(opts options, getenv func(string) string, stderr io.Writer) (string, config.Session, bool) {
 	path, explicit := opts.configPath, opts.configPath != ""
 	if !explicit {
@@ -235,6 +244,15 @@ func loadSession(opts options, getenv func(string) string, stderr io.Writer) (st
 	if err != nil {
 		printErrors(stderr, "invalid flags", err)
 		return path, config.Session{}, false
+	}
+
+	if session.Config.Logbook.Path == "" {
+		p, err := config.LogbookPath(getenv)
+		if err != nil {
+			report(stderr, fmt.Errorf("locating logbook: %w", err))
+			return path, config.Session{}, false
+		}
+		session.Config.Logbook.Path = p
 	}
 	return path, session, true
 }

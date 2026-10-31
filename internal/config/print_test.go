@@ -28,6 +28,11 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 			c, _ := load(t, string(DefaultTemplate))
 			return c
 		}},
+		{name: "logbook path and unit set", config: func(t *testing.T) Config {
+			c := fullConfig(t)
+			c.Logbook = Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitMi}
+			return c
+		}},
 		{name: "session effective config", config: func(t *testing.T) Config {
 			return resolve(t, Overrides{Station: "portable", Grid: "FN31", POTA: []string{"US-0001"}, NoRig: true}).Config
 		}},
@@ -71,6 +76,40 @@ func TestWriteTOMLOmitsNilSpawn(t *testing.T) {
 	out := writeTOML(t, c)
 	assert.Contains(t, out, "[rig.profiles.ic7300.spawn]")
 	assert.NotContains(t, out, "[rig.profiles.portable.spawn]")
+}
+
+func TestWriteTOMLLogbook(t *testing.T) {
+	tests := []struct {
+		name    string
+		logbook Logbook
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "empty path is omitted",
+			logbook: Logbook{DistanceUnit: DistanceUnitKm},
+			want:    []string{"[logbook]", "distance_unit = 'km'"},
+			notWant: []string{"path ="},
+		},
+		{
+			name:    "path is written when set",
+			logbook: Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitMi},
+			want:    []string{"[logbook]", "path = '/data/log.db'", "distance_unit = 'mi'"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := fullConfig(t)
+			c.Logbook = tt.logbook
+			out := writeTOML(t, c)
+			for _, w := range tt.want {
+				assert.Contains(t, out, w)
+			}
+			for _, w := range tt.notWant {
+				assert.NotContains(t, out, w)
+			}
+		})
+	}
 }
 
 // failWriter fails every write.

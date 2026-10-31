@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"jstlogger/internal/config"
+	"jstlogger/internal/logbook"
 	"jstlogger/internal/rig"
 )
 
@@ -56,6 +57,7 @@ func writeConfig(t *testing.T, content string) string {
 type tuiCall struct {
 	called  bool
 	session config.Session
+	store   logbook.Store
 	logger  *slog.Logger
 }
 
@@ -65,9 +67,9 @@ func stubTUI(t *testing.T, err error) *tuiCall {
 	t.Helper()
 	call := new(tuiCall)
 	orig := runTUI
-	runTUI = func(ctx context.Context, session config.Session, logger *slog.Logger) error {
+	runTUI = func(ctx context.Context, session config.Session, store logbook.Store, logger *slog.Logger) error {
 		require.NotNil(t, ctx)
-		*call = tuiCall{called: true, session: session, logger: logger}
+		*call = tuiCall{called: true, session: session, store: store, logger: logger}
 		logger.Info("tui started")
 		return err
 	}
@@ -83,12 +85,13 @@ type result struct {
 	tui            tuiCall
 }
 
-// invoke calls run with args and an environment pointing at an empty temp
-// XDG_CONFIG_HOME (unless vars is non-nil), with the TUI stubbed.
+// invoke calls run with args and an environment pointing at empty temp
+// XDG_CONFIG_HOME and XDG_DATA_HOME directories (unless vars is non-nil), with
+// the TUI stubbed.
 func invoke(t *testing.T, vars map[string]string, tuiErr error, args ...string) result {
 	t.Helper()
 	if vars == nil {
-		vars = map[string]string{"XDG_CONFIG_HOME": t.TempDir()}
+		vars = map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": t.TempDir()}
 	}
 	call := stubTUI(t, tuiErr)
 	var stdout, stderr bytes.Buffer
@@ -351,7 +354,7 @@ func TestRunPassesSessionToTUI(t *testing.T) {
 func TestRunDebugLog(t *testing.T) {
 	p := writeConfig(t, validConfig)
 	state := t.TempDir()
-	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_STATE_HOME": state}
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": t.TempDir(), "XDG_STATE_HOME": state}
 
 	r := invoke(t, vars, nil, "-c", p, "--debug")
 	require.Equal(t, 0, r.code, r.stderr)
@@ -365,7 +368,7 @@ func TestRunDebugLog(t *testing.T) {
 func TestRunNoDebugLog(t *testing.T) {
 	p := writeConfig(t, validConfig)
 	state := t.TempDir()
-	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_STATE_HOME": state}
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": t.TempDir(), "XDG_STATE_HOME": state}
 
 	r := invoke(t, vars, nil, "-c", p)
 	require.Equal(t, 0, r.code, r.stderr)
@@ -379,11 +382,66 @@ func TestRunDebugLogError(t *testing.T) {
 	state := t.TempDir()
 	// A file where the jstlogger directory should be makes the log unopenable.
 	require.NoError(t, os.WriteFile(filepath.Join(state, "jstlogger"), nil, 0o644))
-	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_STATE_HOME": state}
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": t.TempDir(), "XDG_STATE_HOME": state}
 
 	r := invoke(t, vars, nil, "-c", p, "--debug")
 	assert.Equal(t, 1, r.code)
 	assert.Contains(t, r.stderr, "debug log")
+	assert.False(t, r.tuiCalled)
+}
+
+func TestRunOpensLogbook(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	data := t.TempDir()
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": data}
+
+	r := invoke(t, vars, nil, "-c", p)
+	require.Equal(t, 0, r.code, r.stderr)
+	require.True(t, r.tuiCalled)
+	assert.NotNil(t, r.tui.store)
+	assert.FileExists(t, filepath.Join(data, "jstlogger", "logbook.db"))
+}
+
+func TestRunLogbookPathFromConfig(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "my.db")
+	p := writeConfig(t, validConfig+"\n[logbook]\npath = \""+db+"\"\n")
+
+	r := invoke(t, nil, nil, "-c", p)
+	require.Equal(t, 0, r.code, r.stderr)
+	assert.FileExists(t, db)
+	assert.Equal(t, db, r.tui.session.Config.Logbook.Path)
+}
+
+func TestRunPrintConfigShowsLogbookPath(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	data := t.TempDir()
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": data}
+
+	r := invoke(t, vars, nil, "-c", p, "--print-config")
+	require.Equal(t, 0, r.code, r.stderr)
+	assert.Contains(t, r.stdout, filepath.Join(data, "jstlogger", "logbook.db"))
+	assert.NoFileExists(t, filepath.Join(data, "jstlogger", "logbook.db"), "--print-config must not create the logbook")
+}
+
+func TestRunLogbookPathError(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	// Neither XDG_DATA_HOME nor HOME is set, so there is no default path.
+	r := invoke(t, map[string]string{"XDG_CONFIG_HOME": t.TempDir()}, nil, "-c", p)
+	assert.Equal(t, 1, r.code)
+	assert.Contains(t, r.stderr, "logbook")
+	assert.False(t, r.tuiCalled)
+}
+
+func TestRunLogbookOpenError(t *testing.T) {
+	p := writeConfig(t, validConfig)
+	data := t.TempDir()
+	// A file where the jstlogger directory should be makes the logbook unopenable.
+	require.NoError(t, os.WriteFile(filepath.Join(data, "jstlogger"), nil, 0o644))
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": data}
+
+	r := invoke(t, vars, nil, "-c", p)
+	assert.Equal(t, 1, r.code)
+	assert.Contains(t, r.stderr, "opening logbook")
 	assert.False(t, r.tuiCalled)
 }
 

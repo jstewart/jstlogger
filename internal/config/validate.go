@@ -38,6 +38,7 @@ func (c Config) Validate(station string) error {
 	errs = append(errs, c.validateSelected(strings.ToLower(station))...)
 	errs = append(errs, c.validateStations()...)
 	errs = append(errs, c.validateRig()...)
+	errs = append(errs, c.validateLogbook()...)
 	return errors.Join(errs...)
 }
 
@@ -126,4 +127,14 @@ func validateProfile(prefix string, p RigProfile) []error {
 		}
 	}
 	return errs
+}
+
+// validateLogbook checks the [logbook] table.
+func (c Config) validateLogbook() []error {
+	switch c.Logbook.DistanceUnit {
+	case DistanceUnitKm, DistanceUnitMi:
+		return nil
+	default:
+		return []error{invalid("logbook.distance_unit", "must be %q or %q, got %q", DistanceUnitKm, DistanceUnitMi, c.Logbook.DistanceUnit)}
+	}
 }

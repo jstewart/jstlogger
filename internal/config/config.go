@@ -24,6 +24,16 @@ const (
 	DefaultPollInterval = time.Second
 	// DefaultStationName is the default value of default_station.
 	DefaultStationName = "home"
+	// DefaultDistanceUnit is the default logbook.distance_unit.
+	DefaultDistanceUnit = DistanceUnitMi
+)
+
+// Distance units accepted in logbook.distance_unit.
+const (
+	// DistanceUnitKm shows distances in kilometers.
+	DistanceUnitKm = "km"
+	// DistanceUnitMi shows distances in statute miles.
+	DistanceUnitMi = "mi"
 )
 
 // Config is the merged jstlogger configuration (defaults + file).
@@ -34,6 +44,18 @@ type Config struct {
 	Stations map[string]Station `mapstructure:"stations" toml:"stations"`
 	// Rig is the [rig] table.
 	Rig Rig `mapstructure:"rig" toml:"rig"`
+	// Logbook is the [logbook] table.
+	Logbook Logbook `mapstructure:"logbook" toml:"logbook"`
+}
+
+// Logbook is the [logbook] table.
+type Logbook struct {
+	// Path is the logbook database file. Empty means the default from
+	// LogbookPath.
+	Path string `mapstructure:"path" toml:"path"`
+	// DistanceUnit is the unit distances are shown in: DistanceUnitKm or
+	// DistanceUnitMi. Load lowercases it.
+	DistanceUnit string `mapstructure:"distance_unit" toml:"distance_unit"`
 }
 
 // Station describes one operating location. Field names follow the ADIF

@@ -97,12 +97,21 @@ changes and commands) to `$XDG_STATE_HOME/jstlogger/debug.log`
 (`~/.local/state/jstlogger/debug.log` by default). Watch it with
 `tail -f` in another terminal.
 
+### Logbook
+
+QSOs are stored in a SQLite database at `$XDG_DATA_HOME/jstlogger/logbook.db`
+(`~/.local/share/jstlogger/logbook.db` by default). It is created on first
+run and its schema is upgraded automatically at startup. Set
+`[logbook] path` in the config to keep it somewhere else, and
+`distance_unit = "km"` to work in kilometers instead of miles.
+
 ## Development
 
 ```sh
 just format    # gofmt -w . (run before committing)
 just test      # go test ./... -short
 just vendor    # go mod tidy && go mod vendor
+just generate  # go generate ./... (regenerates mocks)
 just --list    # list all recipes
 ```
 
@@ -111,8 +120,10 @@ just --list    # list all recipes
 ```
 main.go            entry point; parses flags, loads config and starts the app
 internal/config/   config file loading, validation and session overrides
+internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
 internal/rig/      rigctld client: polls the rig and sends it commands
 internal/tui/      Bubble Tea models, keybindings and styles for the UI
+migrations/        SQL schema migrations, embedded and applied at startup
 ```
 
 ## Dependencies
@@ -124,7 +135,9 @@ Direct dependencies (see `go.mod`):
 | [`charm.land/bubbletea/v2`](https://charm.land/bubbletea) | TUI framework (Elm-style model / update / view)                |
 | [`charm.land/bubbles/v2`](https://charm.land/bubbles)     | Ready-made TUI components (keybindings, help footer, text input) |
 | [`charm.land/lipgloss/v2`](https://charm.land/lipgloss)   | Terminal styling and layout                                    |
+| [`modernc.org/sqlite`](https://gitlab.com/cznic/sqlite)  | Pure-Go SQLite driver for the logbook (no cgo)                 |
 | [`github.com/stretchr/testify`](https://github.com/stretchr/testify) | Test assertions (`assert`, `require`); tests only   |
+| [`go.uber.org/mock`](https://github.com/uber-go/mock)     | `mockgen` and the gomock runtime for generated mocks; tests only |
 
 Everything else in `go.mod` is an indirect dependency pulled in by these.
 
