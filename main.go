@@ -112,8 +112,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 
 	switch {
 	case opts.version:
-		fmt.Fprintf(stdout, "jstlogger %s\n", version)
-		return exitOK
+		_, err := fmt.Fprintf(stdout, "jstlogger %s\n", version)
+		return report(stderr, err)
 	case opts.printDefaultConfig:
 		return report(stderr, config.WriteFullExample(stdout))
 	}
@@ -125,8 +125,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 
 	switch {
 	case opts.checkConfig:
-		fmt.Fprintf(stdout, "config OK: %s\n", path)
-		return exitOK
+		_, err := fmt.Fprintf(stdout, "config OK: %s\n", path)
+		return report(stderr, err)
 	case opts.printConfig:
 		return report(stderr, config.WriteTOML(stdout, session.Config))
 	}
@@ -195,11 +195,11 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 		if errors.Is(err, pflag.ErrHelp) {
 			return opts, exitOK, false
 		}
-		fmt.Fprintf(stderr, "jstlogger: %v\nRun 'jstlogger --help' for usage.\n", err)
+		printStderr(stderr, "jstlogger: %v\nRun 'jstlogger --help' for usage.\n", err)
 		return opts, exitUsage, false
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "jstlogger: unexpected argument %q\nRun 'jstlogger --help' for usage.\n", fs.Arg(0))
+		printStderr(stderr, "jstlogger: unexpected argument %q\nRun 'jstlogger --help' for usage.\n", fs.Arg(0))
 		return opts, exitUsage, false
 	}
 	opts.overrides.OperatorSet = fs.Changed("operator")
@@ -211,17 +211,17 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 		}
 	}
 	if len(modes) > 1 {
-		fmt.Fprintf(stderr, "jstlogger: %s are mutually exclusive\n", strings.Join(modes, ", "))
+		printStderr(stderr, "jstlogger: %s are mutually exclusive\n", strings.Join(modes, ", "))
 		return opts, exitUsage, false
 	}
 	for _, name := range []string{"import-adif", "export-adif"} {
 		if fs.Changed(name) && fs.Lookup(name).Value.String() == "" {
-			fmt.Fprintf(stderr, "jstlogger: --%s requires a path\nRun 'jstlogger --help' for usage.\n", name)
+			printStderr(stderr, "jstlogger: --%s requires a path\nRun 'jstlogger --help' for usage.\n", name)
 			return opts, exitUsage, false
 		}
 	}
 	if fs.Changed("tag") && !fs.Changed("import-adif") && !fs.Changed("export-adif") {
-		fmt.Fprintf(stderr, "jstlogger: --tag requires --import-adif or --export-adif\nRun 'jstlogger --help' for usage.\n")
+		printStderr(stderr, "jstlogger: --tag requires --import-adif or --export-adif\nRun 'jstlogger --help' for usage.\n")
 		return opts, exitUsage, false
 	}
 	return opts, exitOK, true
@@ -248,16 +248,16 @@ func loadSession(opts options, getenv func(string) string, stderr io.Writer) (st
 		return path, config.Session{}, false
 	}
 	for _, w := range res.Warnings {
-		fmt.Fprintf(stderr, "jstlogger: warning: %s: %s\n", path, w)
+		printStderr(stderr, "jstlogger: warning: %s: %s\n", path, w)
 	}
 	if res.Created {
-		fmt.Fprintf(stderr, "jstlogger: created %s with the default config\n", path)
+		printStderr(stderr, "jstlogger: created %s with the default config\n", path)
 	}
 
 	if err := cfg.Validate(opts.overrides.Station); err != nil {
 		printErrors(stderr, "invalid config file "+path, err)
 		if res.Created {
-			fmt.Fprintf(stderr, "jstlogger: edit %s to set callsign and gridsquare for your station\n", path)
+			printStderr(stderr, "jstlogger: edit %s to set callsign and gridsquare for your station\n", path)
 		}
 		return path, config.Session{}, false
 	}
@@ -286,10 +286,16 @@ func printErrors(stderr io.Writer, header string, err error) {
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		errs = joined.Unwrap()
 	}
-	fmt.Fprintf(stderr, "jstlogger: %s:\n", header)
+	printStderr(stderr, "jstlogger: %s:\n", header)
 	for _, e := range errs {
-		fmt.Fprintf(stderr, "  %v\n", e)
+		printStderr(stderr, "  %v\n", e)
 	}
+}
+
+// printStderr writes a message to stderr. A failed write is ignored: stderr
+// is where errors are reported, so there is nowhere left to report it.
+func printStderr(stderr io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(stderr, format, args...)
 }
 
 // report prints a non-nil err to stderr and returns the matching exit code.
@@ -297,6 +303,6 @@ func report(stderr io.Writer, err error) int {
 	if err == nil {
 		return exitOK
 	}
-	fmt.Fprintf(stderr, "jstlogger: %v\n", err)
+	printStderr(stderr, "jstlogger: %v\n", err)
 	return exitError
 }

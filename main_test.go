@@ -269,6 +269,36 @@ func TestRunExplicitMissingConfig(t *testing.T) {
 	}
 }
 
+// brokenWriter fails every write, like a closed pipe.
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) {
+	return 0, errors.New("broken pipe")
+}
+
+func TestRunReportsStdoutWriteErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"version", []string{"--version"}},
+		{"print default config", []string{"--print-default-config"}},
+		{"check config", []string{"-c", writeConfig(t, validConfig), "--check-config"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": t.TempDir()}
+			stubTUI(t, nil)
+			var stderr bytes.Buffer
+
+			code := run(tt.args, env(vars), brokenWriter{}, &stderr)
+
+			assert.Equal(t, exitError, code)
+			assert.Contains(t, stderr.String(), "broken pipe")
+		})
+	}
+}
+
 func TestRunCheckConfig(t *testing.T) {
 	p := writeConfig(t, validConfig)
 	r := invoke(t, nil, nil, "-c", p, "--check-config")

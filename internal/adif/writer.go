@@ -22,8 +22,9 @@ func NewWriter(w io.Writer) *Writer {
 // Write. An empty preamble is written as a blank line, because a header is
 // recognized only when the file does not start with '<'.
 func (w *Writer) WriteHeader(h Header) error {
-	w.w.WriteString(h.Preamble)
-	w.w.WriteString("\n")
+	// bufio.Writer errors are sticky, so the last write reports any failure.
+	_, _ = w.w.WriteString(h.Preamble)
+	_, _ = w.w.WriteString("\n")
 	w.fields(h.Fields)
 	if _, err := w.w.WriteString("<EOH>\n\n"); err != nil {
 		return fmt.Errorf("adif: write header: %w", err)
@@ -56,6 +57,6 @@ func (w *Writer) fields(r Record) {
 		if f.Value == "" {
 			continue
 		}
-		fmt.Fprintf(w.w, "<%s:%d>%s\n", strings.ToUpper(f.Name), len(f.Value), f.Value)
+		_, _ = fmt.Fprintf(w.w, "<%s:%d>%s\n", strings.ToUpper(f.Name), len(f.Value), f.Value)
 	}
 }
