@@ -97,7 +97,13 @@ and, for most letters, a value:
 | `~b BAND`  | Band is `BAND`, e.g. `~b 20m`                                 |
 | `~m MODE`  | Mode or submode is `MODE`, so `~m FT4` matches MFSK/FT4       |
 | `~y TAG`   | Carries the tag `TAG`                                         |
+| `~C NAME`  | Country is `NAME`, ignoring case, e.g. `~C "United States"`   |
+| `~s STATE` | State or province is `STATE`, e.g. `~s MA`                    |
+| `~o CONT`  | Continent is `CONT`: `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA` |
 | `~d RANGE` | Started within `RANGE` (see below)                            |
+
+`~s` matches the ADIF state code of any country, so `~s WA` also matches
+Western Australia; add `~C "United States"` to narrow it.
 
 `RANGE` is in UTC dates, `YYYY-MM-DD`: `D` is that day, `D-` is from `D`
 on, `-D` is through `D`, and `D1-D2` is `D1` through `D2`.

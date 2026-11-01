@@ -28,6 +28,14 @@ func TestParse(t *testing.T) {
 		{"band", "~b 20m", band("20m")},
 		{"mode", "~m FT8", logbook.ModeIs{Mode: "FT8"}},
 		{"tag", "~y pota", logbook.Filter{Tags: []string{"pota"}}},
+		{"country", "~C Japan", logbook.Filter{Countries: []string{"Japan"}}},
+		{"quoted country", `~C "United States"`, logbook.Filter{Countries: []string{"United States"}}},
+		{"call and country are distinct", "~c W1 ~C Canada", logbook.And{
+			logbook.CallContains{Call: "W1"}, logbook.Filter{Countries: []string{"Canada"}},
+		}},
+		{"state", "~s MA", logbook.Filter{States: []string{"MA"}}},
+		{"continent", "~o EU", logbook.Filter{Continents: []string{"EU"}}},
+		{"continent ignores case", "~o oc", logbook.Filter{Continents: []string{"oc"}}},
 		{"double-quoted tag", `~y "field day"`, logbook.Filter{Tags: []string{"field day"}}},
 		{"single-quoted tag", `~y 'field day'`, logbook.Filter{Tags: []string{"field day"}}},
 		{"escaped quote", `~y "say \"hi\""`, logbook.Filter{Tags: []string{`say "hi"`}}},
@@ -99,6 +107,8 @@ func TestParseErrors(t *testing.T) {
 		{"bare word", "W1AW", []string{"expected ~ term", "column 1"}},
 		{"value for all", "~A foo", []string{"expected ~ term", "column 4"}},
 		{"value swallows a term", "~c ~b 20m", []string{"expected ~ term", "column 7"}},
+		{"unknown continent", "~b 20m ~o EUR", []string{"~o", "column 8", "EUR", "AF, AN, AS, EU, NA, OC, SA"}},
+		{"missing state", "~s", []string{"~s needs a value", "column 1"}},
 		{"bad date", "~d 2024-13-01", []string{"~d", "column 1", "2024-13-01"}},
 		{"reversed range", "~b 20m ~d 2024-03-05-2024-03-01", []string{"~d", "column 8"}},
 	}

@@ -3,6 +3,7 @@ package pattern
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -30,6 +31,9 @@ func Parse(s string) (logbook.Expr, error) {
 	}
 	return e, nil
 }
+
+// continents are the ADIF continent codes ~o accepts.
+var continents = []string{"AF", "AN", "AS", "EU", "NA", "OC", "SA"}
 
 // eof is returned by peek at the end of the input.
 const eof rune = -1
@@ -187,7 +191,7 @@ func (p *parser) parseTerm() (logbook.Expr, error) {
 	switch letter {
 	case 'A':
 		return logbook.All{}, nil
-	case 'c', 'b', 'm', 'y', 'd':
+	case 'c', 'b', 'm', 'y', 'd', 'C', 's', 'o':
 	default:
 		return nil, p.errorf(start, "unknown term %s", name)
 	}
@@ -209,6 +213,17 @@ func (p *parser) parseTerm() (logbook.Expr, error) {
 		return logbook.ModeIs{Mode: value}, nil
 	case 'y':
 		return logbook.Filter{Tags: []string{value}}, nil
+	case 'C':
+		return logbook.Filter{Countries: []string{value}}, nil
+	case 's':
+		return logbook.Filter{States: []string{value}}, nil
+	case 'o':
+		// A mistyped continent would quietly match nothing, so reject it.
+		if !slices.Contains(continents, strings.ToUpper(value)) {
+			return nil, p.errorf(start, "%s: unknown continent %q, want one of %s",
+				name, value, strings.Join(continents, ", "))
+		}
+		return logbook.Filter{Continents: []string{value}}, nil
 	default: // 'd'
 		f, err := parseDateRange(value)
 		if err != nil {

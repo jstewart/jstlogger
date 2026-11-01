@@ -9,6 +9,9 @@
 //	~b BAND       on band BAND
 //	~m MODE       mode or submode is MODE
 //	~y TAG        carries tag TAG
+//	~C COUNTRY    country is COUNTRY, ignoring case
+//	~s STATE      state or province is STATE (ADIF code, e.g. MA)
+//	~o CONT       on continent CONT: AF, AN, AS, EU, NA, OC or SA
 //	~d RANGE      started within RANGE (UTC dates, YYYY-MM-DD):
 //	              D (that day), D- (from D), -D (through D), D1-D2 (D1 through D2)
 //
