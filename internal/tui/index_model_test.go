@@ -704,8 +704,10 @@ func TestIndexLimitLoadErrorKeepsView(t *testing.T) {
 
 	m = submitPattern(t, m, promptLimit, "~b 20m")
 
-	require.ErrorIs(t, m.idx.err, assert.AnError)
+	require.NoError(t, m.idx.err, "the old rows stay on screen")
 	assert.Equal(t, 10, m.idx.total)
+	assert.Contains(t, m.View().Content, "K10A")
+	assert.Contains(t, statusLine(t, m), assert.AnError.Error())
 	assert.NotContains(t, statusLine(t, m), "limit:")
 }
 

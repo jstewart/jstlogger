@@ -211,7 +211,8 @@ func (x *index) applyLimit(msg indexLimitMsg) {
 	}
 	switch {
 	case msg.err != nil:
-		x.err = msg.err
+		// x.err would hide the old rows, which are still good.
+		x.msg = msg.err.Error()
 		return
 	case msg.total == 0 && msg.limit.expr != nil:
 		x.msg = msgNoMatch
@@ -238,7 +239,8 @@ func (x *index) replace(msg indexLoadedMsg) {
 
 // restart drops the loads under way, which are no longer pending, so the
 // next load supersedes them, and returns the ID of the QSO under the
-// cursor, or 0 while its row loads.
+// cursor, or 0 while its row loads. Model.layout requests the visible
+// blocks again under the new gen after every update.
 func (x *index) restart() int64 {
 	x.gen++
 	x.pending = map[int]bool{}
