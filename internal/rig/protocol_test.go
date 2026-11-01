@@ -19,7 +19,7 @@ func pipeClient(t *testing.T, reply string) (*client, <-chan string) {
 	cc, sc := net.Pipe()
 	got := make(chan string, 1)
 	go func() {
-		defer sc.Close()
+		defer func() { _ = sc.Close() }() // the client may close first
 		line, err := bufio.NewReader(sc).ReadString('\n')
 		if err != nil {
 			return
@@ -147,7 +147,7 @@ func TestClientValidation(t *testing.T) {
 			conn, err := net.Dial("tcp", f.Addr())
 			require.NoError(t, err)
 			c := newClient(conn, time.Second)
-			defer c.Close()
+			defer func() { assert.NoError(t, c.Close()) }()
 
 			err = tt.call(c)
 			require.ErrorIs(t, err, ErrInvalidArgument)
@@ -166,7 +166,7 @@ func TestClientTimeout(t *testing.T) {
 	conn, err := net.Dial("tcp", f.Addr())
 	require.NoError(t, err)
 	c := newClient(conn, 50*time.Millisecond)
-	defer c.Close()
+	defer func() { assert.NoError(t, c.Close()) }()
 
 	start := time.Now()
 	_, err = c.getFreq(context.Background())
@@ -183,7 +183,7 @@ func TestClientContextDeadline(t *testing.T) {
 	conn, err := net.Dial("tcp", f.Addr())
 	require.NoError(t, err)
 	c := newClient(conn, time.Minute)
-	defer c.Close()
+	defer func() { assert.NoError(t, c.Close()) }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

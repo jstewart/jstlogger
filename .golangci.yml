@@ -1,0 +1,12 @@
+version: "2"
+
+linters:
+  # standard is errcheck, govet, ineffassign, staticcheck and unused.
+  default: standard
+  enable:
+    # Use errors.Is and errors.As, and wrap errors with %w (see AGENTS.md).
+    - errorlint
+
+formatters:
+  enable:
+    - gofmt

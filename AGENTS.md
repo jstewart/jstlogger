@@ -11,6 +11,13 @@ rediscovering the underlying commands.
 - `just build` — build the binary (optimizations disabled for debugging).
 - `just run` — build, then launch the app.
 - `just test` — `go test ./... -short`.
+- `just lint` — `golangci-lint run`, with the linters in `.golangci.yml`.
+  Must pass before every commit; CI fails otherwise.
+- `just vuln` — `govulncheck ./...`, which reports known vulnerabilities in
+  code jstlogger calls.
+- `just tools` — install the pinned golangci-lint and govulncheck into
+  `$GOBIN`. Versions are pinned in the justfile and in CI; change them in
+  both places together.
 
 ## Environment Setup & Tooling
 

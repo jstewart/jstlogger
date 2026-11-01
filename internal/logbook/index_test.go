@@ -141,7 +141,7 @@ func TestSQLiteStoreIndexUsesStartIndex(t *testing.T) {
 
 	rows, err := s.db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+query, args...)
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() { assert.NoError(t, rows.Close()) }()
 	var plan []string
 	for rows.Next() {
 		var id, parent, notUsed int

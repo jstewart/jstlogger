@@ -62,7 +62,7 @@ func importADIF(ctx context.Context, store logbook.Store, path string, tags []st
 	if err != nil {
 		return fmt.Errorf("importing %s: %w", path, err)
 	}
-	fmt.Fprintf(stderr, "jstlogger: imported %d QSOs, skipped %d duplicates\n", res.Added, res.Skipped)
+	printStderr(stderr, "jstlogger: imported %d QSOs, skipped %d duplicates\n", res.Added, res.Skipped)
 	return nil
 }
 
@@ -77,7 +77,7 @@ func exportADIF(ctx context.Context, store logbook.Store, path string, tags []st
 		if err != nil {
 			return fmt.Errorf("exporting ADIF: %w", err)
 		}
-		fmt.Fprintf(stderr, "jstlogger: exported %d QSOs to stdout\n", n)
+		printStderr(stderr, "jstlogger: exported %d QSOs to stdout\n", n)
 		return nil
 	}
 
@@ -87,7 +87,7 @@ func exportADIF(ctx context.Context, store logbook.Store, path string, tags []st
 	if err != nil {
 		return fmt.Errorf("exporting to %s: %w", path, err)
 	}
-	fmt.Fprintf(stderr, "jstlogger: exported %d QSOs to %s\n", n, path)
+	printStderr(stderr, "jstlogger: exported %d QSOs to %s\n", n, path)
 	return nil
 }
 

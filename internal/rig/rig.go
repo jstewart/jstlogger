@@ -108,7 +108,7 @@ func (r *Rig) Run(ctx context.Context, emit func(any)) error {
 		// it unless its exit was already seen.
 		defer func() {
 			if a.procExit != nil {
-				<-a.procExit
+				<-a.procExit //nolint:errcheck // rigctld's exit error is expected: ctx stopped it
 			}
 		}()
 	}
