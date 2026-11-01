@@ -205,8 +205,17 @@ just format    # gofmt -w . (run before committing)
 just test      # go test ./... -short
 just vendor    # go mod tidy && go mod vendor
 just generate  # go generate ./... (regenerates mocks)
+just lint      # golangci-lint run
+just vuln      # govulncheck ./... (known vulnerabilities in code we call)
 just --list    # list all recipes
 ```
+
+`just lint` and `just vuln` need golangci-lint and govulncheck. Run
+`just tools` once to install the versions CI uses into `$GOBIN`. They are
+installed with `go install`, not added to `go.mod`. CI runs both checks on
+every pull request and push to main, and fails when either finds a problem.
+The linters are configured in `.golangci.yml`; a `//nolint` must name the
+linter and say why.
 
 To check that one of your own ADIF files survives an import and export,
 point the round-trip test at it:
