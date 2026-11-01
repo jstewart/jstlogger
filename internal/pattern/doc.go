@@ -20,7 +20,9 @@
 // A value is a bare word ending at whitespace, '(', ')' or '|', or a string
 // in double or single quotes in which a backslash escapes the next
 // character, so values can contain spaces: ~y "field day". Space between a
-// term and its value is optional.
+// term and its value is optional. As in mutt, a value may start with '~',
+// so ~c ~b 20m looks for calls containing "~B" AND'd with the bare word
+// 20m, which is an error.
 //
 // Parse reports malformed patterns with errors that wrap ErrSyntax and name
 // the 1-based column of the offending character.

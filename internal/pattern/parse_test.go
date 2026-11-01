@@ -98,6 +98,7 @@ func TestParseErrors(t *testing.T) {
 		{"empty parens", "~A ( )", []string{"()", "column 4"}},
 		{"bare word", "W1AW", []string{"expected ~ term", "column 1"}},
 		{"value for all", "~A foo", []string{"expected ~ term", "column 4"}},
+		{"value swallows a term", "~c ~b 20m", []string{"expected ~ term", "column 7"}},
 		{"bad date", "~d 2024-13-01", []string{"~d", "column 1", "2024-13-01"}},
 		{"reversed range", "~b 20m ~d 2024-03-05-2024-03-01", []string{"~d", "column 8"}},
 	}
