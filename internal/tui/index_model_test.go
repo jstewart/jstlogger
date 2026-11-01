@@ -28,7 +28,7 @@ type fakeIndexStore struct {
 	countErr error
 }
 
-func (s *fakeIndexStore) Count(_ context.Context, _ logbook.Filter) (int, error) {
+func (s *fakeIndexStore) Count(_ context.Context, _ logbook.Expr) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.countErr != nil {
@@ -37,7 +37,7 @@ func (s *fakeIndexStore) Count(_ context.Context, _ logbook.Filter) (int, error)
 	return len(s.qsos), s.err
 }
 
-func (s *fakeIndexStore) Index(_ context.Context, _ logbook.Filter, offset, limit int) ([]logbook.QSO, error) {
+func (s *fakeIndexStore) Index(_ context.Context, _ logbook.Expr, offset, limit int) ([]logbook.QSO, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.offsets = append(s.offsets, offset)
@@ -50,7 +50,7 @@ func (s *fakeIndexStore) Index(_ context.Context, _ logbook.Filter, offset, limi
 	return slices.Clone(s.qsos[offset:min(offset+limit, len(s.qsos))]), nil
 }
 
-func (s *fakeIndexStore) IndexOf(_ context.Context, _ logbook.Filter, id int64) (int, error) {
+func (s *fakeIndexStore) IndexOf(_ context.Context, _ logbook.Expr, id int64) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if i := slices.IndexFunc(s.qsos, func(q logbook.QSO) bool { return q.ID == id }); i >= 0 {
