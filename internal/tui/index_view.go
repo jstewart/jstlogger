@@ -144,6 +144,8 @@ func (x index) view(st styles, width, height int) string {
 		return st.err.Render(truncate(x.err.Error(), width, "…"))
 	case !x.loaded:
 		return st.muted.Render("Loading…")
+	case x.total == 0 && x.limit.expr != nil:
+		return st.muted.Render("No QSOs match the limit " + x.limit.text + ".")
 	case x.total == 0:
 		return st.muted.Render("No QSOs yet.")
 	}
@@ -179,10 +181,13 @@ func (x index) rowView(st styles, i, width int) string {
 	return line
 }
 
-// statusView renders the position, the mark count and any message or
-// error, e.g. "QSO 12/4,567 · 3 marked".
+// statusView renders the position, the limit, the mark count and any
+// message or error, e.g. "QSO 12/4,567 · limit: ~b 20m · 3 marked".
 func (x index) statusView(st styles, width int) string {
 	parts := []string{"QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)}
+	if x.limit.expr != nil {
+		parts = append(parts, "limit: "+x.limit.text)
+	}
 	if n := len(x.marks); n > 0 {
 		parts = append(parts, formatCount(n)+" marked")
 	}

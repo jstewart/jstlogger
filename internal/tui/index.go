@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"jstlogger/internal/logbook"
+	"jstlogger/internal/pattern"
 )
 
 const (
@@ -35,6 +36,7 @@ const (
 	msgFirstPage     = "You are on the first page."
 	msgScrollDownEnd = "You can't scroll down farther."
 	msgScrollUpEnd   = "You can't scroll up farther."
+	msgNoMatch       = "No QSOs match the pattern."
 )
 
 // index is the scrolling list of QSOs, newest first. Rows are identified by
@@ -61,7 +63,12 @@ type index struct {
 	// reload are dropped.
 	gen int
 
-	// marks holds the IDs of the marked QSOs.
+	// limit restricts the rows to the QSOs matching a pattern; the zero
+	// limit shows every QSO.
+	limit indexLimit
+
+	// marks holds the IDs of the marked QSOs. Limiting the index does not
+	// change them.
 	marks map[int64]bool
 
 	// msg is shown on the status line until the next key press.
@@ -76,6 +83,14 @@ func newIndex() index {
 		pending: map[int]bool{},
 		marks:   map[int64]bool{},
 	}
+}
+
+// indexLimit is a limit on the QSOs the index shows: the pattern as typed
+// and the expression it parses to. The zero indexLimit, with a nil expr,
+// shows every QSO.
+type indexLimit struct {
+	expr logbook.Expr
+	text string
 }
 
 // indexLoadedMsg reports a full (re)load: the row count and the block
@@ -97,22 +112,38 @@ type indexBlockMsg struct {
 	err   error
 }
 
-// loadIndexCmd returns a command that counts the QSOs and loads the block
-// holding the cursor. The cursor goes to the QSO with the given ID if it
-// still exists, and otherwise to row fallback.
-func loadIndexCmd(s logbook.Store, gen int, id int64, fallback int) tea.Cmd {
+// indexLimitMsg reports a load under a new limit, which the index adopts
+// only if some QSOs match it.
+type indexLimitMsg struct {
+	indexLoadedMsg
+	limit indexLimit
+}
+
+// indexMarksMsg reports the IDs of the QSOs a pattern matched, to mark when
+// add is true and to unmark otherwise.
+type indexMarksMsg struct {
+	ids []int64
+	add bool
+	err error
+}
+
+// loadIndexCmd returns a command that counts the QSOs matching limit and
+// loads the block holding the cursor. The cursor goes to the QSO with the
+// given ID if it still matches, and otherwise to row fallback. A nil limit
+// matches every QSO.
+func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, id int64, fallback int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
 		msg := indexLoadedMsg{gen: gen}
 		msg.err = func() error {
-			total, err := s.Count(ctx, logbook.Filter{})
+			total, err := s.Count(ctx, limit)
 			if err != nil {
 				return fmt.Errorf("load index: %w", err)
 			}
 			cursor := fallback
 			if id != 0 {
-				n, err := s.IndexOf(ctx, logbook.Filter{}, id)
+				n, err := s.IndexOf(ctx, limit, id)
 				switch {
 				case err == nil:
 					cursor = n
@@ -122,7 +153,7 @@ func loadIndexCmd(s logbook.Store, gen int, id int64, fallback int) tea.Cmd {
 			}
 			cursor = max(min(cursor, total-1), 0)
 			block := cursor / indexBlockSize
-			rows, err := s.Index(ctx, logbook.Filter{}, block*indexBlockSize, indexBlockSize)
+			rows, err := s.Index(ctx, limit, block*indexBlockSize, indexBlockSize)
 			if err != nil {
 				return fmt.Errorf("load index: %w", err)
 			}
@@ -133,12 +164,24 @@ func loadIndexCmd(s logbook.Store, gen int, id int64, fallback int) tea.Cmd {
 	}
 }
 
-// loadBlockCmd returns a command that loads one block of rows.
-func loadBlockCmd(s logbook.Store, gen, block int) tea.Cmd {
+// limitIndexCmd returns a command that loads the index under limit, as
+// loadIndexCmd does, and reports it as an indexLimitMsg. The cursor stays
+// on the QSO with the given ID if it matches, and otherwise goes to row 0.
+func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, id int64) tea.Cmd {
+	load := loadIndexCmd(s, gen, limit.expr, id, 0)
+	return func() tea.Msg {
+		msg, _ := load().(indexLoadedMsg)
+		return indexLimitMsg{indexLoadedMsg: msg, limit: limit}
+	}
+}
+
+// loadBlockCmd returns a command that loads one block of the rows matching
+// limit. A nil limit matches every QSO.
+func loadBlockCmd(s logbook.Store, gen int, limit logbook.Expr, block int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
-		rows, err := s.Index(ctx, logbook.Filter{}, block*indexBlockSize, indexBlockSize)
+		rows, err := s.Index(ctx, limit, block*indexBlockSize, indexBlockSize)
 		if err != nil {
 			err = fmt.Errorf("load rows %d–%d: %w", block*indexBlockSize+1, (block+1)*indexBlockSize, err)
 		}
@@ -156,6 +199,32 @@ func (x *index) applyLoad(msg indexLoadedMsg) {
 		x.err = msg.err
 		return
 	}
+	x.replace(msg)
+}
+
+// applyLimit adopts a new limit and the rows loaded under it. As in mutt,
+// a limit no QSO matches is not adopted, and neither is one whose load
+// failed: the index keeps its old limit and rows.
+func (x *index) applyLimit(msg indexLimitMsg) {
+	if msg.gen != x.gen {
+		return
+	}
+	switch {
+	case msg.err != nil:
+		x.err = msg.err
+		return
+	case msg.total == 0 && msg.limit.expr != nil:
+		x.msg = msgNoMatch
+		return
+	}
+	x.limit = msg.limit
+	// Blocks requested while the limit loaded hold rows of the old limit.
+	x.gen++
+	x.replace(msg.indexLoadedMsg)
+}
+
+// replace replaces the cache with the result of a successful (re)load.
+func (x *index) replace(msg indexLoadedMsg) {
 	x.err = nil
 	x.loaded = true
 	x.total = msg.total
@@ -165,6 +234,18 @@ func (x *index) applyLoad(msg indexLoadedMsg) {
 	x.cursor = msg.cursor
 	x.clampTop()
 	x.scrollToCursor()
+}
+
+// restart drops the loads under way, which are no longer pending, so the
+// next load supersedes them, and returns the ID of the QSO under the
+// cursor, or 0 while its row loads.
+func (x *index) restart() int64 {
+	x.gen++
+	x.pending = map[int]bool{}
+	if q, ok := x.current(); ok {
+		return q.ID
+	}
+	return 0
 }
 
 // applyBlock caches a loaded block.
@@ -371,6 +452,133 @@ func (x *index) toggleMark() {
 	if x.cursor < x.total-1 {
 		x.moveTo(x.cursor + 1)
 	}
+}
+
+// applyMarks marks or unmarks the QSOs a pattern matched and reports on the
+// status line how many changed.
+func (x *index) applyMarks(msg indexMarksMsg) {
+	switch {
+	case msg.err != nil:
+		x.msg = msg.err.Error()
+		return
+	case len(msg.ids) == 0:
+		x.msg = msgNoMatch
+		return
+	}
+	n := 0
+	for _, id := range msg.ids {
+		if x.marks[id] != msg.add {
+			n++
+		}
+		if msg.add {
+			x.marks[id] = true
+		} else {
+			delete(x.marks, id)
+		}
+	}
+	verb := "Unmarked "
+	if msg.add {
+		verb = "Marked "
+	}
+	x.msg = verb + countQSOs(n) + "."
+}
+
+// unmarkAll unmarks every QSO and reports how many on the status line.
+func (x *index) unmarkAll() {
+	x.msg = "Unmarked " + countQSOs(len(x.marks)) + "."
+	clear(x.marks)
+}
+
+// countQSOs formats n QSOs, e.g. "1 QSO" or "1,234 QSOs".
+func countQSOs(n int) string {
+	if n == 1 {
+		return "1 QSO"
+	}
+	return formatCount(n) + " QSOs"
+}
+
+// markPatternCmd returns a command that looks up the QSOs matching e, to
+// mark when add is true and to unmark otherwise.
+func markPatternCmd(s logbook.Store, e logbook.Expr, add bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		ids, err := s.IDs(ctx, e)
+		if err != nil {
+			verb := "unmark"
+			if add {
+				verb = "mark"
+			}
+			err = fmt.Errorf("%s QSOs: %w", verb, err)
+		}
+		return indexMarksMsg{ids: ids, add: add, err: err}
+	}
+}
+
+// submitPattern runs the pattern typed in a limit, mark or unmark prompt.
+func (m *Model) submitPattern(kind promptKind, s string) (tea.Cmd, error) {
+	switch kind {
+	case promptLimit:
+		return m.limitIndex(s)
+	case promptMark:
+		return m.markPattern(s, true)
+	case promptUnmark:
+		return m.markPattern(s, false)
+	}
+	return nil, fmt.Errorf("prompt %d takes no pattern", kind)
+}
+
+// parsePattern parses s, reporting whether it is empty and whether it
+// matches every QSO by being just ~A.
+func parsePattern(s string) (e logbook.Expr, empty, all bool, err error) {
+	if strings.TrimSpace(s) == "" {
+		return nil, true, false, nil
+	}
+	e, err = pattern.Parse(s)
+	if err != nil {
+		// The error already starts "pattern:" and is shown under the prompt
+		// as is.
+		return nil, false, false, err
+	}
+	_, all = e.(logbook.All)
+	return e, false, all, nil
+}
+
+// limitIndex returns a command that loads the index limited to the QSOs
+// matching s. An empty s or ~A clears the limit.
+func (m *Model) limitIndex(s string) (tea.Cmd, error) {
+	e, empty, all, err := parsePattern(s)
+	if err != nil {
+		return nil, err
+	}
+	var limit indexLimit
+	if !empty && !all {
+		limit = indexLimit{expr: e, text: strings.TrimSpace(s)}
+	}
+	if limit.expr == nil && m.idx.limit.expr == nil {
+		return nil, nil
+	}
+	id := m.idx.restart()
+	return limitIndexCmd(m.logbook, m.idx.gen, limit, id), nil
+}
+
+// markPattern returns a command that marks, when add is true, or unmarks the
+// QSOs within the limit matching s. An empty s does nothing, and unmarking
+// ~A with no limit unmarks every QSO at once.
+func (m *Model) markPattern(s string, add bool) (tea.Cmd, error) {
+	e, empty, all, err := parsePattern(s)
+	switch {
+	case err != nil:
+		return nil, err
+	case empty:
+		return nil, nil
+	case m.idx.limit.expr != nil:
+		e = logbook.And{m.idx.limit.expr, e}
+	case all && !add:
+		m.idx.unmarkAll()
+		return nil, nil
+	}
+	return markPatternCmd(m.logbook, e, add), nil
 }
 
 // jump moves the index cursor to the row number typed in the jump prompt.

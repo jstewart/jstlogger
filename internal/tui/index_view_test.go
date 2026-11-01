@@ -156,6 +156,10 @@ func TestIndexViewStates(t *testing.T) {
 	assert.Equal(t, "Loading…", plain(newIndex().view(st, 78, 10)))
 	assert.Equal(t, "No QSOs yet.", plain(loadedIndex(0, 8).view(st, 78, 10)))
 
+	limited := loadedIndex(0, 8)
+	limited.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
+	assert.Equal(t, "No QSOs match the limit ~b 20m.", plain(limited.view(st, 78, 10)))
+
 	x := newIndex()
 	x.applyLoad(indexLoadedMsg{err: assert.AnError})
 	assert.Equal(t, assert.AnError.Error(), plain(x.view(st, 78, 10)))
