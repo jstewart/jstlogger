@@ -19,6 +19,13 @@ type Store interface {
 	List(ctx context.Context, f Filter, page PageRequest) (Page, error)
 	// Count returns the number of QSOs matching f.
 	Count(ctx context.Context, f Filter) (int, error)
+	// Index returns up to limit QSOs matching f, newest first, starting at
+	// row offset (0 is the newest), without their fields, confirmations or
+	// tags.
+	Index(ctx context.Context, f Filter, offset, limit int) ([]QSO, error)
+	// IndexOf returns the row number of the QSO with the given ID in Index's
+	// ordering of the QSOs matching f, or ErrNotFound.
+	IndexOf(ctx context.Context, f Filter, id int64) (int, error)
 	// Tag applies tags to each of the given QSOs, creating tags as needed.
 	Tag(ctx context.Context, qsoIDs []int64, tags ...string) error
 	// Untag removes tags from each of the given QSOs.

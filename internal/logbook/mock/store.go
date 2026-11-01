@@ -129,6 +129,36 @@ func (mr *MockStoreMockRecorder) Import(ctx, qsos, tags any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Import", reflect.TypeOf((*MockStore)(nil).Import), ctx, qsos, tags)
 }
 
+// Index mocks base method.
+func (m *MockStore) Index(ctx context.Context, f logbook.Filter, offset, limit int) ([]logbook.QSO, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Index", ctx, f, offset, limit)
+	ret0, _ := ret[0].([]logbook.QSO)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Index indicates an expected call of Index.
+func (mr *MockStoreMockRecorder) Index(ctx, f, offset, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Index", reflect.TypeOf((*MockStore)(nil).Index), ctx, f, offset, limit)
+}
+
+// IndexOf mocks base method.
+func (m *MockStore) IndexOf(ctx context.Context, f logbook.Filter, id int64) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IndexOf", ctx, f, id)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IndexOf indicates an expected call of IndexOf.
+func (mr *MockStoreMockRecorder) IndexOf(ctx, f, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IndexOf", reflect.TypeOf((*MockStore)(nil).IndexOf), ctx, f, id)
+}
+
 // List mocks base method.
 func (m *MockStore) List(ctx context.Context, f logbook.Filter, page logbook.PageRequest) (logbook.Page, error) {
 	m.ctrl.T.Helper()

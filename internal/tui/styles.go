@@ -18,6 +18,11 @@ type styles struct {
 	muted  lipgloss.Style
 	err    lipgloss.Style
 
+	// indexHeader renders the index column header and cursor the bar
+	// across the row under the cursor.
+	indexHeader lipgloss.Style
+	cursor      lipgloss.Style
+
 	// rigFreq renders the rig frequency and mode while connected; stale
 	// renders them while they may be out of date.
 	rigFreq   lipgloss.Style
@@ -27,14 +32,16 @@ type styles struct {
 
 func defaultStyles() styles {
 	return styles{
-		header:    lipgloss.NewStyle().Padding(0, 1),
-		title:     lipgloss.NewStyle().Bold(true).Foreground(accent),
-		body:      lipgloss.NewStyle().Padding(0, 1),
-		footer:    lipgloss.NewStyle().Padding(0, 1),
-		muted:     lipgloss.NewStyle().Foreground(muted),
-		err:       lipgloss.NewStyle().Foreground(bad),
-		rigFreq:   lipgloss.NewStyle().Bold(true),
-		stale:     lipgloss.NewStyle().Foreground(muted).Faint(true),
-		connected: lipgloss.NewStyle().Foreground(good),
+		header:      lipgloss.NewStyle().Padding(0, 1),
+		title:       lipgloss.NewStyle().Bold(true).Foreground(accent),
+		body:        lipgloss.NewStyle().Padding(0, 1),
+		footer:      lipgloss.NewStyle().Padding(0, 1),
+		muted:       lipgloss.NewStyle().Foreground(muted),
+		err:         lipgloss.NewStyle().Foreground(bad),
+		indexHeader: lipgloss.NewStyle().Bold(true),
+		cursor:      lipgloss.NewStyle().Reverse(true),
+		rigFreq:     lipgloss.NewStyle().Bold(true),
+		stale:       lipgloss.NewStyle().Foreground(muted).Faint(true),
+		connected:   lipgloss.NewStyle().Foreground(good),
 	}
 }
