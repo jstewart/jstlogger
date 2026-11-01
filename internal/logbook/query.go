@@ -175,11 +175,12 @@ func filterSQL(f Filter) (string, []any, error) {
 	in("itu_region", toArgs(f.ITURegions, func(v int) any { return v }))
 	// Mode, band and continent are normalized on write, so normalize the
 	// filter values the same way and keep the column indexes usable. Country
-	// is stored as given, so compare ignoring case.
+	// and state are stored as given, so compare ignoring case.
 	in("mode", toArgs(f.Modes, func(v string) any { return upper(v) }))
 	in("band", toArgs(f.Bands, func(v string) any { return strings.ToLower(strings.TrimSpace(v)) }))
 	in("country COLLATE NOCASE", toArgs(f.Countries, func(v string) any { return strings.TrimSpace(v) }))
 	in("cont", toArgs(f.Continents, func(v string) any { return upper(v) }))
+	in("state COLLATE NOCASE", toArgs(f.States, func(v string) any { return strings.TrimSpace(v) }))
 	for _, tag := range normalizeTags(f.Tags) {
 		// tag.name is COLLATE NOCASE, so this matches ignoring case.
 		add(`EXISTS (SELECT 1 FROM qso_tag qt JOIN tag t ON t.id = qt.tag_id
