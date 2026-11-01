@@ -84,22 +84,25 @@ func (k promptKeyMap) FullHelp() [][]key.Binding {
 // indexKeyMap holds the QSO index keybindings, modeled on NeoMutt's generic
 // menu.
 type indexKeyMap struct {
-	Next       key.Binding
-	Prev       key.Binding
-	NextPage   key.Binding
-	PrevPage   key.Binding
-	HalfDown   key.Binding
-	HalfUp     key.Binding
-	NextLine   key.Binding
-	PrevLine   key.Binding
-	TopPage    key.Binding
-	MiddlePage key.Binding
-	BottomPage key.Binding
-	First      key.Binding
-	Last       key.Binding
-	Jump       key.Binding
-	Mark       key.Binding
-	Reload     key.Binding
+	Next          key.Binding
+	Prev          key.Binding
+	NextPage      key.Binding
+	PrevPage      key.Binding
+	HalfDown      key.Binding
+	HalfUp        key.Binding
+	NextLine      key.Binding
+	PrevLine      key.Binding
+	TopPage       key.Binding
+	MiddlePage    key.Binding
+	BottomPage    key.Binding
+	First         key.Binding
+	Last          key.Binding
+	Jump          key.Binding
+	Mark          key.Binding
+	MarkPattern   key.Binding
+	UnmarkPattern key.Binding
+	Limit         key.Binding
+	Reload        key.Binding
 }
 
 // defaultIndexKeys returns the index keybindings, disabled, and so hidden
@@ -166,6 +169,18 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("t"),
 			key.WithHelp("t", "mark"),
 		),
+		MarkPattern: key.NewBinding(
+			key.WithKeys("T"),
+			key.WithHelp("T", "mark pattern"),
+		),
+		UnmarkPattern: key.NewBinding(
+			key.WithKeys("ctrl+t"),
+			key.WithHelp("ctrl+t", "unmark pattern"),
+		),
+		Limit: key.NewBinding(
+			key.WithKeys("l"),
+			key.WithHelp("l", "limit"),
+		),
 		Reload: key.NewBinding(
 			key.WithKeys("ctrl+l"),
 			key.WithHelp("ctrl+l", "reload"),
@@ -174,7 +189,8 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
 		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
-		&k.First, &k.Last, &k.Jump, &k.Mark, &k.Reload,
+		&k.First, &k.Last, &k.Jump, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
+		&k.Limit, &k.Reload,
 	} {
 		b.SetEnabled(enabled)
 	}
@@ -190,7 +206,8 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 		{k.Next, k.Prev, k.NextLine, k.PrevLine},
 		{k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp},
 		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
-		{k.First, k.Last, k.Mark, k.Reload},
+		{k.First, k.Last, k.Limit, k.Reload},
+		{k.Mark, k.MarkPattern, k.UnmarkPattern},
 	}
 }
 

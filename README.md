@@ -74,6 +74,52 @@ it stays quick on large logbooks: jumping to the oldest QSO or to row N
 reads only the rows around it. Marks are kept in memory and are lost on
 quit; nothing acts on them yet.
 
+`l` limits the index to the QSOs matching a [pattern](#patterns), and the
+status line shows the limit, e.g. `QSO 2/57 · limit: ~b 20m`. The cursor
+stays on the selected QSO if it matches. As in mutt, a pattern no QSO
+matches leaves the index as it was. To show every QSO again, limit to
+`~A` or submit an empty pattern. `ctrl+l` reloads under the limit, and
+limiting never changes the marks.
+
+`T` marks, and `ctrl+t` unmarks, the QSOs matching a pattern. Like mutt,
+they act only on the QSOs within the limit, so `ctrl+t ~A` unmarks just
+the QSOs you can see.
+
+### Patterns
+
+Patterns follow mutt's. A term is `~` followed by a case-sensitive letter
+and, for most letters, a value:
+
+| Term       | Matches                                                       |
+| ---------- | ------------------------------------------------------------- |
+| `~A`       | Every QSO                                                     |
+| `~c CALL`  | Call contains `CALL`                                          |
+| `~b BAND`  | Band is `BAND`, e.g. `~b 20m`                                 |
+| `~m MODE`  | Mode or submode is `MODE`, so `~m FT4` matches MFSK/FT4       |
+| `~y TAG`   | Carries the tag `TAG`                                         |
+| `~C NAME`  | Country is `NAME`, ignoring case, e.g. `~C "United States"`   |
+| `~s STATE` | State or province is `STATE`, e.g. `~s MA`                    |
+| `~o CONT`  | Continent is `CONT`: `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA` |
+| `~d RANGE` | Started within `RANGE` (see below)                            |
+
+`~s` matches the ADIF state code of any country, so `~s WA` also matches
+Western Australia; add `~C "United States"` to narrow it.
+
+`RANGE` is in UTC dates, `YYYY-MM-DD`: `D` is that day, `D-` is from `D`
+on, `-D` is through `D`, and `D1-D2` is `D1` through `D2`.
+
+Terms side by side must all match; `|` matches either side and `!` negates
+the term after it. `!` binds tightest, then side by side, then `|`, and
+parentheses group:
+
+```text
+~c W1 (~b 20m | ~b 40m) !~m FT8
+```
+
+A value ends at a space, `(`, `)` or `|`; quote it with double or single
+quotes to include those, as in `~y "field day"`, where a backslash escapes
+the next character. The space between a term and its value is optional.
+
 ### Keybindings
 
 The index keys follow NeoMutt's generic menu.
@@ -91,6 +137,9 @@ The index keys follow NeoMutt's generic menu.
 | `*` / `End`               | Last (oldest) QSO                                  |
 | `1`–`9`                   | Jump to a QSO by its row number                    |
 | `t`                       | Mark or unmark the QSO, then move to the next one  |
+| `T`                       | Mark the QSOs matching a pattern                   |
+| `ctrl+t`                  | Unmark the QSOs matching a pattern                 |
+| `l`                       | Limit the index to the QSOs matching a pattern     |
 | `ctrl+l`                  | Reload the index and redraw the screen             |
 | `f`                       | Set the rig frequency                              |
 | `m`                       | Set the rig mode                                   |
