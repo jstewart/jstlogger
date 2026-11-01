@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# Pinned tool versions; keep them in sync with the justfile. Both are built
+# with the module's Go version, so they understand it.
+env:
+  GOLANGCI_LINT_VERSION: v2.15.0
+  GOVULNCHECK_VERSION: v1.9.0
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -35,3 +41,33 @@ jobs:
 
       - name: Test
         run: go test -race -short ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
+
+      - name: Lint
+        run: golangci-lint run
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+
+      - name: Check for vulnerabilities
+        run: govulncheck ./...
