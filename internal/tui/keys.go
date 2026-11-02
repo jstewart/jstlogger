@@ -107,6 +107,10 @@ type indexKeyMap struct {
 	SearchReverse  key.Binding
 	SearchNext     key.Binding
 	SearchOpposite key.Binding
+	MarkPrefix     key.Binding
+	// PrefixCancel cancels the mark-prefix. It has no help, so help does not
+	// list it.
+	PrefixCancel key.Binding
 }
 
 // defaultIndexKeys returns the index keybindings, disabled, and so hidden
@@ -207,13 +211,20 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("N"),
 			key.WithHelp("N", "search opposite"),
 		),
+		MarkPrefix: key.NewBinding(
+			key.WithKeys(";"),
+			key.WithHelp(";", "mark-prefix"),
+		),
+		PrefixCancel: key.NewBinding(
+			key.WithKeys("esc"),
+		),
 	}
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
 		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
 		&k.First, &k.Last, &k.Jump, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
 		&k.Limit, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
-		&k.SearchOpposite,
+		&k.SearchOpposite, &k.MarkPrefix, &k.PrefixCancel,
 	} {
 		b.SetEnabled(enabled)
 	}
@@ -230,7 +241,7 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 		{k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp},
 		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
 		{k.First, k.Last, k.Limit, k.Reload},
-		{k.Mark, k.MarkPattern, k.UnmarkPattern},
+		{k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix},
 		{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite},
 	}
 }

@@ -35,6 +35,10 @@ type Model struct {
 	logbook logbook.Store
 	idx     index
 
+	// markedFuncs are the index functions that accept the mark-prefix. The
+	// bulk operations register here.
+	markedFuncs []markedFunc
+
 	prompt    promptKind
 	input     textinput.Model
 	promptErr error
@@ -86,6 +90,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		m.rigErr = nil
 		m.idx.msg = ""
+		if m.idx.prefix {
+			return m.updatePrefix(msg)
+		}
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -266,6 +273,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, m.searchAgain(false)
 	case key.Matches(msg, k.SearchOpposite):
 		return m, m.searchAgain(true)
+	case key.Matches(msg, k.MarkPrefix) && x.loaded:
+		x.armPrefix()
 	}
 	return m, nil
 }
