@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -96,13 +98,12 @@ func (m Model) withMarks(fn func(ids []int64) tea.Cmd) (Model, tea.Cmd) {
 	return m, fn(ids)
 }
 
-// askDelete asks whether to delete the marked QSOs.
+// askDelete asks whether to delete the marked QSOs. A yes deletes the QSOs
+// the question counted, even if the marks change while it is open.
 func (m Model) askDelete(ids []int64) (Model, tea.Cmd) {
 	q := fmt.Sprintf("Delete %s? [y/N]", countQSOs(len(ids)))
 	return m.askConfirm(q, func(m Model) (Model, tea.Cmd) {
-		return m.withMarks(func(ids []int64) tea.Cmd {
-			return deleteQSOsCmd(m.logbook, ids)
-		})
+		return m, deleteQSOsCmd(m.logbook, ids)
 	}), nil
 }
 
@@ -121,7 +122,8 @@ func (m Model) submitTag(s string, add bool) (Model, tea.Cmd) {
 // submitSave closes the prompt and saves the marked QSOs to the ADIF file
 // whose path is typed in it, asking first whether to overwrite an existing
 // file. An empty path does nothing. A leading ~/ stands for the home
-// directory; an error finding it leaves the prompt open.
+// directory. An error finding it, a directory, or a path that cannot be
+// checked leaves the prompt open with the error.
 func (m Model) submitSave(s string) (Model, tea.Cmd, error) {
 	path, err := expandHome(strings.TrimSpace(s))
 	switch {
@@ -135,8 +137,14 @@ func (m Model) submitSave(s string) (Model, tea.Cmd, error) {
 			return saveQSOsCmd(m.logbook, ids, path, m.version)
 		})
 	}
-	if _, err := os.Stat(path); err == nil {
+	fi, err := os.Stat(path)
+	switch {
+	case err == nil && fi.IsDir():
+		return m, nil, fmt.Errorf("save to %s: is a directory", path)
+	case err == nil:
 		return m.askConfirm(fmt.Sprintf("Overwrite %s? [y/N]", path), save), nil, nil
+	case !errors.Is(err, fs.ErrNotExist):
+		return m, nil, fmt.Errorf("save to %s: %w", path, err)
 	}
 	m = m.closePrompt()
 	m, cmd := save(m)

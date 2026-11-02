@@ -1,9 +1,6 @@
 package tui
 
 import (
-	"maps"
-	"slices"
-
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 )
@@ -11,8 +8,8 @@ import (
 // markedFunc is an index function that accepts the mark-prefix: on ;
 // followed by its key, it runs on every marked QSO. Its binding must be
 // enabled, since key.Matches ignores disabled bindings. A function that
-// opens a prompt should look at the marks again when the prompt is
-// submitted, as they may have changed.
+// opens a prompt decides whether to act on the IDs it was given or on the
+// marks when the prompt is submitted, as they may have changed.
 type markedFunc struct {
 	keys key.Binding
 	// run runs the function on the QSOs with the given IDs, in ascending
@@ -58,7 +55,7 @@ func (m Model) updatePrefix(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			m.idx.msg = msgNoMarks
 			return m, nil
 		}
-		return f.run(m, slices.Sorted(maps.Keys(m.idx.marks)))
+		return f.run(m, m.idx.markedIDs())
 	}
 	m.idx.msg = notMarkedMsg(msg.String())
 	return m, nil

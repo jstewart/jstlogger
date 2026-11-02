@@ -218,7 +218,8 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 			return m, nil
 		}
 	case promptTag, promptUntag:
-		return m.closePrompt().submitTag(m.input.Value(), m.prompt == promptTag)
+		tag, add := m.input.Value(), m.prompt == promptTag
+		return m.closePrompt().submitTag(tag, add)
 	case promptSave:
 		next, cmd, err := m.submitSave(m.input.Value())
 		if err != nil {

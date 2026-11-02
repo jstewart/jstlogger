@@ -376,6 +376,62 @@ func TestBulkSaveOverwrite(t *testing.T) {
 	}
 }
 
+func TestBulkDeleteDeletesTheConfirmedQSOs(t *testing.T) {
+	tests := []struct {
+		name  string
+		marks indexMarksMsg
+		kept  map[int64]bool
+	}{
+		{"mark added", indexMarksMsg{ids: []int64{1}, add: true}, map[int64]bool{1: true}},
+		{"all unmarked", unmarkAllMsg(5), map[int64]bool{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, s := newBulkModel(t, 5)
+			m = press(t, m, prefixKey, bulkDeleteKey)
+			require.Equal(t, "Delete 2 QSOs? [y/N]", m.confirm.question)
+			// A mark pattern finishes while the question is open.
+			m, _ = update(t, m, tt.marks)
+
+			m = press(t, m, keyPress('y', 0))
+
+			assert.Equal(t, []int64{3, 2, 1}, idsMatching(t, s, "~A"), "QSOs 5 and 4, as asked, are deleted")
+			assert.Equal(t, tt.kept, m.idx.marks)
+			assert.Equal(t, "Deleted 2 QSOs.", m.idx.msg)
+		})
+	}
+}
+
+func TestBulkSaveBadPath(t *testing.T) {
+	dir := t.TempDir()
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"directory", dir, "is a directory"},
+		{"unreadable directory", filepath.Join(dir, "locked", "marked.adi"), "permission denied"},
+	}
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "locked"), 0o000))
+	t.Cleanup(func() { assert.NoError(t, os.Chmod(filepath.Join(dir, "locked"), 0o755)) })
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.want == "permission denied" && os.Geteuid() == 0 {
+				t.Skip("root can read any directory")
+			}
+			m, _ := newBulkModel(t, 5)
+			m = press(t, m, prefixKey, bulkSaveKey)
+			m.input.SetValue(tt.path)
+
+			m = press(t, m, enterKey)
+
+			assert.Equal(t, promptSave, m.prompt, "the prompt stays open")
+			require.Error(t, m.promptErr)
+			assert.Contains(t, m.promptErr.Error(), tt.want)
+		})
+	}
+}
+
 func TestBulkSaveError(t *testing.T) {
 	m, _ := newBulkModel(t, 5)
 	path := filepath.Join(t.TempDir(), "missing", "marked.adi")
@@ -399,9 +455,6 @@ func TestBulkMarksClearedBeforeSubmit(t *testing.T) {
 		}},
 		{"untag", bulkUntagKey, func(t *testing.T, m Model, _ string) Model {
 			return press(t, typeText(t, m, "pota"), enterKey)
-		}},
-		{"delete", bulkDeleteKey, func(t *testing.T, m Model, _ string) Model {
-			return press(t, m, keyPress('y', 0))
 		}},
 		{"save", bulkSaveKey, func(t *testing.T, m Model, dir string) Model {
 			m.input.SetValue(filepath.Join(dir, "marked.adi"))
