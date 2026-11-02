@@ -111,6 +111,12 @@ type indexKeyMap struct {
 	// PrefixCancel cancels the mark-prefix. It has no help, so help does not
 	// list it.
 	PrefixCancel key.Binding
+	// The bulk operations run only after the mark-prefix, so their help
+	// shows the prefix with the key.
+	BulkDelete key.Binding
+	BulkSave   key.Binding
+	BulkTag    key.Binding
+	BulkUntag  key.Binding
 }
 
 // defaultIndexKeys returns the index keybindings, disabled, and so hidden
@@ -218,6 +224,22 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 		PrefixCancel: key.NewBinding(
 			key.WithKeys("esc"),
 		),
+		BulkDelete: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp(";d", "delete marked"),
+		),
+		BulkSave: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp(";s", "save marked"),
+		),
+		BulkTag: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp(";y", "tag marked"),
+		),
+		BulkUntag: key.NewBinding(
+			key.WithKeys("Y"),
+			key.WithHelp(";Y", "untag marked"),
+		),
 	}
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
@@ -225,6 +247,7 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 		&k.First, &k.Last, &k.Jump, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
 		&k.Limit, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
 		&k.SearchOpposite, &k.MarkPrefix, &k.PrefixCancel,
+		&k.BulkDelete, &k.BulkSave, &k.BulkTag, &k.BulkUntag,
 	} {
 		b.SetEnabled(enabled)
 	}
@@ -243,6 +266,7 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 		{k.First, k.Last, k.Limit, k.Reload},
 		{k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix},
 		{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite},
+		{k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag},
 	}
 }
 

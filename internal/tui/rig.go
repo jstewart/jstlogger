@@ -65,6 +65,16 @@ const (
 	// promptSearchReverse asks for a pattern to search the QSO index for,
 	// up from the cursor.
 	promptSearchReverse
+	// promptTag asks for a tag to add to the marked QSOs.
+	promptTag
+	// promptUntag asks for a tag to remove from the marked QSOs.
+	promptUntag
+	// promptSave asks for the path of an ADIF file to save the marked QSOs
+	// to.
+	promptSave
+	// promptConfirm asks a y/N question, Model.confirm, answered by a
+	// single key press rather than typed input.
+	promptConfirm
 )
 
 // rigState is the rig status as last reported by the rig events.
@@ -125,15 +135,25 @@ func (m Model) openPrompt(kind promptKind) (Model, tea.Cmd) {
 		// The last search is there to edit.
 		m.input.SetValue(m.idx.search.text)
 		m.input.CursorEnd()
+	case promptTag:
+		m.input.Prompt = "Tag marked QSOs with: "
+		m.input.Placeholder = ""
+	case promptUntag:
+		m.input.Prompt = "Remove tag from marked QSOs: "
+		m.input.Placeholder = ""
+	case promptSave:
+		m.input.Prompt = "Save marked QSOs to: "
+		m.input.Placeholder = ""
 	}
 	m.sizeInput()
 	return m, m.input.Focus()
 }
 
-// closePrompt closes the open prompt.
+// closePrompt closes the open prompt or question.
 func (m Model) closePrompt() Model {
 	m.prompt = promptNone
 	m.promptErr = nil
+	m.confirm = nil
 	m.input.Blur()
 	return m
 }
@@ -144,11 +164,14 @@ func (m *Model) sizeInput() {
 }
 
 // updatePrompt handles a key press while a prompt is open. Every key goes to
-// the prompt except submit, cancel and force quit.
+// the prompt except submit, cancel and force quit. A y/N question takes any
+// key but force quit as its answer.
 func (m Model) updatePrompt(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.promptKeys.Quit):
 		return m, tea.Quit
+	case m.prompt == promptConfirm:
+		return m.answerConfirm(msg)
 	case key.Matches(msg, m.promptKeys.Cancel):
 		return m.closePrompt(), nil
 	case key.Matches(msg, m.promptKeys.Submit):
@@ -194,6 +217,15 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 			m.promptErr = err
 			return m, nil
 		}
+	case promptTag, promptUntag:
+		return m.closePrompt().submitTag(m.input.Value(), m.prompt == promptTag)
+	case promptSave:
+		next, cmd, err := m.submitSave(m.input.Value())
+		if err != nil {
+			m.promptErr = err
+			return m, nil
+		}
+		return next, cmd
 	}
 	return m.closePrompt(), cmd
 }
@@ -211,8 +243,12 @@ func rigCmd(desc string, fn func(ctx context.Context) error) tea.Cmd {
 	}
 }
 
-// promptView renders the open prompt and any parse error.
+// promptView renders the open prompt and any parse error, or the open y/N
+// question.
 func (m Model) promptView() string {
+	if m.prompt == promptConfirm && m.confirm != nil {
+		return m.confirm.question
+	}
 	lines := []string{m.input.View()}
 	if m.promptErr != nil {
 		lines = append(lines, m.styles.err.Render(m.promptErr.Error()))

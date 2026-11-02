@@ -100,7 +100,7 @@ func runIndex(t *testing.T, m Model, cmd tea.Cmd) Model {
 		switch msg := c().(type) {
 		case tea.BatchMsg:
 			queue = append(queue, msg...)
-		case indexLoadedMsg, indexBlockMsg, indexLimitMsg, indexMarksMsg, indexSearchMsg:
+		case indexLoadedMsg, indexBlockMsg, indexLimitMsg, indexMarksMsg, indexSearchMsg, indexBulkMsg:
 			var next tea.Cmd
 			m, next = update(t, m, msg)
 			queue = append(queue, next)
