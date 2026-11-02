@@ -59,6 +59,12 @@ const (
 	promptMark
 	// promptUnmark asks for a pattern of QSOs to unmark.
 	promptUnmark
+	// promptSearch asks for a pattern to search the QSO index for, down
+	// from the cursor.
+	promptSearch
+	// promptSearchReverse asks for a pattern to search the QSO index for,
+	// up from the cursor.
+	promptSearchReverse
 )
 
 // rigState is the rig status as last reported by the rig events.
@@ -110,6 +116,15 @@ func (m Model) openPrompt(kind promptKind) (Model, tea.Cmd) {
 	case promptUnmark:
 		m.input.Prompt = "Unmark QSOs matching: "
 		m.input.Placeholder = ""
+	case promptSearch, promptSearchReverse:
+		m.input.Prompt = "Search for: "
+		if kind == promptSearchReverse {
+			m.input.Prompt = "Reverse search for: "
+		}
+		m.input.Placeholder = ""
+		// The last search is there to edit.
+		m.input.SetValue(m.idx.search.text)
+		m.input.CursorEnd()
 	}
 	m.sizeInput()
 	return m, m.input.Focus()
@@ -173,7 +188,7 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 			m.promptErr = err
 			return m, nil
 		}
-	case promptLimit, promptMark, promptUnmark:
+	case promptLimit, promptMark, promptUnmark, promptSearch, promptSearchReverse:
 		var err error
 		if cmd, err = m.submitPattern(m.prompt, m.input.Value()); err != nil {
 			m.promptErr = err

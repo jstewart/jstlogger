@@ -100,7 +100,7 @@ func runIndex(t *testing.T, m Model, cmd tea.Cmd) Model {
 		switch msg := c().(type) {
 		case tea.BatchMsg:
 			queue = append(queue, msg...)
-		case indexLoadedMsg, indexBlockMsg, indexLimitMsg, indexMarksMsg:
+		case indexLoadedMsg, indexBlockMsg, indexLimitMsg, indexMarksMsg, indexSearchMsg:
 			var next tea.Cmd
 			m, next = update(t, m, msg)
 			queue = append(queue, next)
@@ -458,7 +458,8 @@ func TestIndexHelp(t *testing.T) {
 
 	m = press(t, m, keyPress('?', 0))
 	full := plain(m.footerView())
-	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "oldest", "reload", "limit", "mark pattern", "unmark pattern"} {
+	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "oldest", "reload", "limit", "mark pattern", "unmark pattern",
+		"search", "search back", "search next", "search opposite"} {
 		assert.Contains(t, full, want)
 	}
 }
@@ -478,6 +479,7 @@ func TestHelpWithoutLogbook(t *testing.T) {
 	full := plain(m.footerView())
 
 	assert.NotContains(t, full, "mark")
+	assert.NotContains(t, full, "search")
 	assert.Contains(t, full, "quit")
 }
 
@@ -528,11 +530,18 @@ func newPatternModel(t *testing.T, s logbook.Store) Model {
 }
 
 var (
-	limitKey   = keyPress('l', 0)
-	markKey    = keyPress('T', 0)
-	unmarkKey  = keyPress('t', tea.ModCtrl)
-	reloadKey  = keyPress('l', tea.ModCtrl)
-	patternFor = map[promptKind]tea.KeyPressMsg{promptLimit: limitKey, promptMark: markKey, promptUnmark: unmarkKey}
+	limitKey          = keyPress('l', 0)
+	markKey           = keyPress('T', 0)
+	unmarkKey         = keyPress('t', tea.ModCtrl)
+	reloadKey         = keyPress('l', tea.ModCtrl)
+	searchKey         = keyPress('/', 0)
+	searchReverseKey  = keyPress('/', tea.ModAlt)
+	searchNextKey     = keyPress('n', 0)
+	searchOppositeKey = keyPress('N', 0)
+	patternFor        = map[promptKind]tea.KeyPressMsg{
+		promptLimit: limitKey, promptMark: markKey, promptUnmark: unmarkKey,
+		promptSearch: searchKey, promptSearchReverse: searchReverseKey,
+	}
 )
 
 // submitPattern opens the prompt for kind, replaces its input with p,
@@ -789,4 +798,234 @@ func TestIndexMarkPatternError(t *testing.T) {
 
 	assert.Empty(t, m.idx.marks)
 	assert.Contains(t, statusLine(t, m), "mark QSOs: "+assert.AnError.Error())
+}
+
+func TestIndexSearchPrompts(t *testing.T) {
+	tests := []struct {
+		name  string
+		kind  promptKind
+		label string
+	}{
+		{"/", promptSearch, "Search for: "},
+		{"alt+/", promptSearchReverse, "Reverse search for: "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newIndexModel(t, 10, 80, 24)
+
+			m = press(t, m, patternFor[tt.kind])
+
+			require.Equal(t, tt.kind, m.prompt)
+			assert.Empty(t, m.input.Value())
+			assert.Equal(t, tt.label, m.input.Prompt)
+			assert.Contains(t, plain(m.View().Content), strings.TrimSpace(tt.label))
+		})
+	}
+}
+
+func TestIndexSearchHelpKeyIsNotSearch(t *testing.T) {
+	m, _ := newIndexModel(t, 10, 80, 24)
+
+	m = press(t, m, keyPress('?', 0))
+
+	assert.Equal(t, promptNone, m.prompt)
+	assert.True(t, m.help.ShowAll)
+}
+
+func TestIndexSearchForward(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+
+	m = submitPattern(t, m, promptSearch, "~m FT8")
+	assert.Equal(t, promptNone, m.prompt)
+	assert.Equal(t, int64(9), currentID(t, m))
+	assert.Equal(t, "QSO 2/10", statusLine(t, m))
+
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(6), currentID(t, m))
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(3), currentID(t, m))
+
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(9), currentID(t, m), "the search wraps to the top")
+	assert.Equal(t, "QSO 2/10 · "+msgSearchWrapTop, statusLine(t, m))
+
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(6), currentID(t, m))
+	assert.Equal(t, "QSO 5/10", statusLine(t, m), "the next key clears the message")
+}
+
+func TestIndexSearchReverse(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+	m = press(t, m, special(tea.KeyEnd))
+	require.Equal(t, int64(1), currentID(t, m))
+
+	m = submitPattern(t, m, promptSearchReverse, "~m FT8")
+	assert.Equal(t, int64(3), currentID(t, m))
+
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(6), currentID(t, m), "n searches up after a reverse search")
+	m = press(t, m, searchOppositeKey)
+	assert.Equal(t, int64(3), currentID(t, m), "N searches down")
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(6), currentID(t, m), "N does not change the direction")
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(9), currentID(t, m))
+
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(3), currentID(t, m), "the search wraps to the bottom")
+	assert.Equal(t, "QSO 8/10 · "+msgSearchWrapBottom, statusLine(t, m))
+}
+
+func TestIndexSearchReverseFromTopWraps(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+
+	m = submitPattern(t, m, promptSearchReverse, "~m FT8")
+
+	assert.Equal(t, int64(3), currentID(t, m), "the search wraps to the match nearest the bottom")
+	assert.Equal(t, "QSO 8/10 · "+msgSearchWrapBottom, statusLine(t, m))
+}
+
+func TestIndexSearchNotFound(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+	m = press(t, m, keyPress('j', 0), keyPress('j', 0))
+
+	m = submitPattern(t, m, promptSearch, "~c ZZZ")
+
+	assert.Equal(t, 2, m.idx.cursor, "the cursor stays put")
+	assert.Equal(t, "QSO 3/10 · "+msgNotFound, statusLine(t, m))
+}
+
+func TestIndexSearchOnlyCurrentMatches(t *testing.T) {
+	for _, kind := range []promptKind{promptSearch, promptSearchReverse} {
+		t.Run(patternFor[kind].String(), func(t *testing.T) {
+			s := newPatternStore(t, 10)
+			m := newPatternModel(t, s)
+			m = press(t, m, keyPress('j', 0), keyPress('j', 0))
+			require.Equal(t, int64(8), currentID(t, m))
+
+			m = submitPattern(t, m, kind, "~c K8A")
+
+			assert.Equal(t, int64(8), currentID(t, m))
+			want := msgSearchWrapTop
+			if kind == promptSearchReverse {
+				want = msgSearchWrapBottom
+			}
+			assert.Equal(t, "QSO 3/10 · "+want, statusLine(t, m))
+		})
+	}
+}
+
+func TestIndexSearchAllMovesOneRow(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+
+	m = submitPattern(t, m, promptSearch, "~A")
+
+	assert.Equal(t, 1, m.idx.cursor)
+}
+
+func TestIndexSearchWithinLimit(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+	m = submitPattern(t, m, promptLimit, "~b 20m")
+	require.Equal(t, int64(10), currentID(t, m))
+
+	m = submitPattern(t, m, promptSearch, "~m FT8")
+	assert.Equal(t, int64(6), currentID(t, m), "QSO 9 is outside the limit")
+
+	m = press(t, m, searchNextKey)
+	assert.Equal(t, int64(6), currentID(t, m), "QSO 3 is outside the limit")
+	assert.Equal(t, "QSO 3/5 · limit: ~b 20m · "+msgSearchWrapTop, statusLine(t, m))
+}
+
+func TestIndexSearchKeepsSearchAcrossLimit(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+	m = submitPattern(t, m, promptSearch, "~m FT8")
+	m = submitPattern(t, m, promptLimit, "~b 20m")
+
+	m = press(t, m, searchNextKey)
+
+	assert.Equal(t, int64(6), currentID(t, m))
+}
+
+func TestIndexSearchAgainWithoutSearch(t *testing.T) {
+	for _, k := range []tea.KeyPressMsg{searchNextKey, searchOppositeKey} {
+		t.Run(k.String(), func(t *testing.T) {
+			m, _ := newIndexModel(t, 10, 80, 24)
+
+			m = press(t, m, k)
+
+			assert.Equal(t, 0, m.idx.cursor)
+			assert.Equal(t, "QSO 1/10 · "+msgNoSearch, statusLine(t, m))
+		})
+	}
+}
+
+func TestIndexSearchPromptPrefilled(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+	m = submitPattern(t, m, promptSearch, " ~m FT8 ")
+
+	for _, k := range []tea.KeyPressMsg{searchKey, searchReverseKey} {
+		next := press(t, m, k)
+		assert.Equal(t, "~m FT8", next.input.Value(), "the prompt shows the last search to edit")
+		assert.Equal(t, len("~m FT8"), next.input.Position(), "the cursor is at the end")
+	}
+}
+
+func TestIndexSearchPromptParseError(t *testing.T) {
+	for _, kind := range []promptKind{promptSearch, promptSearchReverse} {
+		t.Run(patternFor[kind].String(), func(t *testing.T) {
+			m, _ := newIndexModel(t, 10, 80, 24)
+			m = press(t, m, patternFor[kind])
+			m = typeText(t, m, "~b 20m ~q")
+
+			m = press(t, m, enterKey)
+
+			assert.Equal(t, kind, m.prompt, "the prompt stays open")
+			require.ErrorIs(t, m.promptErr, pattern.ErrSyntax)
+			assert.Nil(t, m.idx.search.expr, "a bad pattern is not saved")
+		})
+	}
+}
+
+func TestIndexSearchEmptyInputCloses(t *testing.T) {
+	m, _ := newIndexModel(t, 10, 80, 24)
+
+	m = submitPattern(t, m, promptSearch, " ")
+
+	assert.Equal(t, promptNone, m.prompt)
+	assert.Nil(t, m.idx.search.expr)
+	assert.Equal(t, "QSO 1/10", statusLine(t, m))
+}
+
+func TestIndexSearchBeforeLoadDoesNothing(t *testing.T) {
+	m, _ := update(t, New(WithLogbook(newPatternStore(t, 10))), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.idx.search = indexSearch{expr: logbook.All{}, text: "~A"}
+
+	for _, k := range []tea.KeyPressMsg{searchKey, searchReverseKey, searchNextKey, searchOppositeKey} {
+		next, cmd := update(t, m, k)
+		assert.Equal(t, promptNone, next.prompt, k.String())
+		assert.Empty(t, collectMsgs(cmd), k.String())
+	}
+}
+
+func TestIndexSearchReloadDropsSearchInFlight(t *testing.T) {
+	s := newPatternStore(t, 10)
+	m := newPatternModel(t, s)
+	m = press(t, m, searchKey)
+	m.input.SetValue("~m FT8")
+	m, searchCmd := update(t, m, enterKey)
+	require.NotNil(t, searchCmd)
+
+	m, reloadCmd := update(t, m, reloadKey)
+	m = runIndex(t, m, searchCmd)
+	m = runIndex(t, m, reloadCmd)
+
+	assert.Equal(t, 0, m.idx.cursor, "the search started before the reload is dropped")
 }
