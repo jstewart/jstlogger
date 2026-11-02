@@ -65,7 +65,7 @@ func (m Model) Init() tea.Cmd {
 	if m.logbook == nil {
 		return nil
 	}
-	return loadIndexCmd(m.logbook, m.idx.gen, 0, 0)
+	return loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, 0, 0)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -104,6 +104,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case indexBlockMsg:
 		m.idx.applyBlock(msg)
+
+	case indexLimitMsg:
+		m.idx.applyLimit(msg)
+
+	case indexMarksMsg:
+		m.idx.applyMarks(msg)
 
 	case rig.StateChanged:
 		m.rigState.state = msg.State
@@ -197,7 +203,7 @@ func (m *Model) layout() tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	for _, b := range m.idx.missing() {
-		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, b))
+		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
 	}
 	return tea.Batch(cmds...)
 }
@@ -239,6 +245,12 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		next.input.SetValue(msg.String())
 		next.input.CursorEnd()
 		return next, cmd
+	case key.Matches(msg, k.Limit):
+		return m.openPrompt(promptLimit)
+	case key.Matches(msg, k.MarkPattern):
+		return m.openPrompt(promptMark)
+	case key.Matches(msg, k.UnmarkPattern):
+		return m.openPrompt(promptUnmark)
 	case key.Matches(msg, k.Reload):
 		return m.reloadIndex()
 	}
@@ -246,16 +258,10 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 }
 
 // reloadIndex clears and redraws the screen, and reloads the QSO count and
-// rows, keeping the cursor on the same QSO when it still exists. Loads
-// already under way are dropped. The redraw repairs a screen the terminal
-// has drawn wrong.
+// rows under the current limit, keeping the cursor on the same QSO when it
+// still matches. Loads already under way, including a new limit, are
+// dropped. The redraw repairs a screen the terminal has drawn wrong.
 func (m Model) reloadIndex() (Model, tea.Cmd) {
-	m.idx.gen++
-	// The loads under way will be dropped, so they are no longer pending.
-	m.idx.pending = map[int]bool{}
-	var id int64
-	if q, ok := m.idx.current(); ok {
-		id = q.ID
-	}
-	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, id, m.idx.cursor))
+	id := m.idx.restart()
+	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, id, m.idx.cursor))
 }

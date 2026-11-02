@@ -157,6 +157,9 @@ type Filter struct {
 	Countries []string
 	// Continents selects QSOs on any of these continents.
 	Continents []string
+	// States selects QSOs in any of these states or provinces (ADIF STATE
+	// codes, e.g. MA).
+	States []string
 	// Tags selects QSOs that carry ALL of these tags.
 	Tags []string
 	// MinDistanceKm is the inclusive minimum distance. QSOs without a

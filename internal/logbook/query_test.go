@@ -59,7 +59,7 @@ func seedFilterSet(t *testing.T, s *SQLiteStore) {
 		QSO{
 			StartUTC: queryT0, Call: "A", Band: "20m", Mode: "SSB",
 			DXCC: valid(291), Country: "United States", Cont: "NA", ITUZ: valid(8),
-			DistanceKm: valid(100.0), Tags: []string{"pota", "dx"},
+			State: "CT", DistanceKm: valid(100.0), Tags: []string{"pota", "dx"},
 			Confirmations: []Confirmation{{Service: ServiceLoTW, Rcvd: "Y"}},
 		},
 		QSO{
@@ -76,7 +76,7 @@ func seedFilterSet(t *testing.T, s *SQLiteStore) {
 		QSO{
 			StartUTC: queryT0.Add(3 * time.Hour), Call: "D", Band: "15m", Mode: "SSB",
 			DXCC: valid(291), Country: "united states", Cont: "na", ITUZ: valid(8),
-			DistanceKm: valid(0.0), Tags: []string{"DX"},
+			State: "ma", DistanceKm: valid(0.0), Tags: []string{"DX"},
 		},
 	)
 }
@@ -102,6 +102,8 @@ func TestSQLiteStoreFilter(t *testing.T) {
 		{"band", Filter{Bands: []string{"20M"}}, []string{"C", "A"}},
 		{"country ignores case", Filter{Countries: []string{"UNITED STATES"}}, []string{"D", "A"}},
 		{"continent", Filter{Continents: []string{"eu", "As"}}, []string{"C", "B"}},
+		{"state ignores case", Filter{States: []string{" MA "}}, []string{"D"}},
+		{"state or", Filter{States: []string{"ct", "ma"}}, []string{"D", "A"}},
 		{"one tag", Filter{Tags: []string{"pota"}}, []string{"B", "A"}},
 		{"all tags", Filter{Tags: []string{"POTA", "dx"}}, []string{"A"}},
 		{"blank tag ignored", Filter{Tags: []string{" ", "pota"}}, []string{"B", "A"}},
@@ -162,6 +164,7 @@ func TestFilterSQLKeepsValuesInArgs(t *testing.T) {
 		Bands:            []string{evil + "band"},
 		Countries:        []string{evil + "country"},
 		Continents:       []string{evil + "cont"},
+		States:           []string{evil + "state"},
 		Tags:             []string{evil + "tag1", evil + "tag2"},
 		MinDistanceKm:    valid(12345.5),
 		MaxDistanceKm:    valid(23456.5),

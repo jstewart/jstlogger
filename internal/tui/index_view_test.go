@@ -156,7 +156,32 @@ func TestIndexViewStates(t *testing.T) {
 	assert.Equal(t, "Loading…", plain(newIndex().view(st, 78, 10)))
 	assert.Equal(t, "No QSOs yet.", plain(loadedIndex(0, 8).view(st, 78, 10)))
 
+	limited := loadedIndex(0, 8)
+	limited.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
+	assert.Equal(t, "No QSOs match the limit ~b 20m.", plain(limited.view(st, 78, 10)))
+
 	x := newIndex()
 	x.applyLoad(indexLoadedMsg{err: assert.AnError})
 	assert.Equal(t, assert.AnError.Error(), plain(x.view(st, 78, 10)))
+}
+
+func TestIndexStatusLimit(t *testing.T) {
+	st := defaultStyles()
+	x := loadedIndex(1234, 8)
+	x.marks[1] = true
+	x.msg = "No QSOs match the pattern."
+
+	x.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
+	assert.Equal(t, "QSO 1/1,234 · limit: ~b 20m · 1 marked · No QSOs match the pattern.", plain(x.statusView(st, 80)))
+
+	// A long limit is shortened so the marks and message still fit.
+	x.limit.text = "~c W1 (~b 20m | ~b 40m | ~b 15m) !~m FT8 ~d 2026-01-01-"
+	got := plain(x.statusView(st, 80))
+	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (~b 20m | ~b… · 1 marked · No QSOs match the pattern.", got)
+	assert.LessOrEqual(t, lipgloss.Width(got), 80)
+
+	// On a narrow screen the limit keeps a few characters and the line is
+	// cut instead.
+	got = plain(x.statusView(st, 40))
+	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (… · 1 marked", got)
 }

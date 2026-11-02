@@ -53,6 +53,12 @@ const (
 	promptMode
 	// promptJump asks for a QSO index row number.
 	promptJump
+	// promptLimit asks for the pattern that limits the QSO index.
+	promptLimit
+	// promptMark asks for a pattern of QSOs to mark.
+	promptMark
+	// promptUnmark asks for a pattern of QSOs to unmark.
+	promptUnmark
 )
 
 // rigState is the rig status as last reported by the rig events.
@@ -92,6 +98,18 @@ func (m Model) openPrompt(kind promptKind) (Model, tea.Cmd) {
 	case promptJump:
 		m.input.Prompt = "Jump to: "
 		m.input.Placeholder = ""
+	case promptLimit:
+		m.input.Prompt = "Limit to QSOs matching: "
+		m.input.Placeholder = ""
+		// The current limit is there to edit.
+		m.input.SetValue(m.idx.limit.text)
+		m.input.CursorEnd()
+	case promptMark:
+		m.input.Prompt = "Mark QSOs matching: "
+		m.input.Placeholder = ""
+	case promptUnmark:
+		m.input.Prompt = "Unmark QSOs matching: "
+		m.input.Placeholder = ""
 	}
 	m.sizeInput()
 	return m, m.input.Focus()
@@ -127,8 +145,8 @@ func (m Model) updatePrompt(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 }
 
 // submitPrompt parses the prompt input. On success it closes the prompt and
-// returns a command that applies the setting to the rig; on failure it keeps
-// the prompt open and records the parse error.
+// returns a command that applies it, such as a rig setting or a QSO index
+// query; on failure it keeps the prompt open and records the parse error.
 func (m Model) submitPrompt() (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.prompt {
@@ -152,6 +170,12 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 		})
 	case promptJump:
 		if err := m.jump(m.input.Value()); err != nil {
+			m.promptErr = err
+			return m, nil
+		}
+	case promptLimit, promptMark, promptUnmark:
+		var err error
+		if cmd, err = m.submitPattern(m.prompt, m.input.Value()); err != nil {
 			m.promptErr = err
 			return m, nil
 		}

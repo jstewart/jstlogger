@@ -86,22 +86,54 @@ func (s *SQLiteStore) list(ctx context.Context, f Filter, page PageRequest) (p P
 	return p, nil
 }
 
-// Count returns the number of QSOs matching f, or an error wrapping
-// ErrInvalidFilter if f is invalid.
-func (s *SQLiteStore) Count(ctx context.Context, f Filter) (int, error) {
-	clause, args, err := filterSQL(f)
+// Count returns the number of QSOs matching e, or an error wrapping
+// ErrInvalidFilter if a Filter in e is invalid. A nil e matches every QSO.
+func (s *SQLiteStore) Count(ctx context.Context, e Expr) (int, error) {
+	conds, args, err := exprConds(e)
 	if err != nil {
 		return 0, fmt.Errorf("logbook: count qsos: %w", err)
-	}
-	var conds []string
-	if clause != "" {
-		conds = append(conds, clause)
 	}
 	var n int
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM qso"+where(conds), args...).Scan(&n); err != nil {
 		return 0, fmt.Errorf("logbook: count qsos: %w", err)
 	}
 	return n, nil
+}
+
+// IDs returns the IDs of every QSO matching e, newest first (StartUTC
+// descending, then ID descending, as Index orders them), or nil when none
+// match. It returns an error wrapping ErrInvalidFilter if a Filter in e is
+// invalid. A nil e matches every QSO.
+func (s *SQLiteStore) IDs(ctx context.Context, e Expr) ([]int64, error) {
+	out, err := s.ids(ctx, e)
+	if err != nil {
+		return nil, fmt.Errorf("logbook: list qso ids: %w", err)
+	}
+	return out, nil
+}
+
+func (s *SQLiteStore) ids(ctx context.Context, e Expr) (out []int64, err error) {
+	conds, args, err := exprConds(e)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id FROM qso"+where(conds)+" ORDER BY start_utc DESC, id DESC", args...)
+	if err != nil {
+		return nil, fmt.Errorf("query qso ids: %w", err)
+	}
+	defer func() { err = errors.Join(err, closeRows(rows)) }()
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan qso id: %w", err)
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query qso ids: %w", err)
+	}
+	return out, nil
 }
 
 // where returns " WHERE " and conds AND'd together, or "" if there are none.
@@ -143,11 +175,12 @@ func filterSQL(f Filter) (string, []any, error) {
 	in("itu_region", toArgs(f.ITURegions, func(v int) any { return v }))
 	// Mode, band and continent are normalized on write, so normalize the
 	// filter values the same way and keep the column indexes usable. Country
-	// is stored as given, so compare ignoring case.
+	// and state are stored as given, so compare ignoring case.
 	in("mode", toArgs(f.Modes, func(v string) any { return upper(v) }))
 	in("band", toArgs(f.Bands, func(v string) any { return strings.ToLower(strings.TrimSpace(v)) }))
 	in("country COLLATE NOCASE", toArgs(f.Countries, func(v string) any { return strings.TrimSpace(v) }))
 	in("cont", toArgs(f.Continents, func(v string) any { return upper(v) }))
+	in("state COLLATE NOCASE", toArgs(f.States, func(v string) any { return strings.TrimSpace(v) }))
 	for _, tag := range normalizeTags(f.Tags) {
 		// tag.name is COLLATE NOCASE, so this matches ignoring case.
 		add(`EXISTS (SELECT 1 FROM qso_tag qt JOIN tag t ON t.id = qt.tag_id

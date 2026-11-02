@@ -38,6 +38,10 @@ var indexColumns = []indexColumn{
 // the line is truncated instead.
 const minFlexWidth = 8
 
+// minLimitWidth is the narrowest the limit gets on the status line; below
+// it the line is truncated instead.
+const minLimitWidth = 8
+
 // indexTitles are the column header cells.
 var indexTitles = func() []string {
 	out := make([]string, len(indexColumns))
@@ -144,6 +148,8 @@ func (x index) view(st styles, width, height int) string {
 		return st.err.Render(truncate(x.err.Error(), width, "…"))
 	case !x.loaded:
 		return st.muted.Render("Loading…")
+	case x.total == 0 && x.limit.expr != nil:
+		return st.muted.Render("No QSOs match the limit " + x.limit.text + ".")
 	case x.total == 0:
 		return st.muted.Render("No QSOs yet.")
 	}
@@ -179,19 +185,28 @@ func (x index) rowView(st styles, i, width int) string {
 	return line
 }
 
-// statusView renders the position, the mark count and any message or
-// error, e.g. "QSO 12/4,567 · 3 marked".
+// statusView renders the position, the limit, the mark count and any
+// message or error, e.g. "QSO 12/4,567 · limit: ~b 20m · 3 marked".
 func (x index) statusView(st styles, width int) string {
-	parts := []string{"QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)}
+	position := "QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)
+	var rest []string
 	if n := len(x.marks); n > 0 {
-		parts = append(parts, formatCount(n)+" marked")
+		rest = append(rest, formatCount(n)+" marked")
 	}
 	if x.msg != "" {
-		parts = append(parts, x.msg)
+		rest = append(rest, x.msg)
 	}
-	line := strings.Join(parts, " · ")
 	if x.err != nil {
-		line += " · " + st.err.Render(x.err.Error())
+		rest = append(rest, st.err.Render(x.err.Error()))
 	}
+	parts := []string{position}
+	if x.limit.expr != nil {
+		// The limit prompt shows the whole pattern, so shorten it here to
+		// leave room for the marks, message and error.
+		const label = "limit: "
+		room := width - lipgloss.Width(strings.Join(append([]string{position, label}, rest...), " · "))
+		parts = append(parts, label+truncate(x.limit.text, max(room, minLimitWidth), "…"))
+	}
+	line := strings.Join(append(parts, rest...), " · ")
 	return lipgloss.NewStyle().MaxWidth(width).Render(line)
 }

@@ -17,15 +17,20 @@ type Store interface {
 	Delete(ctx context.Context, id int64) error
 	// List returns one page of QSOs matching f, newest first.
 	List(ctx context.Context, f Filter, page PageRequest) (Page, error)
-	// Count returns the number of QSOs matching f.
-	Count(ctx context.Context, f Filter) (int, error)
-	// Index returns up to limit QSOs matching f, newest first, starting at
+	// Count returns the number of QSOs matching e. A nil e matches every
+	// QSO.
+	Count(ctx context.Context, e Expr) (int, error)
+	// Index returns up to limit QSOs matching e, newest first, starting at
 	// row offset (0 is the newest), without their fields, confirmations or
-	// tags.
-	Index(ctx context.Context, f Filter, offset, limit int) ([]QSO, error)
+	// tags. A nil e matches every QSO.
+	Index(ctx context.Context, e Expr, offset, limit int) ([]QSO, error)
 	// IndexOf returns the row number of the QSO with the given ID in Index's
-	// ordering of the QSOs matching f, or ErrNotFound.
-	IndexOf(ctx context.Context, f Filter, id int64) (int, error)
+	// ordering of the QSOs matching e, or ErrNotFound. A nil e matches every
+	// QSO.
+	IndexOf(ctx context.Context, e Expr, id int64) (int, error)
+	// IDs returns the IDs of every QSO matching e in Index's ordering
+	// (newest first), or nil when none match. A nil e matches every QSO.
+	IDs(ctx context.Context, e Expr) ([]int64, error)
 	// Tag applies tags to each of the given QSOs, creating tags as needed.
 	Tag(ctx context.Context, qsoIDs []int64, tags ...string) error
 	// Untag removes tags from each of the given QSOs.
