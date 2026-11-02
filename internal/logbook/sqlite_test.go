@@ -323,6 +323,69 @@ func TestSQLiteStoreDeleteCascades(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreDeleteMany(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+
+	full := fullQSO()
+	full.Tags = []string{"pota", "gone"}
+	qs := seed(t, s,
+		full,
+		QSO{StartUTC: queryT0, Call: "B", Tags: []string{"gone"}},
+		QSO{StartUTC: queryT0.Add(time.Hour), Call: "C", Tags: []string{"pota"}},
+	)
+	a, b, c := qs[0].ID, qs[1].ID, qs[2].ID
+
+	require.NoError(t, s.DeleteMany(ctx, []int64{b, a, b}), "duplicates are fine")
+
+	for _, id := range []int64{a, b} {
+		_, err := s.Get(ctx, id)
+		require.ErrorIs(t, err, ErrNotFound, "qso %d", id)
+	}
+	got, err := s.Get(ctx, c)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pota"}, got.Tags)
+
+	assert.Equal(t, 1, countRows(t, s, "qso"))
+	assert.Equal(t, 0, countRows(t, s, "qso_adif_field"))
+	assert.Equal(t, 0, countRows(t, s, "qso_confirmation"))
+	assert.Equal(t, 1, countRows(t, s, "qso_tag"))
+	tags, err := s.Tags(ctx)
+	require.NoError(t, err)
+	require.Len(t, tags, 1, "unused tag deleted, used tag kept")
+	assert.Equal(t, "pota", tags[0].Name)
+}
+
+func TestSQLiteStoreDeleteManyUnknownIDDeletesNothing(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+
+	qs := seed(t, s,
+		fullQSO(),
+		QSO{StartUTC: queryT0, Call: "B", Tags: []string{"solo"}},
+	)
+	a, b := qs[0].ID, qs[1].ID
+
+	err := s.DeleteMany(ctx, []int64{a, b + 100, b})
+	require.ErrorIs(t, err, ErrNotFound)
+
+	assert.Equal(t, 2, countRows(t, s, "qso"))
+	assert.Equal(t, 2, countRows(t, s, "qso_adif_field"))
+	assert.Equal(t, 2, countRows(t, s, "qso_confirmation"))
+	assert.Equal(t, 3, countRows(t, s, "qso_tag"))
+	assert.Equal(t, 3, countRows(t, s, "tag"))
+}
+
+func TestSQLiteStoreDeleteManyEmpty(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	seed(t, s, QSO{StartUTC: queryT0, Call: "A"})
+
+	require.NoError(t, s.DeleteMany(ctx, nil))
+	require.NoError(t, s.DeleteMany(ctx, []int64{}))
+	assert.Equal(t, 1, countRows(t, s, "qso"))
+}
+
 func TestSQLiteStoreMissingIDNotFound(t *testing.T) {
 	s := newTestStore(t)
 	ctx := t.Context()

@@ -134,6 +134,49 @@ func TestSQLiteStoreFilter(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreFilterIDs(t *testing.T) {
+	s := newTestStore(t)
+	qs := seed(t, s,
+		QSO{StartUTC: queryT0, Call: "A", Band: "20m"},
+		QSO{StartUTC: queryT0.Add(time.Hour), Call: "B", Band: "40m"},
+		QSO{StartUTC: queryT0.Add(2 * time.Hour), Call: "C", Band: "20m"},
+		QSO{StartUTC: queryT0.Add(3 * time.Hour), Call: "D", Band: "15m"},
+	)
+	a, b, c, d := qs[0].ID, qs[1].ID, qs[2].ID, qs[3].ID
+
+	tests := []struct {
+		name string
+		f    Filter
+		want []string
+	}{
+		{"empty is all", Filter{IDs: []int64{}}, []string{"D", "C", "B", "A"}},
+		{"one", Filter{IDs: []int64{b}}, []string{"B"}},
+		{"several", Filter{IDs: []int64{d, a, c}}, []string{"D", "C", "A"}},
+		{"and band", Filter{IDs: []int64{a, b, c}, Bands: []string{"20m"}}, []string{"C", "A"}},
+		{"unknown matches nothing", Filter{IDs: []int64{d + 100}}, []string{}},
+		{"unknown among known", Filter{IDs: []int64{d + 100, b}}, []string{"B"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			page, err := s.List(ctx, tt.f, PageRequest{})
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, calls(page.QSOs))
+
+			n, err := s.Count(ctx, tt.f)
+			require.NoError(t, err)
+			assert.Equal(t, len(tt.want), n, "Count matches List")
+
+			var each []string
+			require.NoError(t, s.Each(ctx, tt.f, func(q QSO) error {
+				each = append(each, q.Call)
+				return nil
+			}))
+			assert.ElementsMatch(t, tt.want, each, "Each matches List")
+		})
+	}
+}
+
 func TestSQLiteStoreInvalidFilter(t *testing.T) {
 	s := newTestStore(t)
 	tests := []struct {

@@ -171,6 +171,7 @@ func filterSQL(f Filter) (string, []any, error) {
 	if !f.To.IsZero() {
 		add("start_utc < ?", formatTime(f.To))
 	}
+	in("id", toArgs(f.IDs, func(v int64) any { return v }))
 	in("dxcc", toArgs(f.DXCC, func(v int) any { return v }))
 	in("itu_region", toArgs(f.ITURegions, func(v int) any { return v }))
 	// Mode, band and continent are normalized on write, so normalize the
