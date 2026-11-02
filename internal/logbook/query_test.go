@@ -177,6 +177,22 @@ func TestSQLiteStoreFilterIDs(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreFilterManyIDs(t *testing.T) {
+	s := newTestStore(t)
+	qs := seed(t, s, QSO{StartUTC: queryT0, Call: "A"}, QSO{StartUTC: queryT0.Add(time.Hour), Call: "B"})
+	// More IDs than SQLite allows variables in one statement.
+	ids := make([]int64, 0, 40000)
+	for i := range int64(40000) {
+		ids = append(ids, qs[1].ID+1+i)
+	}
+	ids = append(ids, qs[0].ID)
+
+	n, err := s.Count(t.Context(), Filter{IDs: ids})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+}
+
 func TestSQLiteStoreInvalidFilter(t *testing.T) {
 	s := newTestStore(t)
 	tests := []struct {

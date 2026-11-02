@@ -2,6 +2,7 @@ package logbook
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -171,7 +172,15 @@ func filterSQL(f Filter) (string, []any, error) {
 	if !f.To.IsZero() {
 		add("start_utc < ?", formatTime(f.To))
 	}
-	in("id", toArgs(f.IDs, func(v int64) any { return v }))
+	if len(f.IDs) > 0 {
+		// One JSON argument rather than a placeholder per ID, as a marked
+		// set can hold more IDs than SQLite allows variables.
+		ids, err := json.Marshal(f.IDs)
+		if err != nil {
+			return "", nil, fmt.Errorf("encode ids: %w", err)
+		}
+		add("id IN (SELECT value FROM json_each(?))", string(ids))
+	}
 	in("dxcc", toArgs(f.DXCC, func(v int) any { return v }))
 	in("itu_region", toArgs(f.ITURegions, func(v int) any { return v }))
 	// Mode, band and continent are normalized on write, so normalize the
