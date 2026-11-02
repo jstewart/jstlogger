@@ -41,6 +41,7 @@ const (
 	msgNotFound         = "Not found."
 	msgSearchWrapTop    = "Search wrapped to top."
 	msgSearchWrapBottom = "Search wrapped to bottom."
+	msgNoMarks          = "No marked QSOs."
 )
 
 // index is the scrolling list of QSOs, newest first. Rows are identified by
@@ -78,6 +79,10 @@ type index struct {
 	// search is the last search, which n and N repeat. Limiting or
 	// reloading the index does not clear it.
 	search indexSearch
+
+	// prefix reports whether the mark-prefix is armed: the next key runs its
+	// function on every marked QSO instead of the one under the cursor.
+	prefix bool
 
 	// msg is shown on the status line until the next key press.
 	msg string

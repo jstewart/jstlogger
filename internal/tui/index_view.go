@@ -185,13 +185,17 @@ func (x index) rowView(st styles, i, width int) string {
 	return line
 }
 
-// statusView renders the position, the limit, the mark count and any
-// message or error, e.g. "QSO 12/4,567 · limit: ~b 20m · 3 marked".
+// statusView renders the position, the limit, the mark count, the armed
+// mark-prefix and any message or error, e.g. "QSO 12/4,567 · limit: ~b 20m ·
+// 3 marked · mark-prefix".
 func (x index) statusView(st styles, width int) string {
 	position := "QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)
 	var rest []string
 	if n := len(x.marks); n > 0 {
 		rest = append(rest, formatCount(n)+" marked")
+	}
+	if x.prefix {
+		rest = append(rest, "mark-prefix")
 	}
 	if x.msg != "" {
 		rest = append(rest, x.msg)
