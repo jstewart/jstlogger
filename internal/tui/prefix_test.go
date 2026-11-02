@@ -116,6 +116,23 @@ func TestPrefixRunsMarkedFunc(t *testing.T) {
 	assert.Contains(t, collectMsgs(cmd), stubMsg{})
 }
 
+func TestPrefixMarksClearedWhileArmed(t *testing.T) {
+	m, _ := newIndexModel(t, 10, 80, 24)
+	var got []int64
+	m.markedFuncs = []markedFunc{stubMarkedFunc(&got)}
+	m = press(t, m, toggleKey, prefixKey)
+	require.True(t, m.idx.prefix)
+	// An unmark pattern submitted earlier finishes while the prefix is armed.
+	m, _ = update(t, m, indexMarksMsg{ids: []int64{10}, add: false})
+
+	m, cmd := update(t, m, keyPress('x', 0))
+
+	assert.Nil(t, got, "the function does not run on no QSOs")
+	assert.Nil(t, cmd)
+	assert.False(t, m.idx.prefix)
+	assert.Equal(t, "QSO 2/10 · "+msgNoMarks, statusLine(t, m))
+}
+
 func TestPrefixKeyWithoutPrefixDoesNotRunMarkedFunc(t *testing.T) {
 	m, _ := newIndexModel(t, 10, 80, 24)
 	var got []int64

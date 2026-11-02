@@ -9,7 +9,10 @@ import (
 )
 
 // markedFunc is an index function that accepts the mark-prefix: on ;
-// followed by its key, it runs on every marked QSO.
+// followed by its key, it runs on every marked QSO. Its binding must be
+// enabled, since key.Matches ignores disabled bindings. A function that
+// opens a prompt should look at the marks again when the prompt is
+// submitted, as they may have changed.
 type markedFunc struct {
 	keys key.Binding
 	// run runs the function on the QSOs with the given IDs, in ascending
@@ -46,9 +49,16 @@ func (m Model) updatePrefix(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, f := range m.markedFuncs {
-		if key.Matches(msg, f.keys) {
-			return f.run(m, slices.Sorted(maps.Keys(m.idx.marks)))
+		if !key.Matches(msg, f.keys) {
+			continue
 		}
+		// An unmark pattern that finished after ; may have left nothing
+		// marked.
+		if len(m.idx.marks) == 0 {
+			m.idx.msg = msgNoMarks
+			return m, nil
+		}
+		return f.run(m, slices.Sorted(maps.Keys(m.idx.marks)))
 	}
 	m.idx.msg = notMarkedMsg(msg.String())
 	return m, nil
