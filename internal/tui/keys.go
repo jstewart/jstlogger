@@ -193,10 +193,11 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("/"),
 			key.WithHelp("/", "search"),
 		),
-		// NeoMutt's Esc /, which terminals send as alt+/.
+		// NeoMutt's Esc /. The terminal must send Esc and / together, as it
+		// does for alt+/; Esc pressed on its own is a key of its own.
 		SearchReverse: key.NewBinding(
 			key.WithKeys("alt+/"),
-			key.WithHelp("esc /", "search back"),
+			key.WithHelp("alt+/", "search back"),
 		),
 		SearchNext: key.NewBinding(
 			key.WithKeys("n"),

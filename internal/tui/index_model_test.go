@@ -459,7 +459,7 @@ func TestIndexHelp(t *testing.T) {
 	m = press(t, m, keyPress('?', 0))
 	full := plain(m.footerView())
 	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "oldest", "reload", "limit", "mark pattern", "unmark pattern",
-		"search", "search back", "search next", "search opposite"} {
+		"search", "alt+/ search back", "search next", "search opposite"} {
 		assert.Contains(t, full, want)
 	}
 }

@@ -87,8 +87,9 @@ func (s *SQLiteStore) indexOf(ctx context.Context, e Expr, id int64) (int, error
 	if err != nil {
 		return 0, err
 	}
+	conds := append([]string{"id = ?"}, match...)
 	var start string
-	err = s.db.QueryRowContext(ctx, "SELECT start_utc FROM qso"+where(append([]string{"id = ?"}, match...)), append([]any{id}, args...)...).Scan(&start)
+	err = s.db.QueryRowContext(ctx, "SELECT start_utc FROM qso"+where(conds), append([]any{id}, args...)...).Scan(&start)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
