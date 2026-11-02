@@ -87,9 +87,8 @@ func (s *SQLiteStore) indexOf(ctx context.Context, e Expr, id int64) (int, error
 	if err != nil {
 		return 0, err
 	}
-	conds := append([]string{"id = ?"}, match...)
 	var start string
-	err = s.db.QueryRowContext(ctx, "SELECT start_utc FROM qso"+where(conds), append([]any{id}, args...)...).Scan(&start)
+	err = s.db.QueryRowContext(ctx, "SELECT start_utc FROM qso"+where(append([]string{"id = ?"}, match...)), append([]any{id}, args...)...).Scan(&start)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
@@ -97,12 +96,104 @@ func (s *SQLiteStore) indexOf(ctx context.Context, e Expr, id int64) (int, error
 		return 0, fmt.Errorf("query qso: %w", err)
 	}
 
-	// Count the matching QSOs that come before it in newest-first order.
-	conds = append([]string{"(start_utc > ? OR (start_utc = ? AND id > ?))"}, match...)
+	return s.rowOf(ctx, match, args, start, id)
+}
+
+// Conditions that place a QSO strictly before or after the QSO with a given
+// start_utc and id in newest-first order (StartUTC descending, then ID
+// descending). Each takes the start time twice, then the ID, as arguments.
+const (
+	beforeCond = "(start_utc > ? OR (start_utc = ? AND id > ?))"
+	afterCond  = "(start_utc < ? OR (start_utc = ? AND id < ?))"
+)
+
+// rowOf returns the row number, in newest-first order, of the QSO with the
+// given start time and ID among the QSOs matching conds and args, by
+// counting the matching QSOs that come before it.
+func (s *SQLiteStore) rowOf(ctx context.Context, conds []string, args []any, start string, id int64) (int, error) {
+	conds = append([]string{beforeCond}, conds...)
 	var n int
-	err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM qso"+where(conds), append([]any{start, start, id}, args...)...).Scan(&n)
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM qso"+where(conds), append([]any{start, start, id}, args...)...).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count qsos: %w", err)
 	}
 	return n, nil
+}
+
+// Search returns the row number, in Index's ordering of the QSOs matching
+// within, of the first QSO after row from that also matches match, or of the
+// last one before row from when backward is true. From may lie outside the
+// rows: -1 searches forward from the first row and a from at or past the
+// last row searches backward from the last. It returns ErrNotFound when no
+// such QSO exists, and an error wrapping ErrInvalidFilter if a Filter in
+// within or match is invalid. A nil within or match matches every QSO.
+//
+// Only the anchor row, the matching QSO and a count are read, so a caller
+// can search a large logbook without loading every ID.
+func (s *SQLiteStore) Search(ctx context.Context, within, match Expr, from int, backward bool) (int, error) {
+	n, err := s.search(ctx, within, match, from, backward)
+	if errors.Is(err, ErrNotFound) {
+		return 0, err
+	}
+	if err != nil {
+		return 0, fmt.Errorf("logbook: search qsos: %w", err)
+	}
+	return n, nil
+}
+
+func (s *SQLiteStore) search(ctx context.Context, within, match Expr, from int, backward bool) (int, error) {
+	withinConds, withinArgs, err := exprConds(within)
+	if err != nil {
+		return 0, err
+	}
+	matchConds, matchArgs, err := exprConds(match)
+	if err != nil {
+		return 0, err
+	}
+	if backward && from <= 0 {
+		return 0, ErrNotFound // Nothing comes before the first row.
+	}
+
+	// Resolve the anchor: the QSO at row from under within, if any.
+	conds := append(append([]string(nil), withinConds...), matchConds...)
+	args := append(append([]any(nil), withinArgs...), matchArgs...)
+	if from >= 0 {
+		var start string
+		var id int64
+		err := s.db.QueryRowContext(ctx,
+			"SELECT start_utc, id FROM qso"+where(withinConds)+" ORDER BY start_utc DESC, id DESC LIMIT 1 OFFSET ?",
+			append(append([]any(nil), withinArgs...), from)...).Scan(&start, &id)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			if !backward {
+				return 0, ErrNotFound // Nothing comes after the last row.
+			}
+			// Past the end: search backward from the last row.
+		case err != nil:
+			return 0, fmt.Errorf("query anchor qso: %w", err)
+		default:
+			cond := afterCond
+			if backward {
+				cond = beforeCond
+			}
+			conds = append(conds, cond)
+			args = append(args, start, start, id)
+		}
+	}
+
+	// Find the nearest QSO in the search direction.
+	order := " ORDER BY start_utc DESC, id DESC LIMIT 1"
+	if backward {
+		order = " ORDER BY start_utc ASC, id ASC LIMIT 1"
+	}
+	var start string
+	var id int64
+	err = s.db.QueryRowContext(ctx, "SELECT start_utc, id FROM qso"+where(conds)+order, args...).Scan(&start, &id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("query qso: %w", err)
+	}
+	return s.rowOf(ctx, withinConds, withinArgs, start, id)
 }

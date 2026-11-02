@@ -195,3 +195,83 @@ func TestSQLiteStoreIndexOfErrors(t *testing.T) {
 	_, err = s.IndexOf(t.Context(), Filter{Confirmed: Confirmed(7)}, 42)
 	require.ErrorIs(t, err, ErrInvalidFilter)
 }
+
+func TestSQLiteStoreSearch(t *testing.T) {
+	s := newTestStore(t)
+	seedIndexSet(t, s)
+	// Overall rows, newest first: 0 K6A 20m, 1 K5A 40m, 2 K4A 20m,
+	// 3 K3A 40m, 4 K2A 20m, 5 K1A 40m, 6 K0A 20m; rows 3 to 5 share a
+	// start time.
+	b20 := Filter{Bands: []string{"20m"}}
+	b40 := Filter{Bands: []string{"40m"}}
+
+	tests := []struct {
+		name          string
+		within, match Expr
+		from          int
+		backward      bool
+		want          int
+		wantErr       error
+	}{
+		{"forward from a middle row", nil, b40, 2, false, 3, nil},
+		{"backward from a middle row", nil, b40, 4, true, 3, nil},
+		{"forward across equal start times", nil, b40, 3, false, 5, nil},
+		{"forward into equal start times", nil, b20, 3, false, 4, nil},
+		{"backward across equal start times", nil, b40, 5, true, 3, nil},
+		{"forward from -1", nil, b20, -1, false, 0, nil},
+		{"forward from -1 skips non-matching", nil, b40, -1, false, 1, nil},
+		{"backward from the last row", nil, b20, 6, true, 4, nil},
+		{"backward from past the end", nil, b20, 7, true, 6, nil},
+		{"backward from far past the end", nil, b40, 100, true, 5, nil},
+		{"no further match forward", nil, b40, 5, false, 0, ErrNotFound},
+		{"no further match backward", nil, b40, 1, true, 0, ErrNotFound},
+		{"anchor itself not returned forward", nil, CallContains{Call: "K3A"}, 3, false, 0, ErrNotFound},
+		{"anchor itself not returned backward", nil, CallContains{Call: "K3A"}, 3, true, 0, ErrNotFound},
+		{"forward from past the end", nil, nil, 7, false, 0, ErrNotFound},
+		{"backward from the first row", nil, nil, 0, true, 0, ErrNotFound},
+		{"backward from -1", nil, nil, -1, true, 0, ErrNotFound},
+		{"nil within and match forward", nil, nil, 2, false, 3, nil},
+		{"nil within and match backward", nil, nil, 2, true, 1, nil},
+		{"within: row under within", b20, CallContains{Call: "K2A"}, 0, false, 2, nil},
+		{"within: backward from past the end", b20, CallContains{Call: "K4A"}, 10, true, 1, nil},
+		{"within: nil match forward", b20, nil, 1, false, 2, nil},
+		{"within: nil match backward", b40, nil, 1, true, 0, nil},
+		{"within: from -1", b40, CallContains{Call: "K1"}, -1, false, 2, nil},
+		{"within: match outside within", b20, b40, -1, false, 0, ErrNotFound},
+		{"within: forward from past the end", b40, nil, 3, false, 0, ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.Search(t.Context(), tt.within, tt.match, tt.from, tt.backward)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+
+			// Index at the returned row is a QSO matching both.
+			qs, err := s.Index(t.Context(), tt.within, got, 1)
+			require.NoError(t, err)
+			require.Len(t, qs, 1)
+			n, err := s.IndexOf(t.Context(), And{tt.within, tt.match}, qs[0].ID)
+			require.NoError(t, err, "QSO %d matches within and match", qs[0].ID)
+			assert.GreaterOrEqual(t, n, 0)
+		})
+	}
+}
+
+func TestSQLiteStoreSearchErrors(t *testing.T) {
+	s := newTestStore(t)
+	seedIndexSet(t, s)
+	invalid := Filter{ConfirmedService: ServiceLoTW}
+
+	_, err := s.Search(t.Context(), invalid, nil, 0, false)
+	require.ErrorIs(t, err, ErrInvalidFilter, "invalid within")
+
+	_, err = s.Search(t.Context(), nil, invalid, 0, false)
+	require.ErrorIs(t, err, ErrInvalidFilter, "invalid match")
+
+	_, err = s.Search(t.Context(), nil, invalid, 0, true)
+	require.ErrorIs(t, err, ErrInvalidFilter, "invalid match backward")
+}
