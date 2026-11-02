@@ -28,6 +28,13 @@ type Store interface {
 	// ordering of the QSOs matching e, or ErrNotFound. A nil e matches every
 	// QSO.
 	IndexOf(ctx context.Context, e Expr, id int64) (int, error)
+	// Search returns the row number, in Index's ordering of the QSOs matching
+	// within, of the first QSO after row from that also matches match, or of
+	// the last one before row from when backward is true. From may lie outside
+	// the rows: -1 searches forward from the first row and a from at or past
+	// the last row searches backward from the last. It returns ErrNotFound when
+	// no such QSO exists. A nil within or match matches every QSO.
+	Search(ctx context.Context, within, match Expr, from int, backward bool) (int, error)
 	// IDs returns the IDs of every QSO matching e in Index's ordering
 	// (newest first), or nil when none match. A nil e matches every QSO.
 	IDs(ctx context.Context, e Expr) ([]int64, error)

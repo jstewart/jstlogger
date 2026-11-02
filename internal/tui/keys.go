@@ -84,25 +84,29 @@ func (k promptKeyMap) FullHelp() [][]key.Binding {
 // indexKeyMap holds the QSO index keybindings, modeled on NeoMutt's generic
 // menu.
 type indexKeyMap struct {
-	Next          key.Binding
-	Prev          key.Binding
-	NextPage      key.Binding
-	PrevPage      key.Binding
-	HalfDown      key.Binding
-	HalfUp        key.Binding
-	NextLine      key.Binding
-	PrevLine      key.Binding
-	TopPage       key.Binding
-	MiddlePage    key.Binding
-	BottomPage    key.Binding
-	First         key.Binding
-	Last          key.Binding
-	Jump          key.Binding
-	Mark          key.Binding
-	MarkPattern   key.Binding
-	UnmarkPattern key.Binding
-	Limit         key.Binding
-	Reload        key.Binding
+	Next           key.Binding
+	Prev           key.Binding
+	NextPage       key.Binding
+	PrevPage       key.Binding
+	HalfDown       key.Binding
+	HalfUp         key.Binding
+	NextLine       key.Binding
+	PrevLine       key.Binding
+	TopPage        key.Binding
+	MiddlePage     key.Binding
+	BottomPage     key.Binding
+	First          key.Binding
+	Last           key.Binding
+	Jump           key.Binding
+	Mark           key.Binding
+	MarkPattern    key.Binding
+	UnmarkPattern  key.Binding
+	Limit          key.Binding
+	Reload         key.Binding
+	Search         key.Binding
+	SearchReverse  key.Binding
+	SearchNext     key.Binding
+	SearchOpposite key.Binding
 }
 
 // defaultIndexKeys returns the index keybindings, disabled, and so hidden
@@ -185,12 +189,31 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("ctrl+l"),
 			key.WithHelp("ctrl+l", "reload"),
 		),
+		Search: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
+		),
+		// NeoMutt's Esc /. The terminal must send Esc and / together, as it
+		// does for alt+/; Esc pressed on its own is a key of its own.
+		SearchReverse: key.NewBinding(
+			key.WithKeys("alt+/"),
+			key.WithHelp("alt+/", "search back"),
+		),
+		SearchNext: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "search next"),
+		),
+		SearchOpposite: key.NewBinding(
+			key.WithKeys("N"),
+			key.WithHelp("N", "search opposite"),
+		),
 	}
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
 		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
 		&k.First, &k.Last, &k.Jump, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
-		&k.Limit, &k.Reload,
+		&k.Limit, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
+		&k.SearchOpposite,
 	} {
 		b.SetEnabled(enabled)
 	}
@@ -208,6 +231,7 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
 		{k.First, k.Last, k.Limit, k.Reload},
 		{k.Mark, k.MarkPattern, k.UnmarkPattern},
+		{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite},
 	}
 }
 

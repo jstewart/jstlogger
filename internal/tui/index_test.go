@@ -326,3 +326,33 @@ func TestIndexEvict(t *testing.T) {
 	assert.NotContains(t, x.blocks, 1)
 	assert.Contains(t, x.blocks, indexMaxBlocks+1, "the cursor's block stays")
 }
+
+func TestIndexApplySearch(t *testing.T) {
+	notFound := fmt.Errorf("search QSOs: %w", logbook.ErrNotFound)
+	boom := errors.New("search QSOs: boom")
+	tests := []struct {
+		name       string
+		msg        indexSearchMsg
+		wantCursor int
+		wantMsg    string
+	}{
+		{"found", indexSearchMsg{row: 7}, 7, ""},
+		{"wrapped forward", indexSearchMsg{row: 1, wrapped: true}, 1, msgSearchWrapTop},
+		{"wrapped backward", indexSearchMsg{row: 8, wrapped: true, backward: true}, 8, msgSearchWrapBottom},
+		{"not found", indexSearchMsg{err: notFound}, 3, msgNotFound},
+		{"error", indexSearchMsg{err: boom}, 3, "search QSOs: boom"},
+		{"stale", indexSearchMsg{gen: -1, row: 7}, 3, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			x := loadedIndex(10, 5)
+			x.cursor = 3
+
+			x.applySearch(tt.msg)
+
+			assert.Equal(t, tt.wantCursor, x.cursor)
+			assert.Equal(t, tt.wantMsg, x.msg)
+			assert.NoError(t, x.err, "the rows are still good")
+		})
+	}
+}

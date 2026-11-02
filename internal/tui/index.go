@@ -30,13 +30,17 @@ const (
 
 // Messages shown on the index status line.
 const (
-	msgLastQSO       = "You are on the last QSO."
-	msgFirstQSO      = "You are on the first QSO."
-	msgLastPage      = "You are on the last page."
-	msgFirstPage     = "You are on the first page."
-	msgScrollDownEnd = "You can't scroll down farther."
-	msgScrollUpEnd   = "You can't scroll up farther."
-	msgNoMatch       = "No QSOs match the pattern."
+	msgLastQSO          = "You are on the last QSO."
+	msgFirstQSO         = "You are on the first QSO."
+	msgLastPage         = "You are on the last page."
+	msgFirstPage        = "You are on the first page."
+	msgScrollDownEnd    = "You can't scroll down farther."
+	msgScrollUpEnd      = "You can't scroll up farther."
+	msgNoMatch          = "No QSOs match the pattern."
+	msgNoSearch         = "No search pattern."
+	msgNotFound         = "Not found."
+	msgSearchWrapTop    = "Search wrapped to top."
+	msgSearchWrapBottom = "Search wrapped to bottom."
 )
 
 // index is the scrolling list of QSOs, newest first. Rows are identified by
@@ -71,6 +75,10 @@ type index struct {
 	// change them.
 	marks map[int64]bool
 
+	// search is the last search, which n and N repeat. Limiting or
+	// reloading the index does not clear it.
+	search indexSearch
+
 	// msg is shown on the status line until the next key press.
 	msg string
 	// err is the last load error, shown until a reload succeeds.
@@ -91,6 +99,15 @@ func newIndex() index {
 type indexLimit struct {
 	expr logbook.Expr
 	text string
+}
+
+// indexSearch is a search of the index: the pattern as typed, the
+// expression it parses to and the direction it was typed in. The zero
+// indexSearch, with a nil expr, means no search has been made.
+type indexSearch struct {
+	expr     logbook.Expr
+	text     string
+	backward bool
 }
 
 // indexLoadedMsg reports a full (re)load: the row count and the block
@@ -125,6 +142,17 @@ type indexMarksMsg struct {
 	ids []int64
 	add bool
 	err error
+}
+
+// indexSearchMsg reports the row a search found, and whether it wrapped
+// past the end of the index to find it. An err wrapping logbook.ErrNotFound
+// means no QSO matched, even after wrapping.
+type indexSearchMsg struct {
+	gen      int
+	row      int
+	wrapped  bool
+	backward bool
+	err      error
 }
 
 // loadIndexCmd returns a command that counts the QSOs matching limit and
@@ -517,9 +545,65 @@ func markPatternCmd(s logbook.Store, e logbook.Expr, add bool) tea.Cmd {
 	}
 }
 
-// submitPattern runs the pattern typed in a limit, mark or unmark prompt.
+// searchIndexCmd returns a command that searches the rows matching limit
+// for the nearest QSO matching match after row from, or before it when
+// backward is true. As in mutt, a search that reaches the end of the total
+// rows wraps around to the other end. A nil limit matches every QSO.
+func searchIndexCmd(s logbook.Store, gen int, limit, match logbook.Expr, from, total int, backward bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		msg := indexSearchMsg{gen: gen, backward: backward}
+		row, err := s.Search(ctx, limit, match, from, backward)
+		if errors.Is(err, logbook.ErrNotFound) {
+			wrapFrom := -1
+			if backward {
+				wrapFrom = total
+			}
+			row, err = s.Search(ctx, limit, match, wrapFrom, backward)
+			msg.wrapped = err == nil
+		}
+		if err != nil {
+			msg.err = fmt.Errorf("search QSOs: %w", err)
+		}
+		msg.row = row
+		return msg
+	}
+}
+
+// applySearch moves the cursor to the row a search found, and reports on
+// the status line a search that wrapped or found nothing.
+func (x *index) applySearch(msg indexSearchMsg) {
+	if msg.gen != x.gen {
+		return
+	}
+	switch {
+	case errors.Is(msg.err, logbook.ErrNotFound):
+		x.msg = msgNotFound
+		return
+	case msg.err != nil:
+		// x.err would hide the rows, which are still good.
+		x.msg = msg.err.Error()
+		return
+	}
+	x.moveTo(msg.row)
+	switch {
+	case !msg.wrapped:
+	case msg.backward:
+		x.msg = msgSearchWrapBottom
+	default:
+		x.msg = msgSearchWrapTop
+	}
+}
+
+// submitPattern runs the pattern typed in a limit, mark, unmark or search
+// prompt.
 func (m *Model) submitPattern(kind promptKind, s string) (tea.Cmd, error) {
 	switch kind {
+	case promptSearch:
+		return m.search(s, false)
+	case promptSearchReverse:
+		return m.search(s, true)
 	case promptLimit:
 		return m.limitIndex(s)
 	case promptMark:
@@ -581,6 +665,38 @@ func (m *Model) markPattern(s string, add bool) (tea.Cmd, error) {
 		return nil, nil
 	}
 	return markPatternCmd(m.logbook, e, add), nil
+}
+
+// search saves s as the index's search, in the given direction, and
+// returns a command that runs it from the cursor. An empty s does nothing.
+func (m *Model) search(s string, backward bool) (tea.Cmd, error) {
+	e, empty, _, err := parsePattern(s)
+	switch {
+	case err != nil:
+		return nil, err
+	case empty:
+		return nil, nil
+	}
+	m.idx.search = indexSearch{expr: e, text: strings.TrimSpace(s), backward: backward}
+	return m.runSearch(backward), nil
+}
+
+// searchAgain returns a command that repeats the last search, in the
+// opposite direction when opposite is true, without changing the direction
+// n repeats it in.
+func (m *Model) searchAgain(opposite bool) tea.Cmd {
+	if m.idx.search.expr == nil {
+		m.idx.msg = msgNoSearch
+		return nil
+	}
+	return m.runSearch(m.idx.search.backward != opposite)
+}
+
+// runSearch returns a command that runs the index's search from the cursor,
+// within the limit.
+func (m *Model) runSearch(backward bool) tea.Cmd {
+	x := &m.idx
+	return searchIndexCmd(m.logbook, x.gen, x.limit.expr, x.search.expr, x.cursor, x.total, backward)
 }
 
 // jump moves the index cursor to the row number typed in the jump prompt.

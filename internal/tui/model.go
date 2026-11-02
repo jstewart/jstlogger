@@ -111,6 +111,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case indexMarksMsg:
 		m.idx.applyMarks(msg)
 
+	case indexSearchMsg:
+		m.idx.applySearch(msg)
+
 	case rig.StateChanged:
 		m.rigState.state = msg.State
 		m.rigState.haveState = true
@@ -253,6 +256,16 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.openPrompt(promptUnmark)
 	case key.Matches(msg, k.Reload):
 		return m.reloadIndex()
+	case key.Matches(msg, k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite) && !x.loaded:
+		// There is nothing to search until the index loads.
+	case key.Matches(msg, k.Search):
+		return m.openPrompt(promptSearch)
+	case key.Matches(msg, k.SearchReverse):
+		return m.openPrompt(promptSearchReverse)
+	case key.Matches(msg, k.SearchNext):
+		return m, m.searchAgain(false)
+	case key.Matches(msg, k.SearchOpposite):
+		return m, m.searchAgain(true)
 	}
 	return m, nil
 }

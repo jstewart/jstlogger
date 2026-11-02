@@ -189,6 +189,21 @@ func (mr *MockStoreMockRecorder) List(ctx, f, page any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockStore)(nil).List), ctx, f, page)
 }
 
+// Search mocks base method.
+func (m *MockStore) Search(ctx context.Context, within, match logbook.Expr, from int, backward bool) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Search", ctx, within, match, from, backward)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Search indicates an expected call of Search.
+func (mr *MockStoreMockRecorder) Search(ctx, within, match, from, backward any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockStore)(nil).Search), ctx, within, match, from, backward)
+}
+
 // Tag mocks base method.
 func (m *MockStore) Tag(ctx context.Context, qsoIDs []int64, tags ...string) error {
 	m.ctrl.T.Helper()
