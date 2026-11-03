@@ -169,7 +169,7 @@ func (m Model) View() tea.View {
 	bodyHeight := max(m.height-lipgloss.Height(header)-lipgloss.Height(footer), 0)
 	content := m.styles.muted.Render("No QSOs yet.")
 	if m.logbook != nil {
-		content = m.idx.view(m.styles, m.bodyWidth(), bodyHeight)
+		content = m.idx.view(m.styles, m.bodyWidth(), bodyHeight, m.prompt == promptJump)
 	}
 	body := m.styles.body.
 		Width(m.width).

@@ -313,6 +313,47 @@ func TestIndexJumpPrompt(t *testing.T) {
 	assert.Equal(t, "QSO 1,750/2,000", statusLine(t, m))
 }
 
+// bodyLine returns line n of the body in m's view, without styling or
+// surrounding spaces. Line 0 is the index column header.
+func bodyLine(t *testing.T, m Model, n int) string {
+	t.Helper()
+	lines := strings.Split(plain(m.View().Content), "\n")
+	i := lipgloss.Height(m.headerView()) + n
+	require.Greater(t, len(lines), i)
+	return strings.TrimSpace(lines[i])
+}
+
+// numbered reports whether m's index shows the row-number column: the
+// header's "#" cell and row 1's number.
+func numbered(t *testing.T, m Model) bool {
+	t.Helper()
+	return strings.HasPrefix(bodyLine(t, m, 0), "# ") && strings.HasPrefix(bodyLine(t, m, 1), "1 ")
+}
+
+func TestIndexJumpPromptNumbers(t *testing.T) {
+	tests := []struct {
+		name  string
+		close tea.KeyPressMsg
+	}{
+		{"submit", special(tea.KeyEnter)},
+		{"cancel", special(tea.KeyEscape)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newIndexModel(t, 2_000, 80, 24)
+			assert.False(t, numbered(t, m), "no numbers before the prompt opens")
+
+			m, _ = update(t, m, keyPress('5', 0))
+			require.Equal(t, promptJump, m.prompt)
+			assert.True(t, numbered(t, m), "the prompt shows the numbers")
+
+			m = press(t, m, tt.close)
+			require.Equal(t, promptNone, m.prompt)
+			assert.False(t, numbered(t, m), "closing the prompt hides the numbers")
+		})
+	}
+}
+
 func TestIndexJumpPromptErrors(t *testing.T) {
 	tests := []struct {
 		input string
