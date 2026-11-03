@@ -142,7 +142,9 @@ func formatCount(n int) string {
 
 // view renders the index in width by height cells: the column header, the
 // visible rows and the status line. Only the visible rows are formatted.
-func (x index) view(st styles, width, height int) string {
+// numbered adds a column at the left with each row's number, counting from
+// 1 as jump does.
+func (x index) view(st styles, width, height int, numbered bool) string {
 	switch {
 	case !x.loaded && x.err != nil:
 		return st.err.Render(truncate(x.err.Error(), width, "…"))
@@ -154,10 +156,16 @@ func (x index) view(st styles, width, height int) string {
 		return st.muted.Render("No QSOs yet.")
 	}
 
+	nw := 0
+	if numbered {
+		nw = len(strconv.Itoa(x.total))
+	}
 	lines := make([]string, 0, height)
-	lines = append(lines, st.indexHeader.Render(formatCells(indexTitles, width)))
+	lines = append(lines, st.indexHeader.Render(numberLine("#", nw, width, func(w int) string {
+		return formatCells(indexTitles, w)
+	})))
 	for i := x.top; i < x.top+x.visible(); i++ {
-		lines = append(lines, x.rowView(st, i, width))
+		lines = append(lines, x.rowView(st, i, width, nw))
 	}
 	// Keep the status line at the bottom of the body.
 	for len(lines) < height-1 {
@@ -168,17 +176,35 @@ func (x index) view(st styles, width, height int) string {
 	return strings.Join(lines[:min(len(lines), max(height, 1))], "\n")
 }
 
-// rowView renders row i, or a placeholder while it loads.
-func (x index) rowView(st styles, i, width int) string {
+// numberLine prefixes the line rest renders, in the width left over, with
+// num right-aligned in an nw-cell column, and fits it to exactly width
+// cells. An nw of 0 leaves out the column.
+func numberLine(num string, nw, width int, rest func(width int) string) string {
+	if nw == 0 {
+		return rest(width)
+	}
+	num = truncate(num, nw, "")
+	line := strings.Repeat(" ", nw-lipgloss.Width(num)) + num + " " + rest(max(width-nw-1, 0))
+	return pad(truncate(line, width, ""), width)
+}
+
+// rowView renders row i, or a placeholder while it loads, numbered in an
+// nw-cell column unless nw is 0.
+func (x index) rowView(st styles, i, width, nw int) string {
+	num := strconv.Itoa(i + 1)
 	q, ok := x.row(i)
 	if !ok {
-		line := pad(truncate("  …", width, ""), width)
+		line := numberLine(num, nw, width, func(w int) string {
+			return pad(truncate("  …", w, ""), w)
+		})
 		if i == x.cursor {
 			return st.cursor.Render(line)
 		}
 		return st.muted.Render(line)
 	}
-	line := formatCells(indexCells(q, x.marks[q.ID]), width)
+	line := numberLine(num, nw, width, func(w int) string {
+		return formatCells(indexCells(q, x.marks[q.ID]), w)
+	})
 	if i == x.cursor {
 		return st.cursor.Render(line)
 	}

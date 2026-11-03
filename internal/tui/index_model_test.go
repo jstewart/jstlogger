@@ -313,6 +313,43 @@ func TestIndexJumpPrompt(t *testing.T) {
 	assert.Equal(t, "QSO 1,750/2,000", statusLine(t, m))
 }
 
+// headerLine returns the plain index column header in m's view.
+func headerLine(t *testing.T, m Model) string {
+	t.Helper()
+	for _, l := range strings.Split(plain(m.View().Content), "\n") {
+		if strings.Contains(l, "Date") {
+			return l
+		}
+	}
+	t.Fatal("no column header in the view")
+	return ""
+}
+
+func TestIndexJumpPromptNumbers(t *testing.T) {
+	const numbered = "   #   Date"
+	tests := []struct {
+		name  string
+		close tea.KeyPressMsg
+	}{
+		{"submit", special(tea.KeyEnter)},
+		{"cancel", special(tea.KeyEscape)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newIndexModel(t, 2_000, 80, 24)
+			assert.NotContains(t, headerLine(t, m), numbered, "no numbers before the prompt opens")
+
+			m, _ = update(t, m, keyPress('5', 0))
+			require.Equal(t, promptJump, m.prompt)
+			assert.Contains(t, headerLine(t, m), numbered, "the prompt shows the numbers")
+
+			m = press(t, m, tt.close)
+			require.Equal(t, promptNone, m.prompt)
+			assert.NotContains(t, headerLine(t, m), numbered, "closing the prompt hides the numbers")
+		})
+	}
+}
+
 func TestIndexJumpPromptErrors(t *testing.T) {
 	tests := []struct {
 		input string
