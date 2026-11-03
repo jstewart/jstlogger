@@ -120,6 +120,12 @@ A value ends at a space, `(`, `)` or `|`; quote it with double or single
 quotes to include those, as in `~y "field day"`, where a backslash escapes
 the next character. The space between a term and its value is optional.
 
+As in mutt's simple search, input with none of `~ ! | ( ) " '` is a bare
+value matched against the default fields, as if typed as
+`~c V | ~b V | ~m V | ~C V | ~s V | ~o V`. So `W1AW` finds the call, `20m`
+the band and `United States` the country. To match a value containing any
+of those characters, use its term, as in `~C "Cote d'Ivoire"`.
+
 ### Keybindings
 
 The index keys follow NeoMutt's generic menu.
