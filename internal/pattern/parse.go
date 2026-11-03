@@ -18,6 +18,9 @@ var ErrSyntax = errors.New("syntax error")
 // runs of ANDed or ORed terms become a flat logbook.And or logbook.Or, and
 // parentheses only group. Errors wrap ErrSyntax.
 func Parse(s string) (logbook.Expr, error) {
+	if v := strings.TrimSpace(s); v != "" && !strings.ContainsAny(v, syntaxRunes) {
+		return defaultFields(v), nil
+	}
 	p := parser{src: []rune(s)}
 	e, err := p.parseExpr()
 	if err != nil {
@@ -30,6 +33,24 @@ func Parse(s string) (logbook.Expr, error) {
 		return nil, p.errorf(p.pos, "unbalanced )")
 	}
 	return e, nil
+}
+
+// syntaxRunes are the runes that make input a pattern rather than a bare
+// value for the default fields.
+const syntaxRunes = `~!|()"'`
+
+// defaultFields matches v against the default fields, as if typed as
+// ~c v | ~b v | ~m v | ~C v | ~s v | ~o v. Unlike ~o, a v that is not a
+// continent code is no error; it just matches no continent.
+func defaultFields(v string) logbook.Expr {
+	return logbook.Or{
+		logbook.CallContains{Call: v},
+		logbook.Filter{Bands: []string{v}},
+		logbook.ModeIs{Mode: v},
+		logbook.Filter{Countries: []string{v}},
+		logbook.Filter{States: []string{v}},
+		logbook.Filter{Continents: []string{v}},
+	}
 }
 
 // continents are the ADIF continent codes ~o accepts.

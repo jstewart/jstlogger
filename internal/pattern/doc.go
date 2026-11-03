@@ -27,6 +27,14 @@
 // so ~c ~b 20m looks for calls containing "~B" AND'd with the bare word
 // 20m, which is an error.
 //
+// Input with none of the pattern syntax ~ ! | ( ) " ' is a bare value,
+// matched against the default fields as if typed as
+//
+//	~c VALUE | ~b VALUE | ~m VALUE | ~C VALUE | ~s VALUE | ~o VALUE
+//
+// so W1AW finds the call and 20m the band, as in mutt's simple search. A
+// bare value that is not a continent code just matches no continent.
+//
 // Parse reports malformed patterns with errors that wrap ErrSyntax and name
 // the 1-based column of the offending character.
 package pattern

@@ -78,6 +78,36 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestParseDefaultFields(t *testing.T) {
+	defaults := func(v string) logbook.Expr {
+		return logbook.Or{
+			logbook.CallContains{Call: v},
+			logbook.Filter{Bands: []string{v}},
+			logbook.ModeIs{Mode: v},
+			logbook.Filter{Countries: []string{v}},
+			logbook.Filter{States: []string{v}},
+			logbook.Filter{Continents: []string{v}},
+		}
+	}
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"call", "W1AW", "W1AW"},
+		{"surrounded by space", "  20m\t", "20m"},
+		{"not a continent", "FT8", "FT8"},
+		{"with spaces", "United States", "United States"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Parse(tt.in)
+			require.NoError(t, err)
+			assert.Equal(t, defaults(tt.want), got)
+		})
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -104,7 +134,11 @@ func TestParseErrors(t *testing.T) {
 		{"dangling not", "~A !", []string{"!", "column 4"}},
 		{"not before bar", "! | ~A", []string{"!", "column 1"}},
 		{"empty parens", "~A ( )", []string{"()", "column 4"}},
-		{"bare word", "W1AW", []string{"expected ~ term", "column 1"}},
+		{"bare word after term", "~b 20m W1AW", []string{"expected ~ term", "column 8"}},
+		{"quoted bare word", `"W1AW"`, []string{"expected ~ term", "column 1"}},
+		{"bare word in parens", "(W1AW)", []string{"expected ~ term", "column 2"}},
+		{"negated bare word", "!W1AW", []string{"expected ~ term", "column 2"}},
+		{"ored bare words", "W1AW | K1A", []string{"expected ~ term", "column 1"}},
 		{"value for all", "~A foo", []string{"expected ~ term", "column 4"}},
 		{"value swallows a term", "~c ~b 20m", []string{"expected ~ term", "column 7"}},
 		{"unknown continent", "~b 20m ~o EUR", []string{"~o", "column 8", "EUR", "AF, AN, AS, EU, NA, OC, SA"}},

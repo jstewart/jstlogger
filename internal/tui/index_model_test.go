@@ -896,6 +896,28 @@ func TestIndexSearchForward(t *testing.T) {
 	assert.Equal(t, "QSO 5/10", statusLine(t, m), "the next key clears the message")
 }
 
+func TestIndexSearchBareWord(t *testing.T) {
+	tests := []struct {
+		word string
+		want int64
+	}{
+		{"k3a", 3},
+		{"ft8", 9},
+		{"20m", 8},
+	}
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			m := newPatternModel(t, newPatternStore(t, 10))
+
+			m = submitPattern(t, m, promptSearch, tt.word)
+
+			assert.Equal(t, promptNone, m.prompt)
+			require.NoError(t, m.promptErr)
+			assert.Equal(t, tt.want, currentID(t, m), "the word is searched for in the default fields")
+		})
+	}
+}
+
 func TestIndexSearchReverse(t *testing.T) {
 	s := newPatternStore(t, 10)
 	m := newPatternModel(t, s)
