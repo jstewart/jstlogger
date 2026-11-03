@@ -84,6 +84,16 @@ type rigState struct {
 	conn      rig.ConnectionChanged
 }
 
+// isPatternPrompt reports whether the prompt of the given kind takes a
+// pattern.
+func isPatternPrompt(kind promptKind) bool {
+	switch kind {
+	case promptLimit, promptMark, promptUnmark, promptSearch, promptSearchReverse:
+		return true
+	}
+	return false
+}
+
 // promptOpen reports whether an input prompt is capturing key presses.
 func (m Model) promptOpen() bool {
 	return m.prompt != promptNone
@@ -104,6 +114,10 @@ func (m Model) openPrompt(kind promptKind) (Model, tea.Cmd) {
 	m.prompt = kind
 	m.promptErr = nil
 	m.input.Reset()
+	takesPattern := isPatternPrompt(kind)
+	m.promptKeys.HistoryPrev.SetEnabled(takesPattern)
+	m.promptKeys.HistoryNext.SetEnabled(takesPattern)
+	m.patterns.reset()
 	switch kind {
 	case promptFreq:
 		m.input.Prompt = "freq> "
@@ -176,6 +190,18 @@ func (m Model) updatePrompt(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.closePrompt(), nil
 	case key.Matches(msg, m.promptKeys.Submit):
 		return m.submitPrompt()
+	case key.Matches(msg, m.promptKeys.HistoryPrev):
+		if s, ok := m.patterns.prev(m.input.Value()); ok {
+			m.input.SetValue(s)
+			m.input.CursorEnd()
+		}
+		return m, nil
+	case key.Matches(msg, m.promptKeys.HistoryNext):
+		if s, ok := m.patterns.next(); ok {
+			m.input.SetValue(s)
+			m.input.CursorEnd()
+		}
+		return m, nil
 	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
@@ -217,6 +243,7 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 			m.promptErr = err
 			return m, nil
 		}
+		m.patterns.add(strings.TrimSpace(m.input.Value()))
 	case promptTag, promptUntag:
 		tag, add := m.input.Value(), m.prompt == promptTag
 		return m.closePrompt().submitTag(tag, add)
