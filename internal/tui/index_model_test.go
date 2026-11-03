@@ -313,20 +313,24 @@ func TestIndexJumpPrompt(t *testing.T) {
 	assert.Equal(t, "QSO 1,750/2,000", statusLine(t, m))
 }
 
-// headerLine returns the plain index column header in m's view.
-func headerLine(t *testing.T, m Model) string {
+// bodyLine returns line n of the body in m's view, without styling or
+// surrounding spaces. Line 0 is the index column header.
+func bodyLine(t *testing.T, m Model, n int) string {
 	t.Helper()
-	for _, l := range strings.Split(plain(m.View().Content), "\n") {
-		if strings.Contains(l, "Date") {
-			return l
-		}
-	}
-	t.Fatal("no column header in the view")
-	return ""
+	lines := strings.Split(plain(m.View().Content), "\n")
+	i := lipgloss.Height(m.headerView()) + n
+	require.Greater(t, len(lines), i)
+	return strings.TrimSpace(lines[i])
+}
+
+// numbered reports whether m's index shows the row-number column: the
+// header's "#" cell and row 1's number.
+func numbered(t *testing.T, m Model) bool {
+	t.Helper()
+	return strings.HasPrefix(bodyLine(t, m, 0), "# ") && strings.HasPrefix(bodyLine(t, m, 1), "1 ")
 }
 
 func TestIndexJumpPromptNumbers(t *testing.T) {
-	const numbered = "   #   Date"
 	tests := []struct {
 		name  string
 		close tea.KeyPressMsg
@@ -337,15 +341,15 @@ func TestIndexJumpPromptNumbers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m, _ := newIndexModel(t, 2_000, 80, 24)
-			assert.NotContains(t, headerLine(t, m), numbered, "no numbers before the prompt opens")
+			assert.False(t, numbered(t, m), "no numbers before the prompt opens")
 
 			m, _ = update(t, m, keyPress('5', 0))
 			require.Equal(t, promptJump, m.prompt)
-			assert.Contains(t, headerLine(t, m), numbered, "the prompt shows the numbers")
+			assert.True(t, numbered(t, m), "the prompt shows the numbers")
 
 			m = press(t, m, tt.close)
 			require.Equal(t, promptNone, m.prompt)
-			assert.NotContains(t, headerLine(t, m), numbered, "closing the prompt hides the numbers")
+			assert.False(t, numbered(t, m), "closing the prompt hides the numbers")
 		})
 	}
 }
