@@ -15,6 +15,10 @@ type Store interface {
 	Update(ctx context.Context, q QSO) error
 	// Delete removes the QSO with the given ID, or returns ErrNotFound.
 	Delete(ctx context.Context, id int64) error
+	// DeleteMany removes every QSO with the given IDs in one transaction:
+	// all of them or, if any ID is unknown, none, returning an error wrapping
+	// ErrNotFound. No IDs is a no-op.
+	DeleteMany(ctx context.Context, ids []int64) error
 	// List returns one page of QSOs matching f, newest first.
 	List(ctx context.Context, f Filter, page PageRequest) (Page, error)
 	// Count returns the number of QSOs matching e. A nil e matches every

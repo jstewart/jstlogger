@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"jstlogger/internal/adif"
+	"jstlogger/internal/adifexport"
 	"jstlogger/internal/config"
 	"jstlogger/internal/logbook"
 )
@@ -72,8 +72,9 @@ func importADIF(ctx context.Context, store logbook.Store, path string, tags []st
 // temporary file in the same directory and renamed into place, so a failed
 // export never leaves a partial file; an existing file is replaced.
 func exportADIF(ctx context.Context, store logbook.Store, path string, tags []string, stdout, stderr io.Writer) error {
+	opts := adifexport.Options{Filter: logbook.Filter{Tags: tags}, Version: version, Now: exportNow}
 	if path == "-" {
-		n, err := writeADIF(ctx, store, tags, stdout)
+		n, err := adifexport.Write(ctx, store, stdout, opts)
 		if err != nil {
 			return fmt.Errorf("exporting ADIF: %w", err)
 		}
@@ -81,87 +82,10 @@ func exportADIF(ctx context.Context, store logbook.Store, path string, tags []st
 		return nil
 	}
 
-	n, err := writeFileAtomic(path, func(w io.Writer) (int, error) {
-		return writeADIF(ctx, store, tags, w)
-	})
+	n, err := adifexport.WriteFile(ctx, store, path, opts)
 	if err != nil {
 		return fmt.Errorf("exporting to %s: %w", path, err)
 	}
 	printStderr(stderr, "jstlogger: exported %d QSOs to %s\n", n, path)
 	return nil
-}
-
-// writeFileAtomic calls write with a temporary file in path's directory,
-// then renames the file to path. The temporary file is removed on any
-// error. It returns write's count.
-func writeFileAtomic(path string, write func(io.Writer) (int, error)) (n int, err error) {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return 0, fmt.Errorf("create temporary file: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			// The file may already be closed, so a second Close error says
-			// nothing; a failed removal is reported alongside the cause.
-			_ = tmp.Close()
-			if rerr := os.Remove(tmp.Name()); rerr != nil {
-				err = errors.Join(err, fmt.Errorf("remove temporary file: %w", rerr))
-			}
-		}
-	}()
-
-	if n, err = write(tmp); err != nil {
-		return 0, err
-	}
-	// CreateTemp makes the file private; give it the mode of the file it
-	// replaces, or the usual mode of a new file.
-	mode := os.FileMode(0o644)
-	if fi, serr := os.Stat(path); serr == nil {
-		mode = fi.Mode().Perm()
-	}
-	if err = tmp.Chmod(mode); err != nil {
-		return 0, fmt.Errorf("set temporary file mode: %w", err)
-	}
-	// Sync before the rename so a crash cannot leave a short file in place.
-	if err = tmp.Sync(); err != nil {
-		return 0, fmt.Errorf("sync temporary file: %w", err)
-	}
-	if err = tmp.Close(); err != nil {
-		return 0, fmt.Errorf("close temporary file: %w", err)
-	}
-	if err = os.Rename(tmp.Name(), path); err != nil {
-		return 0, fmt.Errorf("rename temporary file: %w", err)
-	}
-	return n, nil
-}
-
-// writeADIF writes a header and the QSOs in store carrying all of tags to
-// w, oldest first, and returns how many QSOs it wrote.
-func writeADIF(ctx context.Context, store logbook.Store, tags []string, w io.Writer) (int, error) {
-	aw := adif.NewWriter(w)
-	err := aw.WriteHeader(adif.Header{
-		Preamble: "jstlogger ADIF export",
-		Fields: adif.Record{
-			{Name: "ADIF_VER", Value: "3.1.6"},
-			{Name: "PROGRAMID", Value: "jstlogger"},
-			{Name: "PROGRAMVERSION", Value: version},
-			{Name: "CREATED_TIMESTAMP", Value: exportNow().UTC().Format("20060102 150405")},
-		},
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	n := 0
-	err = store.Each(ctx, logbook.Filter{Tags: tags}, func(q logbook.QSO) error {
-		n++
-		return aw.Write(logbook.RecordFromQSO(q))
-	})
-	if err != nil {
-		return 0, fmt.Errorf("write QSOs: %w", err)
-	}
-	if err := aw.Flush(); err != nil {
-		return 0, err
-	}
-	return n, nil
 }

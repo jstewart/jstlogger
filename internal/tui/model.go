@@ -42,6 +42,11 @@ type Model struct {
 	prompt    promptKind
 	input     textinput.Model
 	promptErr error
+	// confirm is the y/N question open while prompt is promptConfirm.
+	confirm *pendingConfirm
+
+	// version is the program version written to exported files.
+	version string
 
 	width  int
 	height int
@@ -61,7 +66,17 @@ func New(opts ...Option) Model {
 	}
 	m.keys = defaultKeys(m.rig != nil)
 	m.indexKeys = defaultIndexKeys(m.logbook != nil)
+	if m.logbook != nil {
+		m.markedFuncs = m.bulkFuncs()
+	}
 	return m
+}
+
+// WithVersion sets the program version written to exported files.
+func WithVersion(v string) Option {
+	return func(m *Model) {
+		m.version = v
+	}
 }
 
 // Init loads the QSO index when a logbook is open.
@@ -121,6 +136,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case indexSearchMsg:
 		m.idx.applySearch(msg)
 
+	case indexBulkMsg:
+		return m.applyBulk(msg)
+
 	case rig.StateChanged:
 		m.rigState.state = msg.State
 		m.rigState.haveState = true
@@ -132,8 +150,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.rigErr = msg.err
 
 	default:
-		// Other input, such as pastes, goes to the open prompt.
-		if m.promptOpen() {
+		// Other input, such as pastes, goes to the open prompt, but not to
+		// a y/N question.
+		if m.promptOpen() && m.prompt != promptConfirm {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
 			return m, cmd
@@ -188,6 +207,10 @@ func (m Model) footerView() string {
 	case m.promptOpen():
 		lines = append(lines, m.promptView())
 		keys = m.promptKeys
+		if m.prompt == promptConfirm {
+			// Only y answers yes; enter and esc are no like any other key.
+			keys = promptKeyMap{Quit: m.promptKeys.Quit}
+		}
 	case m.rigErr != nil:
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
 	}

@@ -141,6 +141,8 @@ const (
 // Values within one slice are OR'd and the dimensions are AND'd. An empty
 // slice or zero value places no constraint.
 type Filter struct {
+	// IDs selects QSOs with any of these IDs. There is no limit on how many.
+	IDs []int64
 	// From is the inclusive lower bound on StartUTC; zero is unbounded.
 	From time.Time
 	// To is the exclusive upper bound on StartUTC; zero is unbounded.

@@ -245,6 +245,34 @@ func (s *SQLiteStore) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// DeleteMany removes every QSO with the given IDs and, through foreign keys,
+// their fields, confirmations and tag links, in one transaction, then deletes
+// tags that no longer label any QSO. Duplicate IDs are ignored. If any ID has
+// no QSO it deletes nothing and returns an error wrapping ErrNotFound. No IDs
+// is a no-op.
+func (s *SQLiteStore) DeleteMany(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	ids = slices.Compact(slices.Sorted(slices.Values(ids)))
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		for _, id := range ids {
+			res, err := tx.ExecContext(ctx, "DELETE FROM qso WHERE id = ?", id)
+			if err != nil {
+				return fmt.Errorf("qso %d: %w", id, err)
+			}
+			if err := requireOneRow(res); err != nil {
+				return fmt.Errorf("qso %d: %w", id, err)
+			}
+		}
+		return deleteUnusedTags(ctx, tx)
+	})
+	if err != nil {
+		return fmt.Errorf("logbook: delete qsos: %w", err)
+	}
+	return nil
+}
+
 // inTx runs fn in a transaction, committing if it succeeds and rolling back
 // otherwise.
 func (s *SQLiteStore) inTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error) {

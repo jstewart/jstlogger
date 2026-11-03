@@ -35,12 +35,12 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 
 	opts, ok := rigOptions(session)
 	if !ok {
-		_, err := tea.NewProgram(tui.New(tui.WithLogbook(store)), tea.WithContext(ctx)).Run()
+		_, err := tea.NewProgram(tui.New(tui.WithLogbook(store), tui.WithVersion(version)), tea.WithContext(ctx)).Run()
 		return err
 	}
 
 	r := rig.New(opts)
-	p := tea.NewProgram(tui.New(tui.WithLogbook(store), tui.WithRig(session.RigProfileName, r)), tea.WithContext(ctx))
+	p := tea.NewProgram(tui.New(tui.WithLogbook(store), tui.WithVersion(version), tui.WithRig(session.RigProfileName, r)), tea.WithContext(ctx))
 	emit := func(event any) {
 		logEvent(logger, event)
 		p.Send(event)
