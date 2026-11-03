@@ -44,6 +44,8 @@ type Model struct {
 	promptErr error
 	// confirm is the y/N question open while prompt is promptConfirm.
 	confirm *pendingConfirm
+	// patterns is the history shared by the pattern prompts.
+	patterns history
 
 	// version is the program version written to exported files.
 	version string

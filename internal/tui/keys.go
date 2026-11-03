@@ -54,6 +54,10 @@ type promptKeyMap struct {
 	Submit key.Binding
 	Cancel key.Binding
 	Quit   key.Binding
+	// HistoryPrev and HistoryNext browse the pattern history. They are
+	// enabled only while a pattern prompt is open.
+	HistoryPrev key.Binding
+	HistoryNext key.Binding
 }
 
 func defaultPromptKeys() promptKeyMap {
@@ -70,15 +74,25 @@ func defaultPromptKeys() promptKeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		HistoryPrev: key.NewBinding(
+			key.WithKeys("up", "ctrl+p"),
+			key.WithHelp("↑/ctrl+p", "prev pattern"),
+			key.WithDisabled(),
+		),
+		HistoryNext: key.NewBinding(
+			key.WithKeys("down", "ctrl+n"),
+			key.WithHelp("↓/ctrl+n", "next pattern"),
+			key.WithDisabled(),
+		),
 	}
 }
 
 func (k promptKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Submit, k.Cancel}
+	return []key.Binding{k.Submit, k.Cancel, k.HistoryPrev, k.HistoryNext}
 }
 
 func (k promptKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Submit, k.Cancel, k.Quit}}
+	return [][]key.Binding{{k.Submit, k.Cancel, k.Quit}, {k.HistoryPrev, k.HistoryNext}}
 }
 
 // indexKeyMap holds the QSO index keybindings, modeled on NeoMutt's generic
