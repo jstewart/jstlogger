@@ -34,9 +34,10 @@ type pendingConfirm struct {
 	yes      func(m Model) (Model, tea.Cmd)
 }
 
-// indexBulkMsg reports the outcome of a bulk operation on the marked QSOs:
-// a status message, the IDs of the QSOs it deleted, whose marks are
-// dropped, and whether the index must reload.
+// indexBulkMsg reports the outcome of a bulk operation on the marked QSOs,
+// or of deleting the QSO under the cursor: a status message, the IDs of
+// the QSOs it deleted, whose marks are dropped, and whether the index must
+// reload.
 type indexBulkMsg struct {
 	status  string
 	deleted []int64
@@ -105,6 +106,26 @@ func (m Model) askDelete(ids []int64) (Model, tea.Cmd) {
 	return m.askConfirm(q, func(m Model) (Model, tea.Cmd) {
 		return m, deleteQSOsCmd(m.logbook, ids)
 	}), nil
+}
+
+// askDeleteCurrent asks whether to delete the QSO under the cursor, naming
+// it. A yes deletes that QSO, even if the cursor moves while the question
+// is open. It does nothing while the row is loading.
+func (m Model) askDeleteCurrent() Model {
+	q, ok := m.idx.current()
+	if !ok {
+		return m
+	}
+	name := describeQSO(q)
+	return m.askConfirm("Delete "+name+"? [y/N]", func(m Model) (Model, tea.Cmd) {
+		return m, deleteQSOCmd(m.logbook, q.ID, name)
+	})
+}
+
+// describeQSO names q for a question or status message, e.g. "QSO with
+// K1ABC on 2026-10-31 12:03".
+func describeQSO(q logbook.QSO) string {
+	return "QSO with " + q.Call + " on " + q.StartUTC.UTC().Format("2006-01-02 15:04")
 }
 
 // submitTag tags, when add is true, or untags the marked QSOs with the tag
@@ -176,6 +197,23 @@ func deleteQSOsCmd(s logbook.Store, ids []int64) tea.Cmd {
 		return indexBulkMsg{
 			status:  "Deleted " + countQSOs(len(ids)) + ".",
 			deleted: ids,
+			reload:  true,
+		}
+	}
+}
+
+// deleteQSOCmd returns a command that deletes the QSO with the given ID,
+// which name describes.
+func deleteQSOCmd(s logbook.Store, id int64, name string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		if err := s.Delete(ctx, id); err != nil {
+			return indexBulkMsg{err: fmt.Errorf("delete %s: %w", name, err)}
+		}
+		return indexBulkMsg{
+			status:  "Deleted " + name + ".",
+			deleted: []int64{id},
 			reload:  true,
 		}
 	}

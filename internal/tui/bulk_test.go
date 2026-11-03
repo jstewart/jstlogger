@@ -482,7 +482,8 @@ func TestBulkMarksClearedBeforeSubmit(t *testing.T) {
 }
 
 func TestBulkKeysNeedPrefix(t *testing.T) {
-	for _, k := range []tea.KeyPressMsg{bulkDeleteKey, bulkSaveKey, bulkTagKey, bulkUntagKey} {
+	// d without the prefix deletes the QSO under the cursor instead.
+	for _, k := range []tea.KeyPressMsg{bulkSaveKey, bulkTagKey, bulkUntagKey} {
 		t.Run(k.String(), func(t *testing.T) {
 			m, s := newBulkModel(t, 5)
 

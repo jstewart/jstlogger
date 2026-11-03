@@ -296,6 +296,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, m.searchAgain(false)
 	case key.Matches(msg, k.SearchOpposite):
 		return m, m.searchAgain(true)
+	case key.Matches(msg, k.Delete):
+		return m.askDeleteCurrent(), nil
 	case key.Matches(msg, k.MarkPrefix) && x.loaded:
 		x.armPrefix()
 	}
