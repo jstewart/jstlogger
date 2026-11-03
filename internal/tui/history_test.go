@@ -70,6 +70,42 @@ func TestHistoryBrowse(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestHistoryBrowseSkipsInputEqualToNewest(t *testing.T) {
+	var h history
+	h.add("a")
+	h.add("b")
+	h.reset()
+
+	s, ok := h.prev("b")
+	assert.True(t, ok)
+	assert.Equal(t, "a", s, "the newest entry is already in the prompt")
+	s, ok = h.next()
+	assert.True(t, ok)
+	assert.Equal(t, "b", s)
+	_, ok = h.next()
+	assert.False(t, ok, "the input is the newest entry")
+	s, _ = h.prev("b")
+	assert.Equal(t, "a", s)
+
+	var one history
+	one.add("a")
+	one.reset()
+	_, ok = one.prev("a")
+	assert.False(t, ok, "the only entry is already in the prompt")
+}
+
+func TestPatternHistoryAfterPrefilledPrompt(t *testing.T) {
+	m := newPatternModel(t, newPatternStore(t, 10))
+	m = submitPattern(t, m, promptMark, "~b 20m")
+	m = submitPattern(t, m, promptSearch, "~m FT8")
+
+	m = press(t, m, searchKey)
+	require.Equal(t, "~m FT8", m.input.Value(), "the prompt shows the last search")
+	m = press(t, m, special(tea.KeyUp))
+
+	assert.Equal(t, "~b 20m", m.input.Value(), "up recalls the pattern before the one shown")
+}
+
 func TestHistoryEmpty(t *testing.T) {
 	var h history
 	h.reset()
