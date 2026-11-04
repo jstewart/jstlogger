@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"database/sql"
 	"regexp"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 )
 
@@ -34,41 +36,148 @@ func TestIndexCells(t *testing.T) {
 		Country:         "Japan",
 		StationCallsign: "W1AW",
 	}
+	x := newIndex()
 
 	assert.Equal(t,
-		[]string{" ", "2026-10-31", "18:34", "JA1ABC", "FT4", "-10", "+02", "20m", "Japan", "W1AW"},
-		indexCells(q, false), "UTC date and time without seconds, submode over mode")
+		[]string{" ", " ", "2026-10-31", " ", "18:34", " ", "JA1ABC", " ", "FT4", " ", "-10", " ", "+02", " ", "20m", " ", "Japan", " ", "W1AW"},
+		x.format.Values(q, false, x.unit), "UTC date and time without seconds, submode over mode")
 
 	q.Submode = ""
-	cells := indexCells(q, true)
+	cells := x.format.Values(q, true, x.unit)
 	assert.Equal(t, "*", cells[0])
-	assert.Equal(t, "MFSK", cells[4], "mode when there is no submode")
+	assert.Equal(t, "MFSK", cells[8], "mode when there is no submode")
+}
+
+// defaultCells interleaves the default format's single-space separators
+// with cells, one per column.
+func defaultCells(cells ...string) []string {
+	out := make([]string, 0, 2*len(cells)-1)
+	for i, c := range cells {
+		if i > 0 {
+			out = append(out, " ")
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 func TestFormatCells(t *testing.T) {
-	cells := []string{"*", "2026-10-31", "13:34", "JA1ABC", "FT4", "-10", "+02", "20m", "Japan", "W1AW"}
+	f := newIndex().format
+	cells := defaultCells("*", "2026-10-31", "13:34", "JA1ABC", "FT4", "-10", "+02", "20m", "Japan", "W1AW")
 
-	line := formatCells(cells, 78)
+	line := formatLine(f, cells, 78)
 	assert.Equal(t, 78, lipgloss.Width(line), "the line fills the width")
 	assert.Equal(t, "* 2026-10-31 13:34 JA1ABC     FT4    -10   +02   20m   Japan        W1AW      ", line)
 
-	wide := formatCells(cells, 100)
+	wide := formatLine(f, cells, 100)
 	assert.Equal(t, 100, lipgloss.Width(wide))
 	assert.Contains(t, wide, "Japan"+strings.Repeat(" ", 30)+"W1AW", "the country takes the extra width")
 
-	narrow := formatCells(cells, 30)
+	narrow := formatLine(f, cells, 30)
 	assert.Equal(t, "* 2026-10-31 13:34 JA1ABC     ", narrow, "a narrow window truncates the line")
+
+	assert.Equal(t,
+		"  Date       Time  Call       Mode   RST S RST R Band  Country      Station   ",
+		formatLine(f, f.Titles(), 78), "the default header")
 }
 
 func TestFormatCellsTruncatesValues(t *testing.T) {
-	cells := []string{" ", "2026-10-31", "13:34", "VP2E/W1AW/P", "FT8", "", "", "20m", "Bosnia-Herzegovina", "W1AW/VE3XYZ"}
+	f := newIndex().format
+	cells := defaultCells(" ", "2026-10-31", "13:34", "VP2E/W1AW/P", "FT8", "", "", "20m", "Bosnia-Herzegovina", "W1AW/VE3XYZ")
 
-	line := formatCells(cells, 78)
+	line := formatLine(f, cells, 78)
 
 	assert.Equal(t, 78, lipgloss.Width(line))
 	assert.Contains(t, line, "VP2E/W1AW…")
 	assert.Contains(t, line, "Bosnia-Herz…")
 	assert.True(t, strings.HasSuffix(line, "W1AW/VE3X…"))
+}
+
+func TestFormatLineCustom(t *testing.T) {
+	tests := []struct {
+		name   string
+		format string
+		cells  []string
+		width  int
+		want   string
+	}{
+		{
+			name:   "literal separators and a right-aligned column",
+			format: "%-8c|%5b",
+			cells:  []string{"JA1ABC", "|", "20m"},
+			width:  20,
+			want:   "JA1ABC  |  20m      ",
+		},
+		{
+			name:   "right-aligned values are truncated too",
+			format: "%3c|",
+			cells:  []string{"JA1ABC", "|"},
+			width:  6,
+			want:   "JA…|  ",
+		},
+		{
+			name:   "a natural-width column takes its value's width",
+			format: "%c/%-3b",
+			cells:  []string{"VP2E/W1AW", "/", "2m"},
+			width:  16,
+			want:   "VP2E/W1AW/2m    ",
+		},
+		{
+			name:   "a right-aligned flexible column",
+			format: "%3b %*C",
+			cells:  []string{"20m", " ", "Japan"},
+			width:  16,
+			want:   "20m        Japan",
+		},
+		{
+			name:   "the flexible column keeps its minimum width",
+			format: "%-10c %-*C",
+			cells:  []string{"JA1ABC", " ", "Bosnia-Herzegovina"},
+			width:  15,
+			want:   "JA1ABC     Bosn",
+		},
+		{
+			name:   "with no flexible column the line is padded",
+			format: "%-6c %4b",
+			cells:  []string{"W1AW", " ", "20m"},
+			width:  15,
+			want:   "W1AW    20m    ",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := indexfmt.Parse(tt.format)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, formatLine(f, tt.cells, tt.width))
+		})
+	}
+}
+
+func TestIndexViewCustomFormat(t *testing.T) {
+	f, err := indexfmt.Parse("%-8c|%5b %D")
+	require.NoError(t, err)
+	q := logbook.QSO{ID: 1, Call: "JA1ABC", Band: "20m", DistanceKm: sql.Null[float64]{V: 10_000, Valid: true}}
+
+	for _, tt := range []struct {
+		unit indexfmt.Unit
+		row  string
+	}{
+		{indexfmt.Km, "JA1ABC  |  20m 10000"},
+		{indexfmt.Mi, "JA1ABC  |  20m 6214"},
+	} {
+		t.Run(string(tt.unit), func(t *testing.T) {
+			m := New(WithIndexFormat(f, tt.unit))
+			x := m.idx
+			x.applyLoad(indexLoadedMsg{total: 1, rows: []logbook.QSO{q}})
+			x.setHeight(1)
+
+			lines := strings.Split(x.view(defaultStyles(), 30, 3, false), "\n")
+
+			require.Len(t, lines, 3)
+			assert.Equal(t, "Call    | Band Dist"+strings.Repeat(" ", 11), plain(lines[0]), "the header titles follow the format")
+			assert.Equal(t, tt.row+strings.Repeat(" ", 30-len(tt.row)), plain(lines[1]))
+		})
+	}
 }
 
 func TestTruncate(t *testing.T) {

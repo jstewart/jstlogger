@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/pattern"
 )
@@ -84,17 +85,43 @@ type index struct {
 	// function on every marked QSO instead of the one under the cursor.
 	prefix bool
 
+	// format lays out the header and rows, and unit is the unit of its
+	// distances.
+	format indexfmt.Format
+	unit   indexfmt.Unit
+
 	// msg is shown on the status line until the next key press.
 	msg string
 	// err is the last load error, shown until a reload succeeds.
 	err error
 }
 
+// defaultIndexFormat is indexfmt.Default parsed: the index's layout unless
+// WithIndexFormat sets another.
+var defaultIndexFormat = func() indexfmt.Format {
+	f, err := indexfmt.Parse(indexfmt.Default)
+	if err != nil {
+		panic(fmt.Sprintf("parse default index format: %v", err))
+	}
+	return f
+}()
+
 func newIndex() index {
 	return index{
 		blocks:  map[int][]logbook.QSO{},
 		pending: map[int]bool{},
 		marks:   map[int64]bool{},
+		format:  defaultIndexFormat,
+		unit:    indexfmt.Mi,
+	}
+}
+
+// WithIndexFormat lays out the index's header and rows by f, showing
+// distances in unit.
+func WithIndexFormat(f indexfmt.Format, unit indexfmt.Unit) Option {
+	return func(m *Model) {
+		m.idx.format = f
+		m.idx.unit = unit
 	}
 }
 
