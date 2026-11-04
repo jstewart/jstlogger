@@ -92,6 +92,33 @@ func TestLoadDefaultsInCode(t *testing.T) {
 	assert.Empty(t, c.Rig.Profile)
 	assert.Empty(t, c.Rig.Profiles)
 	assert.Equal(t, Logbook{DistanceUnit: DefaultDistanceUnit}, c.Logbook)
+	assert.Equal(t, Index{Format: DefaultIndexFormat}, c.Index)
+}
+
+func TestLoadIndex(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    Index
+	}{
+		{
+			name:    "section absent uses the default format",
+			content: "",
+			want:    Index{Format: DefaultIndexFormat},
+		},
+		{
+			name:    "custom format is loaded verbatim",
+			content: "[index]\nformat = \"  %-10c  %-*C \"\n",
+			want:    Index{Format: "  %-10c  %-*C "},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, res := load(t, tt.content)
+			assert.Empty(t, res.Warnings)
+			assert.Equal(t, tt.want, c.Index)
+		})
+	}
 }
 
 func TestLoadLogbook(t *testing.T) {

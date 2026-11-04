@@ -185,11 +185,32 @@ func TestValidate(t *testing.T) {
 			wantKeys: []string{"logbook.distance_unit"},
 		},
 		{
+			name:     "custom index format is valid",
+			mutate:   func(c *Config) { c.Index.Format = "%-10c %-*C" },
+			wantKeys: nil,
+		},
+		{
+			name:     "index format rejects an unknown expando",
+			mutate:   func(c *Config) { c.Index.Format = "%Z %q" },
+			wantKeys: []string{"index.format"},
+		},
+		{
+			name:     "index format rejects a bad strftime conversion",
+			mutate:   func(c *Config) { c.Index.Format = "%{%Q}" },
+			wantKeys: []string{"index.format"},
+		},
+		{
+			name:     "index format allows only one flexible column",
+			mutate:   func(c *Config) { c.Index.Format = "%-*c %-*C" },
+			wantKeys: []string{"index.format"},
+		},
+		{
 			name: "multiple failures in sorted key order",
 			mutate: func(c *Config) {
 				setProfile(c, "portable", func(p *RigProfile) { p.Port = 0 })
 				setProfile(c, "ic7300", func(p *RigProfile) { p.Backend = "bogus" })
 				c.Logbook.DistanceUnit = "bogus"
+				c.Index.Format = "%q"
 				for _, n := range []string{"portable", "home"} {
 					s := c.Stations[n]
 					s.Gridsquare = "bad"
@@ -202,6 +223,7 @@ func TestValidate(t *testing.T) {
 				"rig.profiles.ic7300.backend",
 				"rig.profiles.portable.port",
 				"logbook.distance_unit",
+				"index.format",
 			},
 		},
 	}
@@ -218,6 +240,14 @@ func TestValidate(t *testing.T) {
 			assert.Equal(t, tt.wantKeys, validationKeys(t, err))
 		})
 	}
+}
+
+func TestValidateIndexMessage(t *testing.T) {
+	c := fullConfig(t)
+	c.Index.Format = "%Z %q"
+	err := c.Validate("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `index.format: indexfmt: unknown expando`)
 }
 
 func TestValidateDefaultTemplateNeedsEditing(t *testing.T) {

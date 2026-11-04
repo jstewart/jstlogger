@@ -14,6 +14,7 @@ type tomlConfig struct {
 	Stations       map[string]tomlStation `toml:"stations"`
 	Rig            tomlRig                `toml:"rig"`
 	Logbook        tomlLogbook            `toml:"logbook"`
+	Index          Index                  `toml:"index"`
 }
 
 // tomlLogbook mirrors Logbook for encoding, omitting an empty path so the
@@ -62,6 +63,7 @@ func WriteTOML(w io.Writer, c Config) error {
 			Profiles:     c.Rig.Profiles,
 		},
 		Logbook: tomlLogbook(c.Logbook),
+		Index:   c.Index,
 	}
 	for name, s := range c.Stations {
 		tc.Stations[name] = tomlStation(s)
