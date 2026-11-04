@@ -63,7 +63,8 @@ jstlogger opens on the QSO index: every QSO in the logbook, newest first,
 filling the window. Each row shows the date and time (UTC), call, mode
 (the submode when there is one, so `FT4` rather than `MFSK`), the reports
 sent and received, band, country and station callsign. A `*` marks a
-marked QSO.
+marked QSO. Set `[index] format` in the config to choose other columns;
+see [Index format](#index-format).
 
 The status line above the help shows where you are and how many QSOs are
 marked, e.g. `QSO 12/4,567 · 3 marked`, along with messages such as
@@ -84,6 +85,48 @@ limiting never changes the marks.
 `T` marks, and `ctrl+t` unmarks, the QSOs matching a pattern. Like mutt,
 they act only on the QSOs within the limit, so `ctrl+t ~A` unmarks just
 the QSOs you can see.
+
+### Index format
+
+`[index] format` lays out each row of the QSO index, in the style of
+mutt's `index_format`. The default reproduces the columns above:
+
+```toml
+[index]
+format = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S"
+```
+
+Text in the format is shown as is, and `%%` shows a `%`. Each `%` expando
+is a column, written `%[-][width]X`:
+
+- `width` is the column width in cells. Longer values are cut short with
+  `…`. Without a width, a column is as wide as its value.
+- `-` aligns the value left; without it, the value is aligned right.
+- `*` in place of a width makes the column take the width that remains.
+  At most one column can.
+
+| Expando     | Column                                                   |
+|-------------|----------------------------------------------------------|
+| `%Z`        | `*` when the QSO is marked                               |
+| `%{format}` | start date and time (UTC), in strftime `format`          |
+| `%c`        | call                                                     |
+| `%m`        | mode, or the submode when there is one                   |
+| `%s`, `%r`  | report sent, received                                    |
+| `%b`        | band                                                     |
+| `%f`        | frequency in MHz, e.g. `14.074`                          |
+| `%C`        | country                                                  |
+| `%S`        | station callsign                                         |
+| `%o`        | operator                                                 |
+| `%n`        | name                                                     |
+| `%g`        | grid square                                              |
+| `%D`        | distance, in whole `[logbook] distance_unit`s            |
+| `%k`        | continent                                                |
+| `%x`        | DXCC entity number                                       |
+
+A date and time format can use `%Y` `%y` `%m` `%d` `%e` `%j` `%H` `%M`
+`%S` `%b` `%B` `%a` `%A` and `%%`. The header row shows each column's
+name in the same layout. An unknown expando or conversion is reported as
+a config error at startup.
 
 ### Patterns
 
@@ -285,6 +328,7 @@ JSTLOGGER_ROUNDTRIP_ADIF=/path/to/log.adi go test -run TestRoundTripExternalFile
 main.go            entry point; parses flags, loads config and starts the app
 internal/adif/     ADIF .adi file reading, writing and comparison
 internal/config/   config file loading, validation and session overrides
+internal/indexfmt/ QSO index format parsing and column values
 internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
 internal/rig/      rigctld client: polls the rig and sends it commands
 internal/tui/      Bubble Tea models, keybindings and styles for the UI
