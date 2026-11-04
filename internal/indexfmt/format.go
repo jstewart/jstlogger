@@ -88,7 +88,7 @@ var expandos = map[byte]expando{
 		if !q.FreqHz.Valid {
 			return ""
 		}
-		return formatFreqMHz(q.FreqHz.V)
+		return logbook.FormatFreqMHz(q.FreqHz.V)
 	}},
 	'C': {"Country", func(q logbook.QSO, _ Unit) string { return q.Country }},
 	'S': {"Station", func(q logbook.QSO, _ Unit) string { return q.StationCallsign }},
@@ -263,16 +263,4 @@ func (f Format) Values(q logbook.QSO, marked bool, unit Unit) []string {
 		}
 	}
 	return out
-}
-
-// formatFreqMHz formats hz as decimal MHz with trailing zeros trimmed, e.g.
-// 14075219 as "14.075219" and 7000000 as "7". It mirrors the logbook
-// package's unexported ADIF formatter.
-func formatFreqMHz(hz int64) string {
-	whole := strconv.FormatInt(hz/1_000_000, 10)
-	frac := strings.TrimRight(fmt.Sprintf("%06d", hz%1_000_000), "0")
-	if frac == "" {
-		return whole
-	}
-	return whole + "." + frac
 }
