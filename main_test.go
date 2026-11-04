@@ -357,6 +357,12 @@ func TestRunValidationAndOverrideErrors(t *testing.T) {
 			fromFile:   true,
 			wantStderr: []string{"stations.home.gridsquare: required"},
 		},
+		{
+			name:       "invalid index format",
+			config:     validConfig + "\n[index]\nformat = \"%c %q\"\n",
+			fromFile:   true,
+			wantStderr: []string{`index.format: indexfmt: unknown expando "%q"`},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

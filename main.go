@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"jstlogger/internal/config"
+	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/rig"
 	"jstlogger/internal/tui"
@@ -33,14 +34,24 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	format, err := indexfmt.Parse(session.Config.Index.Format)
+	if err != nil {
+		return fmt.Errorf("index format: %w", err)
+	}
+	tuiOpts := []tui.Option{
+		tui.WithLogbook(store),
+		tui.WithVersion(version),
+		tui.WithIndexFormat(format, indexfmt.Unit(session.Config.Logbook.DistanceUnit)),
+	}
+
 	opts, ok := rigOptions(session)
 	if !ok {
-		_, err := tea.NewProgram(tui.New(tui.WithLogbook(store), tui.WithVersion(version)), tea.WithContext(ctx)).Run()
+		_, err = tea.NewProgram(tui.New(tuiOpts...), tea.WithContext(ctx)).Run()
 		return err
 	}
 
 	r := rig.New(opts)
-	p := tea.NewProgram(tui.New(tui.WithLogbook(store), tui.WithVersion(version), tui.WithRig(session.RigProfileName, r)), tea.WithContext(ctx))
+	p := tea.NewProgram(tui.New(append(tuiOpts, tui.WithRig(session.RigProfileName, r))...), tea.WithContext(ctx))
 	emit := func(event any) {
 		logEvent(logger, event)
 		p.Send(event)
@@ -53,7 +64,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 			emit(rig.ConnectionChanged{Status: rig.Disconnected, Err: err})
 		}
 	})
-	_, err := p.Run()
+	_, err = p.Run()
 	cancel()
 	wg.Wait()
 	return err
