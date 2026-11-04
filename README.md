@@ -99,8 +99,9 @@ format = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S"
 Text in the format is shown as is, and `%%` shows a `%`. Each `%` expando
 is a column, written `%[-][width]X`:
 
-- `width` is the column width in cells. Longer values are cut short with
-  `…`. Without a width, a column is as wide as its value.
+- `width` is the column width in cells, up to 255. Longer values are cut
+  short with `…`. Without a width, a column is as wide as its value, so it
+  doesn't line up with the header or other rows.
 - `-` aligns the value left; without it, the value is aligned right.
 - `*` in place of a width makes the column take the width that remains.
   At most one column can.
@@ -125,8 +126,8 @@ is a column, written `%[-][width]X`:
 
 A date and time format can use `%Y` `%y` `%m` `%d` `%e` `%j` `%H` `%M`
 `%S` `%b` `%B` `%a` `%A` and `%%`. The header row shows each column's
-name in the same layout. An unknown expando or conversion is reported as
-a config error at startup.
+name in the same layout. A format needs at least one expando; an unknown
+expando or conversion is reported as a config error at startup.
 
 ### Patterns
 

@@ -8,12 +8,16 @@
 // optional width, and a case-sensitive letter or a braced time layout:
 //
 //	%X            expando X at its natural width
-//	%NX           expando X in a column N cells wide (N > 0)
+//	%NX           expando X in a column N cells wide (0 < N <= MaxWidth)
 //	%-NX          the same, left-aligned
 //	%*X           expando X in the column that takes the remaining width;
 //	              at most one per format
 //	%{LAYOUT}     the QSO start time in UTC, formatted with LAYOUT
 //	%%            a literal '%'
+//
+// A natural-width column is as wide as each value, so it does not line up
+// with the header or with other rows; give a width to align it. A format
+// needs at least one expando.
 //
 // The expandos and their header titles are:
 //
@@ -51,7 +55,8 @@
 //	%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S
 //
 // Parse reports malformed formats (an unknown expando or conversion, a
-// lone '%', an unterminated '{', a zero width or a second flexible column)
+// lone '%', an unterminated '{', a zero or too large width, a second
+// flexible column, or no expandos at all)
 // with errors that wrap ErrSyntax and name the 1-based column of the
 // offending character.
 package indexfmt

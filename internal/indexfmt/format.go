@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -113,6 +114,9 @@ var expandos = map[byte]expando{
 	}},
 }
 
+// MaxWidth is the widest fixed column width a format can give.
+const MaxWidth = 255
+
 // errorf builds an error wrapping ErrSyntax that reports the 1-based
 // column of the rune at offset pos.
 func errorf(pos int, format string, args ...any) error {
@@ -161,8 +165,8 @@ func Parse(s string) (Format, error) {
 				j++
 			}
 			w, err := strconv.Atoi(string(rs[i:j]))
-			if err != nil {
-				return Format{}, errorf(start, "bad width %q", string(rs[i:j]))
+			if err != nil || w > MaxWidth {
+				return Format{}, errorf(start, "width %s is more than %d", string(rs[i:j]), MaxWidth)
 			}
 			if w == 0 {
 				return Format{}, errorf(start, "zero width")
@@ -206,6 +210,9 @@ func Parse(s string) (Format, error) {
 		f.Items = append(f.Items, it)
 	}
 	flushLit()
+	if !slices.ContainsFunc(f.Items, func(it Item) bool { return !it.IsLiteral() }) {
+		return Format{}, fmt.Errorf("indexfmt: no columns: %w", ErrSyntax)
+	}
 	return f, nil
 }
 

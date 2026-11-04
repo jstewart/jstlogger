@@ -92,9 +92,9 @@ func TestParseItems(t *testing.T) {
 		in   string
 		want []Item
 	}{
-		{"empty", "", nil},
-		{"literal", "ab", []Item{{Literal: "ab"}}},
-		{"percent escape merges", "a%%b", []Item{{Literal: "a%b"}}},
+		{"literal", "ab%c", []Item{{Literal: "ab"}, {Field: 'c'}}},
+		{"percent escape merges", "a%%b%c", []Item{{Literal: "a%b"}, {Field: 'c'}}},
+		{"widest", "%255c", []Item{{Field: 'c', Width: MaxWidth}}},
 		{"right aligned", "%8c", []Item{{Field: 'c', Width: 8}}},
 		{"left aligned", "%-8c", []Item{{Field: 'c', Width: 8, Left: true}}},
 		{"natural", "%c", []Item{{Field: 'c'}}},
@@ -129,6 +129,10 @@ func TestParseErrors(t *testing.T) {
 		{"two flex", "%*c %*C", "more than one flexible column at column 5"},
 		{"zero width", "%0c", "zero width at column 1"},
 		{"zero width left", "%-00c", "zero width at column 1"},
+		{"too wide", "%c %256c", "width 256 is more than 255 at column 4"},
+		{"huge width", "%99999999999999999999c", "width 99999999999999999999 is more than 255 at column 1"},
+		{"empty", "", "no columns"},
+		{"only literal text", "a%%b", "no columns"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
