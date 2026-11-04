@@ -55,6 +55,7 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 	v.SetDefault("default_station", DefaultStationName)
 	v.SetDefault("rig.poll_interval", DefaultPollInterval)
 	v.SetDefault("logbook.distance_unit", DefaultDistanceUnit)
+	v.SetDefault("index.format", DefaultIndexFormat)
 
 	if err := v.ReadInConfig(); err != nil {
 		return Config{}, res, fmt.Errorf("reading config %s: %w", path, err)

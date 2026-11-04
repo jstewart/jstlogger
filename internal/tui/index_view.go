@@ -6,33 +6,12 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"jstlogger/internal/logbook"
+	"jstlogger/internal/indexfmt"
 )
 
 // indexChrome is the number of body lines the index uses besides its rows:
 // the column header and the status line.
 const indexChrome = 2
-
-// indexColumn is one column of the index. A width of 0 marks the column
-// that takes the remaining width.
-type indexColumn struct {
-	title string
-	width int
-}
-
-// indexColumns are the index columns, in order. The first is the mark.
-var indexColumns = []indexColumn{
-	{"", 1},
-	{"Date", 10},
-	{"Time", 5},
-	{"Call", 10},
-	{"Mode", 6},
-	{"RST S", 5},
-	{"RST R", 5},
-	{"Band", 5},
-	{"Country", 0},
-	{"Station", 10},
-}
 
 // minFlexWidth is the narrowest the remaining-width column gets; below it
 // the line is truncated instead.
@@ -42,59 +21,39 @@ const minFlexWidth = 8
 // it the line is truncated instead.
 const minLimitWidth = 8
 
-// indexTitles are the column header cells.
-var indexTitles = func() []string {
-	out := make([]string, len(indexColumns))
-	for i, c := range indexColumns {
-		out[i] = c.title
+// formatLine lays out cells, one per item of f, and fits the line to
+// exactly width cells. A literal is written as is and a natural-width
+// expando at its value's width. A fixed-width expando is truncated and
+// padded to its width, aligned as the item says, and the flexible one takes
+// the width the others leave, but at least minFlexWidth.
+func formatLine(f indexfmt.Format, cells []string, width int) string {
+	used := 0
+	for i, it := range f.Items {
+		switch {
+		case it.Flex:
+		case it.IsLiteral() || it.Width == 0:
+			used += lipgloss.Width(cells[i])
+		default:
+			used += it.Width
+		}
 	}
-	return out
-}()
-
-// indexCells returns the cells of q's row; marked sets the mark column.
-func indexCells(q logbook.QSO, marked bool) []string {
-	mark := " "
-	if marked {
-		mark = "*"
-	}
-	mode := q.Submode
-	if mode == "" {
-		mode = q.Mode
-	}
-	start := q.StartUTC.UTC()
-	return []string{
-		mark,
-		start.Format("2006-01-02"),
-		start.Format("15:04"),
-		q.Call,
-		mode,
-		q.RSTSent,
-		q.RSTRcvd,
-		q.Band,
-		q.Country,
-		q.StationCallsign,
-	}
-}
-
-// formatCells lays cells out in indexColumns, one space apart, and fits the
-// line to exactly width cells.
-func formatCells(cells []string, width int) string {
-	fixed := len(indexColumns) - 1
-	for _, c := range indexColumns {
-		fixed += c.width
-	}
-	flex := max(width-fixed, minFlexWidth)
 
 	var b strings.Builder
-	for i, c := range indexColumns {
-		if i > 0 {
-			b.WriteByte(' ')
+	for i, it := range f.Items {
+		w := it.Width
+		switch {
+		case it.Flex:
+			w = max(width-used, minFlexWidth)
+		case it.IsLiteral() || w == 0:
+			b.WriteString(cells[i])
+			continue
 		}
-		w := c.width
-		if w == 0 {
-			w = flex
+		v := truncate(cells[i], w, "…")
+		if it.Left {
+			b.WriteString(pad(v, w))
+		} else {
+			b.WriteString(strings.Repeat(" ", max(w-lipgloss.Width(v), 0)) + v)
 		}
-		b.WriteString(pad(truncate(cells[i], w, "…"), w))
 	}
 	return pad(truncate(b.String(), width, ""), width)
 }
@@ -162,7 +121,7 @@ func (x index) view(st styles, width, height int, numbered bool) string {
 	}
 	lines := make([]string, 0, height)
 	lines = append(lines, st.indexHeader.Render(numberLine("#", nw, width, func(w int) string {
-		return formatCells(indexTitles, w)
+		return formatLine(x.format, x.format.Titles(), w)
 	})))
 	for i := x.top; i < x.top+x.visible(); i++ {
 		lines = append(lines, x.rowView(st, i, width, nw))
@@ -203,7 +162,7 @@ func (x index) rowView(st styles, i, width, nw int) string {
 		return st.muted.Render(line)
 	}
 	line := numberLine(num, nw, width, func(w int) string {
-		return formatCells(indexCells(q, x.marks[q.ID]), w)
+		return formatLine(x.format, x.format.Values(q, x.marks[q.ID], x.unit), w)
 	})
 	if i == x.cursor {
 		return st.cursor.Render(line)

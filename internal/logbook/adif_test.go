@@ -172,7 +172,7 @@ func TestFormatFreqMHz(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			assert.Equal(t, tt.want, formatFreqMHz(tt.in))
+			assert.Equal(t, tt.want, FormatFreqMHz(tt.in))
 		})
 	}
 }

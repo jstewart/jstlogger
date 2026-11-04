@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"jstlogger/internal/indexfmt"
 )
 
 // ValidationError reports one invalid option. Key is the dotted option name
@@ -39,6 +41,7 @@ func (c Config) Validate(station string) error {
 	errs = append(errs, c.validateStations()...)
 	errs = append(errs, c.validateRig()...)
 	errs = append(errs, c.validateLogbook()...)
+	errs = append(errs, c.validateIndex()...)
 	return errors.Join(errs...)
 }
 
@@ -137,4 +140,12 @@ func (c Config) validateLogbook() []error {
 	default:
 		return []error{invalid("logbook.distance_unit", "must be %q or %q, got %q", DistanceUnitKm, DistanceUnitMi, c.Logbook.DistanceUnit)}
 	}
+}
+
+// validateIndex checks that index.format parses as an index format.
+func (c Config) validateIndex() []error {
+	if _, err := indexfmt.Parse(c.Index.Format); err != nil {
+		return []error{invalid("index.format", "%v", err)}
+	}
+	return nil
 }

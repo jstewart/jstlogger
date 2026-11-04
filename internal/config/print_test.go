@@ -33,6 +33,11 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 			c.Logbook = Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitMi}
 			return c
 		}},
+		{name: "custom index format with significant spacing", config: func(t *testing.T) Config {
+			c := fullConfig(t)
+			c.Index = Index{Format: "  %-10c  %-*C 'x' "}
+			return c
+		}},
 		{name: "session effective config", config: func(t *testing.T) Config {
 			return resolve(t, Overrides{Station: "portable", Grid: "FN31", POTA: []string{"US-0001"}, NoRig: true}).Config
 		}},

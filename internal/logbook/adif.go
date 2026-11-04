@@ -240,8 +240,8 @@ func RecordFromQSO(q QSO) adif.Record {
 		add("TIME_OFF", end.Format(adifTime))
 	}
 	add("BAND", q.Band)
-	add("FREQ", formatNull(q.FreqHz, formatFreqMHz))
-	add("FREQ_RX", formatNull(q.FreqRxHz, formatFreqMHz))
+	add("FREQ", formatNull(q.FreqHz, FormatFreqMHz))
+	add("FREQ_RX", formatNull(q.FreqRxHz, FormatFreqMHz))
 	add("MODE", q.Mode)
 	add("SUBMODE", q.Submode)
 	add("RST_SENT", q.RSTSent)
@@ -376,9 +376,9 @@ func parseFreqHz(v string) (int64, error) {
 	return hz, nil
 }
 
-// formatFreqMHz formats hz as decimal MHz with trailing zeros trimmed, e.g.
+// FormatFreqMHz formats hz as decimal MHz with trailing zeros trimmed, e.g.
 // 14075219 as "14.075219" and 7000000 as "7".
-func formatFreqMHz(hz int64) string {
+func FormatFreqMHz(hz int64) string {
 	whole := strconv.FormatInt(hz/1_000_000, 10)
 	frac := strings.TrimRight(fmt.Sprintf("%06d", hz%1_000_000), "0")
 	if frac == "" {

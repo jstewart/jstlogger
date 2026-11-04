@@ -4,7 +4,11 @@
 // package is independent of the TUI.
 package config
 
-import "time"
+import (
+	"time"
+
+	"jstlogger/internal/indexfmt"
+)
 
 // Rig backends accepted in a rig profile's backend option.
 const (
@@ -26,6 +30,9 @@ const (
 	DefaultStationName = "home"
 	// DefaultDistanceUnit is the default logbook.distance_unit.
 	DefaultDistanceUnit = DistanceUnitMi
+	// DefaultIndexFormat is the default index.format, reproducing the
+	// built-in QSO index columns.
+	DefaultIndexFormat = indexfmt.Default
 )
 
 // Distance units accepted in logbook.distance_unit.
@@ -46,6 +53,16 @@ type Config struct {
 	Rig Rig `mapstructure:"rig" toml:"rig"`
 	// Logbook is the [logbook] table.
 	Logbook Logbook `mapstructure:"logbook" toml:"logbook"`
+	// Index is the [index] table.
+	Index Index `mapstructure:"index" toml:"index"`
+}
+
+// Index is the [index] table, which configures the QSO index.
+type Index struct {
+	// Format is the index format string that chooses the index columns; see
+	// package indexfmt for the syntax. Load keeps it verbatim because
+	// spacing is significant.
+	Format string `mapstructure:"format" toml:"format"`
 }
 
 // Logbook is the [logbook] table.
