@@ -33,6 +33,15 @@ const (
 	Mi Unit = "mi"
 )
 
+// FormatDistance formats km in unit, rounded to a whole number and without
+// the unit, e.g. "1235". Any unit other than Mi formats kilometers.
+func FormatDistance(km float64, unit Unit) string {
+	if unit == Mi {
+		km = logbook.KmToMiles(km)
+	}
+	return strconv.FormatFloat(math.Round(km), 'f', 0, 64)
+}
+
 // Format is a parsed index format: a sequence of items, each producing one
 // header title and one cell value per QSO.
 type Format struct {
@@ -99,11 +108,7 @@ var expandos = map[byte]expando{
 		if !q.DistanceKm.Valid {
 			return ""
 		}
-		d := q.DistanceKm.V
-		if unit == Mi {
-			d = logbook.KmToMiles(d)
-		}
-		return strconv.FormatFloat(math.Round(d), 'f', 0, 64)
+		return FormatDistance(q.DistanceKm.V, unit)
 	}},
 	'k': {"Cont", func(q logbook.QSO, _ Unit) string { return q.Cont }},
 	'x': {"DXCC", func(q logbook.QSO, _ Unit) string {

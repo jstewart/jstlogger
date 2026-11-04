@@ -189,6 +189,25 @@ func TestValues(t *testing.T) {
 	}
 }
 
+func TestFormatDistance(t *testing.T) {
+	tests := []struct {
+		name string
+		km   float64
+		unit Unit
+		want string
+	}{
+		{"km rounds", 1234.5, Km, "1235"},
+		{"mi converts", 160.9344, Mi, "100"},
+		{"unknown unit is km", 12.4, Unit(""), "12"},
+		{"zero", 0, Mi, "0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, FormatDistance(tt.km, tt.unit))
+		})
+	}
+}
+
 func TestTitles(t *testing.T) {
 	f, err := Parse("%c|%m%s%r%b%f%C%S%o%n%g%D%k%x%Z%{%H:%M}%{%d}%{%b}")
 	require.NoError(t, err)
