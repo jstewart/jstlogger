@@ -8,6 +8,9 @@ var (
 	muted  = lipgloss.Color("8")
 	good   = lipgloss.Color("2")
 	bad    = lipgloss.Color("1")
+	yellow = lipgloss.Color("3")
+	blue   = lipgloss.Color("4")
+	purple = lipgloss.Color("5")
 )
 
 type styles struct {
@@ -32,6 +35,12 @@ type styles struct {
 	rigFreq   lipgloss.Style
 	stale     lipgloss.Style
 	connected lipgloss.Style
+
+	// qrz, hamQTH and eQSL render the pager's lookup badges for those
+	// sites, each in its own color.
+	qrz    lipgloss.Style
+	hamQTH lipgloss.Style
+	eQSL   lipgloss.Style
 }
 
 func defaultStyles() styles {
@@ -49,5 +58,8 @@ func defaultStyles() styles {
 		rigFreq:     lipgloss.NewStyle().Bold(true),
 		stale:       lipgloss.NewStyle().Foreground(muted).Faint(true),
 		connected:   lipgloss.NewStyle().Foreground(good),
+		qrz:         lipgloss.NewStyle().Bold(true).Foreground(blue),
+		hamQTH:      lipgloss.NewStyle().Bold(true).Foreground(yellow),
+		eQSL:        lipgloss.NewStyle().Bold(true).Foreground(purple),
 	}
 }
