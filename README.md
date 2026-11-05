@@ -86,6 +86,21 @@ limiting never changes the marks.
 they act only on the QSOs within the limit, so `ctrl+t ~A` unmarks just
 the QSOs you can see.
 
+### Showing a QSO
+
+`enter` opens the QSO under the cursor in a pager, in the style of
+NeoMutt's split pager. Five index rows stay above it with the QSO
+highlighted. Below them, the QSO tab lists the date and time (UTC), call,
+band, frequency, mode and submode, the reports sent and received, grid,
+distance (in `[logbook] distance_unit`), state, county, name, comment,
+country and continent. An empty field shows `—`, so the layout doesn't
+shift between QSOs.
+
+`j`/`↓` and `k`/`↑` move to the next or previous QSO in index order
+without leaving the pager, and the index rows follow. `q` or `esc` closes
+the pager and returns to the index with the cursor where it was. While
+the pager is open, `q` closes it instead of quitting; `ctrl+c` still quits.
+
 ### Index format
 
 `[index] format` lays out each row of the QSO index, in the style of
@@ -191,6 +206,7 @@ The index keys follow NeoMutt's generic menu.
 | `ctrl+t`                  | Unmark the QSOs matching a pattern                 |
 | `l`                       | Limit the index to the QSOs matching a pattern     |
 | `ctrl+l`                  | Reload the index and redraw the screen             |
+| `enter`                   | [Show the QSO](#showing-a-qso) in the pager        |
 | `f`                       | Set the rig frequency                              |
 | `m`                       | Set the rig mode                                   |
 | `?`                       | Show or hide full help                             |

@@ -23,6 +23,10 @@ type styles struct {
 	indexHeader lipgloss.Style
 	cursor      lipgloss.Style
 
+	// tab renders the open pager tab and label a field's label.
+	tab   lipgloss.Style
+	label lipgloss.Style
+
 	// rigFreq renders the rig frequency and mode while connected; stale
 	// renders them while they may be out of date.
 	rigFreq   lipgloss.Style
@@ -40,6 +44,8 @@ func defaultStyles() styles {
 		err:         lipgloss.NewStyle().Foreground(bad),
 		indexHeader: lipgloss.NewStyle().Bold(true),
 		cursor:      lipgloss.NewStyle().Reverse(true),
+		tab:         lipgloss.NewStyle().Bold(true).Reverse(true),
+		label:       lipgloss.NewStyle().Bold(true),
 		rigFreq:     lipgloss.NewStyle().Bold(true),
 		stale:       lipgloss.NewStyle().Foreground(muted).Faint(true),
 		connected:   lipgloss.NewStyle().Foreground(good),

@@ -19,6 +19,7 @@ import (
 type Model struct {
 	keys       keyMap
 	indexKeys  indexKeyMap
+	pagerKeys  pagerKeyMap
 	promptKeys promptKeyMap
 	help       help.Model
 	styles     styles
@@ -34,6 +35,8 @@ type Model struct {
 	// logbook is nil when no logbook is open.
 	logbook logbook.Store
 	idx     index
+	// pager is shown in the body, below a strip of the index, while open.
+	pager pager
 
 	// markedFuncs are the index functions that accept the mark-prefix. The
 	// bulk operations register here.
@@ -57,6 +60,7 @@ type Model struct {
 // New returns the root model configured by opts.
 func New(opts ...Option) Model {
 	m := Model{
+		pagerKeys:  defaultPagerKeys(),
 		promptKeys: defaultPromptKeys(),
 		help:       help.New(),
 		styles:     defaultStyles(),
@@ -110,15 +114,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if m.idx.prefix {
 			return m.updatePrefix(msg)
 		}
+		keys := m.globalKeys()
 		switch {
-		case key.Matches(msg, m.keys.Quit):
+		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
+		case key.Matches(msg, keys.Help):
 			m.help.ShowAll = !m.help.ShowAll
-		case key.Matches(msg, m.keys.Freq):
+		case key.Matches(msg, keys.Freq):
 			return m.openPrompt(promptFreq)
-		case key.Matches(msg, m.keys.Mode):
+		case key.Matches(msg, keys.Mode):
 			return m.openPrompt(promptMode)
+		case m.pager.open:
+			return m.updatePager(msg)
 		default:
 			return m.updateIndex(msg)
 		}
@@ -170,7 +177,10 @@ func (m Model) View() tea.View {
 
 	bodyHeight := max(m.height-lipgloss.Height(header)-lipgloss.Height(footer), 0)
 	content := m.styles.muted.Render("No QSOs yet.")
-	if m.logbook != nil {
+	switch {
+	case m.logbook != nil && m.pager.open:
+		content = m.pagerView(m.bodyWidth(), bodyHeight)
+	case m.logbook != nil:
 		content = m.idx.view(m.styles, m.bodyWidth(), bodyHeight, m.prompt == promptJump)
 	}
 	body := m.styles.body.
@@ -205,6 +215,9 @@ func (m Model) footerView() string {
 	var lines []string
 	// The global keys come first so a narrow window still shows them.
 	var keys help.KeyMap = joinedKeyMap{m.keys, m.indexKeys}
+	if m.pager.open {
+		keys = joinedKeyMap{m.globalKeys(), m.pagerKeys}
+	}
 	switch {
 	case m.promptOpen():
 		lines = append(lines, m.promptView())
@@ -228,11 +241,19 @@ func (m Model) bodyWidth() int {
 }
 
 // layout fits the index to the space between the header and footer, which
-// change height with the prompt and help, and returns a command loading any
-// rows that come into view.
+// change height with the prompt and help, or to the strip above the open
+// pager, and returns a command loading any rows that come into view.
 func (m *Model) layout() tea.Cmd {
+	// A reload or bulk delete may have left no QSO for the pager to show.
+	if m.idx.total == 0 {
+		m.pager.open = false
+	}
 	bodyHeight := m.height - lipgloss.Height(m.headerView()) - lipgloss.Height(m.footerView())
-	m.idx.setHeight(bodyHeight - indexChrome)
+	if m.pager.open {
+		m.idx.setHeight(pagerStripHeight(bodyHeight))
+	} else {
+		m.idx.setHeight(bodyHeight - indexChrome)
+	}
 	if m.logbook == nil {
 		return nil
 	}
@@ -273,6 +294,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		x.first()
 	case key.Matches(msg, k.Last):
 		x.last()
+	case key.Matches(msg, k.Open):
+		return m.openPager(), nil
 	case key.Matches(msg, k.Mark):
 		x.toggleMark()
 	case key.Matches(msg, k.Jump):
