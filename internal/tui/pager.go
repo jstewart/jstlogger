@@ -1,11 +1,12 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
@@ -29,6 +30,75 @@ type pager struct {
 	// indexLines is the number of index rows kept above the pager, as
 	// NeoMutt's pager_index_lines.
 	indexLines int
+	// tab is the open tab, kept while moving between QSOs.
+	tab pagerTab
+	// scroll is the first line of the tab shown. The view clamps it to the
+	// tab's length.
+	scroll int
+	// stationName names our station from its callsign and grid; nil names
+	// none.
+	stationName func(callsign, grid string) string
+
+	// The index rows lack some fields, so the tabs other than the QSO tab
+	// show the whole QSO, fetched from the logbook. fetched is the ID of
+	// the QSO that qso, or err, is for; pending is the ID being fetched.
+	fetched int64
+	pending int64
+	qso     logbook.QSO
+	err     error
+}
+
+// pagerQSOMsg carries the whole QSO, or the error fetching it, for the
+// pager.
+type pagerQSOMsg struct {
+	id  int64
+	qso logbook.QSO
+	err error
+}
+
+// fetchQSOCmd returns a command that fetches the whole QSO with the given
+// ID.
+func fetchQSOCmd(s logbook.Store, id int64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		q, err := s.Get(ctx, id)
+		if err != nil {
+			err = fmt.Errorf("load QSO %d: %w", id, err)
+		}
+		return pagerQSOMsg{id: id, qso: q, err: err}
+	}
+}
+
+// fetch returns a command fetching the whole QSO under the index cursor,
+// unless it has been fetched or is being fetched.
+func (m *Model) fetch() tea.Cmd {
+	q, ok := m.idx.current()
+	if !m.pager.open || m.logbook == nil || !ok || q.ID == m.pager.fetched || q.ID == m.pager.pending {
+		return nil
+	}
+	m.pager.pending = q.ID
+	return fetchQSOCmd(m.logbook, q.ID)
+}
+
+// applyQSO keeps a fetched QSO for the pager. A QSO the cursor has moved
+// off is dropped.
+func (p *pager) applyQSO(msg pagerQSOMsg, current int64) {
+	if msg.id == p.pending {
+		p.pending = 0
+	}
+	if msg.id != current {
+		return
+	}
+	p.fetched, p.qso, p.err = msg.id, msg.qso, msg.err
+}
+
+// WithStationName names our station on the pager's Station tab with name,
+// called with the QSO's station callsign and grid.
+func WithStationName(name func(callsign, grid string) string) Option {
+	return func(m *Model) {
+		m.pager.stationName = name
+	}
 }
 
 // WithPagerIndexLines keeps n index rows above the pager, or none when n is
@@ -41,9 +111,15 @@ func WithPagerIndexLines(n int) Option {
 
 // pagerKeyMap holds the keybindings handled while the pager is open.
 type pagerKeyMap struct {
-	Next  key.Binding
-	Prev  key.Binding
-	Close key.Binding
+	Next     key.Binding
+	Prev     key.Binding
+	NextTab  key.Binding
+	PrevTab  key.Binding
+	PageDown key.Binding
+	PageUp   key.Binding
+	Top      key.Binding
+	Bottom   key.Binding
+	Close    key.Binding
 	// Quit replaces the global quit binding, since q closes the pager.
 	Quit key.Binding
 }
@@ -58,6 +134,30 @@ func defaultPagerKeys() pagerKeyMap {
 			key.WithKeys("k", "up"),
 			key.WithHelp("k/↑", "prev QSO"),
 		),
+		NextTab: key.NewBinding(
+			key.WithKeys("tab"),
+			key.WithHelp("tab", "next tab"),
+		),
+		PrevTab: key.NewBinding(
+			key.WithKeys("shift+tab"),
+			key.WithHelp("shift+tab", "prev tab"),
+		),
+		PageDown: key.NewBinding(
+			key.WithKeys("space", "pgdown"),
+			key.WithHelp("space/pgdn", "page down"),
+		),
+		PageUp: key.NewBinding(
+			key.WithKeys("-", "pgup"),
+			key.WithHelp("-/pgup", "page up"),
+		),
+		Top: key.NewBinding(
+			key.WithKeys("home"),
+			key.WithHelp("home", "top"),
+		),
+		Bottom: key.NewBinding(
+			key.WithKeys("end"),
+			key.WithHelp("end", "bottom"),
+		),
 		Close: key.NewBinding(
 			key.WithKeys("q", "esc"),
 			key.WithHelp("q/esc", "close"),
@@ -70,11 +170,15 @@ func defaultPagerKeys() pagerKeyMap {
 }
 
 func (k pagerKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Next, k.Prev, k.Close}
+	return []key.Binding{k.Next, k.Prev, k.NextTab, k.Close}
 }
 
 func (k pagerKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Next, k.Prev, k.Close}}
+	return [][]key.Binding{
+		{k.Next, k.Prev, k.Close},
+		{k.NextTab, k.PrevTab},
+		{k.PageDown, k.PageUp, k.Top, k.Bottom},
+	}
 }
 
 // globalKeys returns the global keybindings in effect: while the pager is
@@ -87,28 +191,94 @@ func (m Model) globalKeys() keyMap {
 	return k
 }
 
-// openPager opens the pager on the QSO under the index cursor. It does
-// nothing until the index has a QSO to show.
+// openPager opens the pager on the QSO under the index cursor, at the top
+// of the tab last open. It does nothing until the index has a QSO to show.
 func (m Model) openPager() Model {
 	if m.idx.loaded && m.idx.total > 0 {
 		m.pager.open = true
+		m.pager.scroll = 0
 	}
 	return m
 }
 
+// closePager closes the pager. The fetched QSO is forgotten, so reopening
+// shows any change made to it since.
+func (m Model) closePager() Model {
+	m.pager.open = false
+	m.pager.fetched, m.pager.pending, m.pager.qso, m.pager.err = 0, 0, logbook.QSO{}, nil
+	return m
+}
+
 // updatePager handles a key press in the pager. Model.layout fits the index
-// to the strip or the whole body again, and loads the rows the cursor moves
-// to.
+// to the strip or the whole body again, loads the rows the cursor moves to
+// and fetches the QSO under it.
 func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	k, p := m.pagerKeys, &m.pager
+	room := m.pagerRoom(m.bodyHeight())
+	bottom := max(len(m.pagerContent(m.bodyWidth()))-room, 0)
+	p.scroll = min(p.scroll, bottom)
 	switch {
-	case key.Matches(msg, m.pagerKeys.Close):
-		m.pager.open = false
-	case key.Matches(msg, m.pagerKeys.Next):
+	case key.Matches(msg, k.Close):
+		return m.closePager(), nil
+	case key.Matches(msg, k.Next):
 		m.idx.next()
-	case key.Matches(msg, m.pagerKeys.Prev):
+		p.scroll = 0
+	case key.Matches(msg, k.Prev):
 		m.idx.prev()
+		p.scroll = 0
+	case key.Matches(msg, k.NextTab):
+		p.tab, p.scroll = p.tab.next(), 0
+	case key.Matches(msg, k.PrevTab):
+		p.tab, p.scroll = p.tab.prev(), 0
+	case key.Matches(msg, k.PageDown):
+		p.scroll = min(p.scroll+max(room, 1), bottom)
+	case key.Matches(msg, k.PageUp):
+		p.scroll = max(p.scroll-max(room, 1), 0)
+	case key.Matches(msg, k.Top):
+		p.scroll = 0
+	case key.Matches(msg, k.Bottom):
+		p.scroll = bottom
 	}
 	return m, nil
+}
+
+// pagerRoom is the number of tab lines shown in a pager height lines high,
+// below the index strip and tab bar and above the status line.
+func (m Model) pagerRoom(height int) int {
+	return max(height-m.idx.height-pagerChrome, 0)
+}
+
+// pagerContent returns the lines of the open tab for the QSO under the
+// cursor, fitted to width cells.
+func (m Model) pagerContent(width int) []string {
+	st, p := m.styles, m.pager
+	q, ok := m.idx.current()
+	if !ok {
+		return []string{st.muted.Render("Loading…")}
+	}
+	if p.tab == tabQSO {
+		return strings.Split(qsoTab(st, q, m.idx.unit, width), "\n")
+	}
+	switch {
+	case p.fetched != q.ID:
+		return []string{st.muted.Render("Loading…")}
+	case p.err != nil:
+		return []string{st.err.Render(truncate(p.err.Error(), width, "…"))}
+	}
+	var tab string
+	switch p.tab {
+	case tabStation:
+		var name string
+		if p.stationName != nil {
+			name = p.stationName(p.qso.StationCallsign, p.qso.MyGridsquare)
+		}
+		tab = stationTab(st, p.qso, name, width)
+	case tabQSL:
+		tab = qslTab(st, p.qso, width)
+	case tabADIF:
+		tab = adifTab(st, p.qso, width)
+	}
+	return strings.Split(tab, "\n")
 }
 
 // pagerStripHeight is the number of index rows shown above a pager in a
@@ -120,8 +290,8 @@ func pagerStripHeight(lines, height int) int {
 }
 
 // pagerView renders the pager in width by height cells: the index strip,
-// with the cursor's row highlighted, the tab bar, the QSO under the cursor
-// and the index status line.
+// with the cursor's row highlighted, the tab bar, the open tab scrolled to
+// the pager's scroll and the index status line.
 func (m Model) pagerView(width, height int) string {
 	st, x := m.styles, m.idx
 	lines := make([]string, 0, height)
@@ -132,12 +302,11 @@ func (m Model) pagerView(width, height int) string {
 	for len(lines) < x.height {
 		lines = append(lines, "")
 	}
-	lines = append(lines, tabBar(st, "QSO", width))
-	if q, ok := x.current(); ok {
-		lines = append(lines, strings.Split(qsoTab(st, q, x.unit, width), "\n")...)
-	} else {
-		lines = append(lines, st.muted.Render("Loading…"))
-	}
+	lines = append(lines, tabBar(st, m.pager.tab, width))
+	content := m.pagerContent(width)
+	room := m.pagerRoom(height)
+	scroll := min(m.pager.scroll, max(len(content)-room, 0))
+	lines = append(lines, content[scroll:]...)
 	// Keep the status line at the bottom of the body, cutting off what
 	// doesn't fit above it.
 	lines = lines[:min(len(lines), max(height-1, 0))]
@@ -145,14 +314,6 @@ func (m Model) pagerView(width, height int) string {
 		lines = append(lines, "")
 	}
 	return strings.Join(append(lines, x.statusView(st, width)), "\n")
-}
-
-// tabBar renders the pager's tab bar with the open tab's name, ruled to
-// width cells.
-func tabBar(st styles, name string, width int) string {
-	tab := st.tab.Render(truncate(" "+name+" ", width, ""))
-	rule := strings.Repeat("─", max(width-lipgloss.Width(tab), 0))
-	return tab + st.muted.Render(rule)
 }
 
 // qsoTab renders the QSO tab: one labeled row per field, each fitted to
@@ -183,7 +344,7 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 		date = q.StartUTC.UTC().Format("2006-01-02 15:04:05") + " UTC"
 	}
 
-	fields := []struct{ label, value string }{
+	return pagerRows(st, []pagerRow{
 		{"Date/time", date},
 		{"Call", q.Call},
 		{"Band", q.Band},
@@ -199,28 +360,5 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 		{"Comment", q.Comment},
 		{"Country", q.Country},
 		{"Continent", q.Cont},
-	}
-	lw := 0
-	for _, f := range fields {
-		lw = max(lw, lipgloss.Width(f.label))
-	}
-	lines := make([]string, len(fields))
-	for i, f := range fields {
-		label := st.label.Render(pad(truncate(f.label, width, ""), min(lw, width)))
-		room := max(width-lw-2, 0)
-		if room == 0 {
-			lines[i] = label
-			continue
-		}
-		// A value broken over lines, such as an imported comment, would
-		// push the rows below it down.
-		value := strings.Join(strings.Fields(f.value), " ")
-		if value == "" {
-			value = st.muted.Render(truncate(pagerEmpty, room, ""))
-		} else {
-			value = truncate(value, room, "…")
-		}
-		lines[i] = label + "  " + value
-	}
-	return strings.Join(lines, "\n")
+	}, width)
 }

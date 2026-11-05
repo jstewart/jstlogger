@@ -86,7 +86,7 @@ func TestPagerIndexLinesOption(t *testing.T) {
 
 	assert.Equal(t, 3, m.idx.height, "the index is cut to the configured strip")
 	lines := strings.Split(plain(m.View().Content), "\n")
-	assert.True(t, strings.HasPrefix(strings.TrimSpace(lines[1+3]), "QSO ─"), "the tab bar follows the strip: %q", lines[1+3])
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(lines[1+3]), "QSO  Station  QSL  ADIF ─"), "the tab bar follows the strip: %q", lines[1+3])
 }
 
 func TestPagerIndexLinesShrinkInShortWindows(t *testing.T) {
