@@ -302,3 +302,22 @@ func TestQSOTabTooNarrowForValues(t *testing.T) {
 		assert.LessOrEqual(t, lipgloss.Width(line), 10, "lines fit the width: %q", line)
 	}
 }
+
+func TestQSOTabMode(t *testing.T) {
+	tests := []struct {
+		name          string
+		mode, submode string
+		want          string
+	}{
+		{"mode and submode", "MFSK", "FT4", "Mode       MFSK (FT4)"},
+		{"mode only", "SSB", "", "Mode       SSB"},
+		{"submode only", "", "FT4", "Mode       FT4"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := logbook.QSO{Mode: tt.mode, Submode: tt.submode}
+			tab := plain(qsoTab(defaultStyles(), q, indexfmt.Km, 80))
+			assert.Contains(t, strings.Split(tab, "\n"), tt.want)
+		})
+	}
+}

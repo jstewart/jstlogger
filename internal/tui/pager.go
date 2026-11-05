@@ -150,7 +150,11 @@ func tabBar(st styles, name string, width int) string {
 // kilometers.
 func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 	mode := q.Mode
-	if q.Submode != "" {
+	switch {
+	case q.Submode == "":
+	case mode == "":
+		mode = q.Submode
+	default:
 		mode += " (" + q.Submode + ")"
 	}
 	var freq, dist string
