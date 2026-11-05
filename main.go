@@ -43,6 +43,9 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		tui.WithVersion(version),
 		tui.WithIndexFormat(format, indexfmt.Unit(session.Config.Logbook.DistanceUnit)),
 		tui.WithPagerIndexLines(session.Config.Index.PagerIndexLines),
+		tui.WithStationName(func(callsign, grid string) string {
+			return config.StationName(session.Config.Stations, callsign, grid)
+		}),
 	}
 
 	opts, ok := rigOptions(session)
