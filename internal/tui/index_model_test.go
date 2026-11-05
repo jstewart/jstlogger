@@ -111,10 +111,10 @@ func runIndex(t *testing.T, m Model, cmd tea.Cmd) Model {
 
 // newIndexModel returns a Model showing an index of n QSOs in a width by
 // height window, with the initial load done.
-func newIndexModel(t *testing.T, n, width, height int) (Model, *fakeIndexStore) {
+func newIndexModel(t *testing.T, n, width, height int, opts ...Option) (Model, *fakeIndexStore) {
 	t.Helper()
 	s := &fakeIndexStore{qsos: testQSOs(n)}
-	m := New(WithLogbook(s))
+	m := New(append([]Option{WithLogbook(s)}, opts...)...)
 	m = runIndex(t, m, m.Init())
 	m, cmd := update(t, m, tea.WindowSizeMsg{Width: width, Height: height})
 	return runIndex(t, m, cmd), s

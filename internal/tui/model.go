@@ -66,6 +66,7 @@ func New(opts ...Option) Model {
 		styles:     defaultStyles(),
 		input:      newInput(),
 		idx:        newIndex(),
+		pager:      pager{indexLines: defaultPagerIndexLines},
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -250,7 +251,7 @@ func (m *Model) layout() tea.Cmd {
 	}
 	bodyHeight := m.height - lipgloss.Height(m.headerView()) - lipgloss.Height(m.footerView())
 	if m.pager.open {
-		m.idx.setHeight(pagerStripHeight(bodyHeight))
+		m.idx.setHeight(pagerStripHeight(m.pager.indexLines, bodyHeight))
 	} else {
 		m.idx.setHeight(bodyHeight - indexChrome)
 	}
