@@ -205,12 +205,23 @@ func TestValidate(t *testing.T) {
 			wantKeys: []string{"index.format"},
 		},
 		{
+			name:     "pager_index_lines may be zero",
+			mutate:   func(c *Config) { c.Index.PagerIndexLines = 0 },
+			wantKeys: nil,
+		},
+		{
+			name:     "pager_index_lines must not be negative",
+			mutate:   func(c *Config) { c.Index.PagerIndexLines = -1 },
+			wantKeys: []string{"index.pager_index_lines"},
+		},
+		{
 			name: "multiple failures in sorted key order",
 			mutate: func(c *Config) {
 				setProfile(c, "portable", func(p *RigProfile) { p.Port = 0 })
 				setProfile(c, "ic7300", func(p *RigProfile) { p.Backend = "bogus" })
 				c.Logbook.DistanceUnit = "bogus"
 				c.Index.Format = "%q"
+				c.Index.PagerIndexLines = -1
 				for _, n := range []string{"portable", "home"} {
 					s := c.Stations[n]
 					s.Gridsquare = "bad"
@@ -224,6 +235,7 @@ func TestValidate(t *testing.T) {
 				"rig.profiles.portable.port",
 				"logbook.distance_unit",
 				"index.format",
+				"index.pager_index_lines",
 			},
 		},
 	}

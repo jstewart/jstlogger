@@ -92,7 +92,7 @@ func TestLoadDefaultsInCode(t *testing.T) {
 	assert.Empty(t, c.Rig.Profile)
 	assert.Empty(t, c.Rig.Profiles)
 	assert.Equal(t, Logbook{DistanceUnit: DefaultDistanceUnit}, c.Logbook)
-	assert.Equal(t, Index{Format: DefaultIndexFormat}, c.Index)
+	assert.Equal(t, Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines}, c.Index)
 }
 
 func TestLoadIndex(t *testing.T) {
@@ -102,14 +102,19 @@ func TestLoadIndex(t *testing.T) {
 		want    Index
 	}{
 		{
-			name:    "section absent uses the default format",
+			name:    "section absent uses the defaults",
 			content: "",
-			want:    Index{Format: DefaultIndexFormat},
+			want:    Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines},
 		},
 		{
 			name:    "custom format is loaded verbatim",
 			content: "[index]\nformat = \"  %-10c  %-*C \"\n",
-			want:    Index{Format: "  %-10c  %-*C "},
+			want:    Index{Format: "  %-10c  %-*C ", PagerIndexLines: DefaultPagerIndexLines},
+		},
+		{
+			name:    "custom pager_index_lines",
+			content: "[index]\npager_index_lines = 3\n",
+			want:    Index{Format: DefaultIndexFormat, PagerIndexLines: 3},
 		},
 	}
 	for _, tt := range tests {
@@ -292,6 +297,38 @@ func TestLoadPollInterval(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, c.Rig.PollInterval)
+		})
+	}
+}
+
+func TestLoadPagerIndexLines(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		want    int
+		wantErr []string
+	}{
+		{name: "whole number", value: `7`, want: 7},
+		{name: "zero hides the strip", value: `0`, want: 0},
+		{name: "negative loads (validation rejects it)", value: `-1`, want: -1},
+		{name: "fraction", value: `2.5`, wantErr: []string{"index.pager_index_lines", "2.5"}},
+		{name: "whole float", value: `10.0`, wantErr: []string{"index.pager_index_lines", "10"}},
+		{name: "string", value: `"10"`, wantErr: []string{"index.pager_index_lines", "10"}},
+		{name: "boolean", value: `true`, wantErr: []string{"index.pager_index_lines", "true"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := writeConfig(t, "[index]\npager_index_lines = "+tt.value+"\n")
+			c, _, err := Load(p, true)
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				for _, s := range tt.wantErr {
+					assert.Contains(t, err.Error(), s)
+				}
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, c.Index.PagerIndexLines)
 		})
 	}
 }

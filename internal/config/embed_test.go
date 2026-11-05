@@ -78,7 +78,8 @@ distance_unit = "mi"             # "mi" | "km"
 
 [index]
 # Columns of the QSO index; see the README's Index format section.
-format = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S"
+format            = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S"
+pager_index_lines = 10   # Index rows kept above the QSO pager
 `
 
 func TestDefaultTemplateMatchesIssue(t *testing.T) {
@@ -141,6 +142,6 @@ func TestFullExampleLoads(t *testing.T) {
 			},
 		},
 		Logbook: Logbook{DistanceUnit: DistanceUnitMi},
-		Index:   Index{Format: indexfmt.Default},
+		Index:   Index{Format: indexfmt.Default, PagerIndexLines: 10},
 	}, c)
 }
