@@ -217,15 +217,14 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	room := m.pagerRoom(m.bodyHeight())
 	bottom := max(len(m.pagerContent(m.bodyWidth()))-room, 0)
 	p.scroll = min(p.scroll, bottom)
+	cursor := m.idx.cursor
 	switch {
 	case key.Matches(msg, k.Close):
 		return m.closePager(), nil
 	case key.Matches(msg, k.Next):
 		m.idx.next()
-		p.scroll = 0
 	case key.Matches(msg, k.Prev):
 		m.idx.prev()
-		p.scroll = 0
 	case key.Matches(msg, k.NextTab):
 		p.tab, p.scroll = p.tab.next(), 0
 	case key.Matches(msg, k.PrevTab):
@@ -238,6 +237,11 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		p.scroll = 0
 	case key.Matches(msg, k.Bottom):
 		p.scroll = bottom
+	}
+	// Another QSO starts at the top; j or k at the end of the index leaves
+	// the scroll alone.
+	if m.idx.cursor != cursor {
+		p.scroll = 0
 	}
 	return m, nil
 }

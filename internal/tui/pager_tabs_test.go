@@ -405,6 +405,21 @@ func TestPagerScrollsADIFTab(t *testing.T) {
 	assert.Equal(t, 0, m.pager.scroll, "moving QSO resets the scroll")
 }
 
+func TestPagerKeepsScrollAtIndexEnds(t *testing.T) {
+	m, s := newIndexModel(t, 1, 80, 14)
+	fields := map[string]string{}
+	for i := range 30 {
+		fields[fmt.Sprintf("APP_F%02d", i)] = fmt.Sprintf("v%02d", i)
+	}
+	s.qsos[0].Fields = fields
+	m = pressPager(t, m, enter(), shiftTab(), keyPress(' ', 0))
+	scroll := m.pager.scroll
+	require.Positive(t, scroll)
+
+	m = pressPager(t, m, keyPress('j', 0), keyPress('k', 0))
+	assert.Equal(t, scroll, m.pager.scroll, "j/k that can't move keep the scroll")
+}
+
 func TestPagerHelpListsTabKeys(t *testing.T) {
 	m, _ := newIndexModel(t, 5, 120, 24)
 	m = press(t, m, enter())
