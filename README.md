@@ -98,6 +98,14 @@ distance (in `[logbook] distance_unit`), state, county, name, comment,
 country and continent. An empty field shows `—`, so the layout doesn't
 shift between QSOs.
 
+Next to the call, the badges `[Q] [H] [E]` link to the station's page on
+QRZ, HamQTH and eQSL. In a terminal that supports OSC 8 hyperlinks
+(iTerm2, kitty, WezTerm, Ghostty, VTE…), click or Cmd-click a badge to
+open it. From the keyboard, `gq`, `gh` and `ge` open the same pages with
+`open` on macOS or `xdg-open` on Linux; `esc` after `g` cancels. The
+links use the base callsign, so `VE3/W1AW/P` looks up `W1AW`. The badges
+are left out when the pager is too narrow for them.
+
 `j`/`↓` and `k`/`↑` move to the next or previous QSO in index order
 without leaving the pager, and the index rows follow. `q` or `esc` closes
 the pager and returns to the index with the cursor where it was. While
