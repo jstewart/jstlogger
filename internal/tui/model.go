@@ -149,6 +149,10 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case indexBulkMsg:
 		return m.applyBulk(msg)
 
+	case pagerQSOMsg:
+		q, _ := m.idx.current()
+		m.pager.applyQSO(msg, q.ID)
+
 	case rig.StateChanged:
 		m.rigState.state = msg.State
 		m.rigState.haveState = true
@@ -176,7 +180,7 @@ func (m Model) View() tea.View {
 	header := m.headerView()
 	footer := m.footerView()
 
-	bodyHeight := max(m.height-lipgloss.Height(header)-lipgloss.Height(footer), 0)
+	bodyHeight := m.bodyHeight()
 	content := m.styles.muted.Render("No QSOs yet.")
 	switch {
 	case m.logbook != nil && m.pager.open:
@@ -236,6 +240,11 @@ func (m Model) footerView() string {
 		Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
+// bodyHeight is the height of the body, between the header and footer.
+func (m Model) bodyHeight() int {
+	return max(m.height-lipgloss.Height(m.headerView())-lipgloss.Height(m.footerView()), 0)
+}
+
 // bodyWidth is the width inside the body's padding.
 func (m Model) bodyWidth() int {
 	return max(m.width-m.styles.body.GetHorizontalFrameSize(), 0)
@@ -243,11 +252,12 @@ func (m Model) bodyWidth() int {
 
 // layout fits the index to the space between the header and footer, which
 // change height with the prompt and help, or to the strip above the open
-// pager, and returns a command loading any rows that come into view.
+// pager, and returns a command loading any rows that come into view and
+// the whole QSO the pager shows.
 func (m *Model) layout() tea.Cmd {
 	// A reload or bulk delete may have left no QSO for the pager to show.
-	if m.idx.total == 0 {
-		m.pager.open = false
+	if m.idx.total == 0 && m.pager.open {
+		*m = m.closePager()
 	}
 	bodyHeight := m.height - lipgloss.Height(m.headerView()) - lipgloss.Height(m.footerView())
 	if m.pager.open {
@@ -262,7 +272,7 @@ func (m *Model) layout() tea.Cmd {
 	for _, b := range m.idx.missing() {
 		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
 	}
-	return tea.Batch(cmds...)
+	return tea.Batch(append(cmds, m.fetch())...)
 }
 
 // updateIndex handles a key press on the QSO index.
