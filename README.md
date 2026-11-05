@@ -103,6 +103,24 @@ without leaving the pager, and the index rows follow. `q` or `esc` closes
 the pager and returns to the index with the cursor where it was. While
 the pager is open, `q` closes it instead of quitting; `ctrl+c` still quits.
 
+`tab` and `shift+tab` cycle through the pager's tabs, and the tab bar
+shows which one is active. The tab stays the same as you move between
+QSOs.
+
+- **QSO** — the details above.
+- **Station** — the station callsign, operator, station grid, TX power
+  and station name, followed by any `MY_*` ADIF fields such as `MY_RIG`
+  or `MY_POTA_REF`. The station name shows when the QSO's station
+  callsign and grid match exactly one `[stations.*]` entry, ignoring
+  case; otherwise it is blank.
+- **QSL** — one row per confirmation (card, LoTW, eQSL…) with its sent
+  and received status and dates.
+- **ADIF** — every field of the QSO as ADIF name/value pairs, sorted by
+  name, which is handy for checking an import.
+
+A tab taller than the pager scrolls: `space` or `pgdown` pages down, `-`
+or `pgup` pages up, and `home` and `end` jump to the top and bottom.
+
 ### Index format
 
 `[index] format` lays out each row of the QSO index, in the style of
