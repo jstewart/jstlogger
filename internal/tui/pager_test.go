@@ -285,3 +285,20 @@ func TestPagerClosesWhenTheIndexEmpties(t *testing.T) {
 	assert.False(t, m.pager.open, "there is no QSO left to show")
 	assert.Contains(t, m.View().Content, "No QSOs yet.")
 }
+
+func TestQSOTabKeepsMultilineValuesOnOneRow(t *testing.T) {
+	q := fullQSO()
+	q.Comment = "line one\r\nline two\n"
+	tab := plain(qsoTab(defaultStyles(), q, indexfmt.Km, 80))
+	assert.Equal(t, lipgloss.Height(plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, 80))), lipgloss.Height(tab))
+	assert.Contains(t, tab, "line one line two")
+	assert.NotContains(t, tab, "\r")
+}
+
+func TestQSOTabTooNarrowForValues(t *testing.T) {
+	tab := plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, 10))
+	assert.NotContains(t, tab, "JA1ABC", "there is no room for values")
+	for _, line := range strings.Split(tab, "\n") {
+		assert.LessOrEqual(t, lipgloss.Width(line), 10, "lines fit the width: %q", line)
+	}
+}

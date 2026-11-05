@@ -102,7 +102,8 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 
 // pagerStripHeight is the number of index rows shown above a pager in a
 // body height lines high: pagerIndexLines, but no more than half the lines
-// the chrome leaves, so the QSO stays in view in a short window.
+// the chrome leaves, so a short window still shows the top of the QSO tab.
+// A window too short for the whole tab cuts off its last rows.
 func pagerStripHeight(height int) int {
 	return min(pagerIndexLines, max(height-pagerChrome, 0)/2)
 }
@@ -126,13 +127,13 @@ func (m Model) pagerView(width, height int) string {
 	} else {
 		lines = append(lines, st.muted.Render("Loading…"))
 	}
-	// Keep the status line at the bottom of the body.
+	// Keep the status line at the bottom of the body, cutting off what
+	// doesn't fit above it.
 	lines = lines[:min(len(lines), max(height-1, 0))]
 	for len(lines) < height-1 {
 		lines = append(lines, "")
 	}
-	lines = append(lines, x.statusView(st, width))
-	return strings.Join(lines[:min(len(lines), max(height, 1))], "\n")
+	return strings.Join(append(lines, x.statusView(st, width)), "\n")
 }
 
 // tabBar renders the pager's tab bar with the open tab's name, ruled to
@@ -192,13 +193,17 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 	for i, f := range fields {
 		label := st.label.Render(pad(truncate(f.label, width, ""), min(lw, width)))
 		room := max(width-lw-2, 0)
-		value := st.muted.Render(truncate(pagerEmpty, room, ""))
-		if f.value != "" {
-			value = truncate(f.value, room, "…")
-		}
 		if room == 0 {
 			lines[i] = label
 			continue
+		}
+		// A value broken over lines, such as an imported comment, would
+		// push the rows below it down.
+		value := strings.Join(strings.Fields(f.value), " ")
+		if value == "" {
+			value = st.muted.Render(truncate(pagerEmpty, room, ""))
+		} else {
+			value = truncate(value, room, "…")
 		}
 		lines[i] = label + "  " + value
 	}
