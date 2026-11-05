@@ -311,10 +311,10 @@ func TestLoadPagerIndexLines(t *testing.T) {
 		{name: "whole number", value: `7`, want: 7},
 		{name: "zero hides the strip", value: `0`, want: 0},
 		{name: "negative loads (validation rejects it)", value: `-1`, want: -1},
-		{name: "fraction", value: `2.5`, wantErr: []string{"index.pager_index_lines", "2.5"}},
-		{name: "whole float", value: `10.0`, wantErr: []string{"index.pager_index_lines", "10"}},
-		{name: "string", value: `"10"`, wantErr: []string{"index.pager_index_lines", "10"}},
-		{name: "boolean", value: `true`, wantErr: []string{"index.pager_index_lines", "true"}},
+		{name: "fraction", value: `2.5`, wantErr: []string{"index.pager_index_lines", "got 2.5"}},
+		{name: "whole float", value: `10.0`, wantErr: []string{"index.pager_index_lines", "got 10"}},
+		{name: "string", value: `"10"`, wantErr: []string{"index.pager_index_lines", "got 10"}},
+		{name: "boolean", value: `true`, wantErr: []string{"index.pager_index_lines", "got true"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
