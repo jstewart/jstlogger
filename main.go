@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/pflag"
 
+	"jstlogger/internal/browser"
 	"jstlogger/internal/config"
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
@@ -46,6 +47,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		tui.WithStationName(func(callsign, grid string) string {
 			return config.StationName(session.Config.Stations, callsign, grid)
 		}),
+		tui.WithURLOpener(browser.Open),
 	}
 
 	opts, ok := rigOptions(session)
