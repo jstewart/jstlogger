@@ -8,8 +8,8 @@ import "strings"
 // matches, or when more than one does, since the match is then ambiguous.
 //
 // QSOs do not yet record which station logged them, so this is a stand-in
-// that infers it from the QSO's MY_* fields until the station name is
-// stored on each QSO.
+// that infers it from the QSO's station callsign and grid until the station
+// name is stored on each QSO.
 func StationName(stations map[string]Station, callsign, grid string) string {
 	callsign = strings.TrimSpace(callsign)
 	grid = strings.TrimSpace(grid)
