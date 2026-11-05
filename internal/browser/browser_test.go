@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,4 +79,15 @@ func TestRunSucceeds(t *testing.T) {
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nexit 0\n"), 0o700))
 
 	assert.NoError(t, run(context.Background(), script, "https://example.com"))
+}
+
+// TestRunDoesNotWaitForBrowser covers an opener such as xdg-open that
+// exits after starting a browser which keeps the opener's output open.
+func TestRunDoesNotWaitForBrowser(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fake-open")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nsleep 30 &\nexit 0\n"), 0o700))
+
+	start := time.Now()
+	assert.NoError(t, run(context.Background(), script, "https://example.com"))
+	assert.Less(t, time.Since(start), 10*time.Second)
 }

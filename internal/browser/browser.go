@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // Open opens url in the user's browser. It returns an error wrapping
@@ -39,12 +40,21 @@ func command(goos string) (string, error) {
 	}
 }
 
+// outputDelay bounds how long run waits for the opener's output to close
+// after it exits. xdg-open can start a browser that inherits its output and
+// keeps it open for as long as the browser runs.
+const outputDelay = time.Second
+
 // run runs name with url as its only argument and waits for it to exit.
 // The URL is passed as a single argument, never through a shell. When the
 // command fails, any output it produced is included in the error.
 func run(ctx context.Context, name, url string) error {
-	out, err := exec.CommandContext(ctx, name, url).CombinedOutput()
-	if err == nil {
+	cmd := exec.CommandContext(ctx, name, url)
+	cmd.WaitDelay = outputDelay
+	out, err := cmd.CombinedOutput()
+	if err == nil || errors.Is(err, exec.ErrWaitDelay) {
+		// ErrWaitDelay means the opener succeeded but something it started
+		// still holds its output.
 		return nil
 	}
 	if msg := strings.TrimSpace(string(out)); msg != "" {
