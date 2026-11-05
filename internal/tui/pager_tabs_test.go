@@ -316,6 +316,16 @@ func TestPagerDropsStaleFetch(t *testing.T) {
 	assert.Contains(t, plain(m.pagerBody(t)), "FRESH2")
 }
 
+func TestPagerDropsFetchAfterClose(t *testing.T) {
+	m, s := newIndexModel(t, 3, 80, 40)
+	m = press(t, m, enter(), tab(), esc())
+	q := s.qsos[0]
+	require.Equal(t, q.ID, m.mustCurrentID(t))
+
+	m, _ = update(t, m, pagerQSOMsg{id: q.ID, qso: q})
+	assert.NotEqual(t, q.ID, m.pager.fetched, "a fetch landing after close is dropped, so reopening fetches afresh")
+}
+
 // mustCurrentID returns the ID of the QSO under the index cursor.
 func (m Model) mustCurrentID(t *testing.T) int64 {
 	t.Helper()

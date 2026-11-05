@@ -82,12 +82,12 @@ func (m *Model) fetch() tea.Cmd {
 }
 
 // applyQSO keeps a fetched QSO for the pager. A QSO the cursor has moved
-// off is dropped.
+// off, or one landing after the pager closed, is dropped.
 func (p *pager) applyQSO(msg pagerQSOMsg, current int64) {
 	if msg.id == p.pending {
 		p.pending = 0
 	}
-	if msg.id != current {
+	if !p.open || msg.id != current {
 		return
 	}
 	p.fetched, p.qso, p.err = msg.id, msg.qso, msg.err
