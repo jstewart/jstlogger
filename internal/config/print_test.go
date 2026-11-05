@@ -35,7 +35,12 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 		}},
 		{name: "custom index format with significant spacing", config: func(t *testing.T) Config {
 			c := fullConfig(t)
-			c.Index = Index{Format: "  %-10c  %-*C 'x' "}
+			c.Index = Index{Format: "  %-10c  %-*C 'x' ", PagerIndexLines: DefaultPagerIndexLines}
+			return c
+		}},
+		{name: "custom pager_index_lines", config: func(t *testing.T) Config {
+			c := fullConfig(t)
+			c.Index.PagerIndexLines = 3
 			return c
 		}},
 		{name: "session effective config", config: func(t *testing.T) Config {

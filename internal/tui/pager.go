@@ -11,9 +11,9 @@ import (
 	"jstlogger/internal/logbook"
 )
 
-// pagerIndexLines is the number of index rows kept above the pager, as
-// NeoMutt's pager_index_lines.
-const pagerIndexLines = 5
+// defaultPagerIndexLines is the number of index rows kept above the pager
+// unless WithPagerIndexLines sets another.
+const defaultPagerIndexLines = 10
 
 // pagerChrome is the number of body lines the pager uses besides the index
 // strip and the tab: the tab bar and the index status line.
@@ -26,6 +26,17 @@ const pagerEmpty = "—"
 // of index rows, in the style of NeoMutt's pager.
 type pager struct {
 	open bool
+	// indexLines is the number of index rows kept above the pager, as
+	// NeoMutt's pager_index_lines.
+	indexLines int
+}
+
+// WithPagerIndexLines keeps n index rows above the pager, or none when n is
+// not positive.
+func WithPagerIndexLines(n int) Option {
+	return func(m *Model) {
+		m.pager.indexLines = max(n, 0)
+	}
 }
 
 // pagerKeyMap holds the keybindings handled while the pager is open.
@@ -101,11 +112,11 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 }
 
 // pagerStripHeight is the number of index rows shown above a pager in a
-// body height lines high: pagerIndexLines, but no more than half the lines
-// the chrome leaves, so a short window still shows the top of the QSO tab.
-// A window too short for the whole tab cuts off its last rows.
-func pagerStripHeight(height int) int {
-	return min(pagerIndexLines, max(height-pagerChrome, 0)/2)
+// body height lines high: lines, but no more than half the lines the chrome
+// leaves, so a short window still shows the top of the QSO tab. A window too
+// short for the whole tab cuts off its last rows.
+func pagerStripHeight(lines, height int) int {
+	return min(lines, max(height-pagerChrome, 0)/2)
 }
 
 // pagerView renders the pager in width by height cells: the index strip,

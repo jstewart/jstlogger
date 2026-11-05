@@ -42,6 +42,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		tui.WithLogbook(store),
 		tui.WithVersion(version),
 		tui.WithIndexFormat(format, indexfmt.Unit(session.Config.Logbook.DistanceUnit)),
+		tui.WithPagerIndexLines(session.Config.Index.PagerIndexLines),
 	}
 
 	opts, ok := rigOptions(session)

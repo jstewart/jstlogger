@@ -56,6 +56,7 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 	v.SetDefault("rig.poll_interval", DefaultPollInterval)
 	v.SetDefault("logbook.distance_unit", DefaultDistanceUnit)
 	v.SetDefault("index.format", DefaultIndexFormat)
+	v.SetDefault("index.pager_index_lines", DefaultPagerIndexLines)
 
 	if err := v.ReadInConfig(); err != nil {
 		return Config{}, res, fmt.Errorf("reading config %s: %w", path, err)
@@ -66,6 +67,12 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 		return Config{}, res, fmt.Errorf("config %s: %w", path, err)
 	}
 	v.Set("rig.poll_interval", poll)
+
+	lines, err := parsePagerIndexLines(v.Get("index.pager_index_lines"))
+	if err != nil {
+		return Config{}, res, fmt.Errorf("config %s: %w", path, err)
+	}
+	v.Set("index.pager_index_lines", lines)
 
 	var c Config
 	var md mapstructure.Metadata
@@ -130,6 +137,20 @@ func parsePollInterval(raw any) (time.Duration, error) {
 		return d, nil
 	default:
 		return 0, fmt.Errorf(`rig.poll_interval: want a duration string such as "1s", got %v`, raw)
+	}
+}
+
+// parsePagerIndexLines checks that the raw index.pager_index_lines value is
+// a whole number. Decoding alone would cut a fraction short or accept a
+// numeric string.
+func parsePagerIndexLines(raw any) (int, error) {
+	switch val := raw.(type) {
+	case int:
+		return val, nil
+	case int64:
+		return int(val), nil
+	default:
+		return 0, fmt.Errorf("index.pager_index_lines: want a whole number of rows, got %v", raw)
 	}
 }
 

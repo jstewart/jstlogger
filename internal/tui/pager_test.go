@@ -61,12 +61,12 @@ func TestPagerOpensOnEnter(t *testing.T) {
 }
 
 func TestPagerKeepsIndexLinesAboveIt(t *testing.T) {
-	m, _ := newIndexModel(t, 20, 80, 24)
+	m, _ := newIndexModel(t, 20, 80, 40)
 	m = press(t, m, keyPress('z', 0), enter())
 
 	lines := strings.Split(plain(m.View().Content), "\n")
 	// The header is line 0; the index strip follows it.
-	strip := lines[1 : 1+pagerIndexLines]
+	strip := lines[1 : 1+defaultPagerIndexLines]
 	var cursor []int
 	for i, l := range strip {
 		if strings.Contains(l, " "+m.currentCall(t)+" ") {
@@ -74,10 +74,54 @@ func TestPagerKeepsIndexLinesAboveIt(t *testing.T) {
 		}
 	}
 	require.Len(t, cursor, 1, "the current QSO is in the strip: %q", strip)
-	assert.Equal(t, pagerIndexLines, m.idx.height, "the index is cut to the strip")
+	assert.Equal(t, defaultPagerIndexLines, m.idx.height, "the index is cut to the strip")
 
 	raw := strings.Split(m.View().Content, "\n")
 	assert.Contains(t, raw[1+cursor[0]], "\x1b[7m", "the strip highlights the cursor")
+}
+
+func TestPagerIndexLinesOption(t *testing.T) {
+	m, _ := newIndexModel(t, 20, 80, 40, WithPagerIndexLines(3))
+	m = press(t, m, enter())
+
+	assert.Equal(t, 3, m.idx.height, "the index is cut to the configured strip")
+	lines := strings.Split(plain(m.View().Content), "\n")
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(lines[1+3]), "QSO ─"), "the tab bar follows the strip: %q", lines[1+3])
+}
+
+func TestPagerIndexLinesShrinkInShortWindows(t *testing.T) {
+	m, _ := newIndexModel(t, 40, 80, 24, WithPagerIndexLines(30))
+	m = press(t, m, enter())
+
+	assert.Less(t, m.idx.height, 30, "the strip shrinks to fit the window")
+	assert.Positive(t, m.idx.height)
+	body := plain(m.pagerBody(t))
+	assert.Contains(t, body, " QSO ", "the tab bar is visible")
+	assert.Contains(t, body, "Date/time", "the top of the QSO tab is visible")
+}
+
+func TestPagerStripHeight(t *testing.T) {
+	tests := []struct {
+		name          string
+		lines, height int
+		want          int
+	}{
+		{"room for every line", 10, 40, 10},
+		{"no more than half the room", 10, 20, 9},
+		{"zero lines", 0, 40, 0},
+		{"no room", 10, 2, 0},
+		{"shorter than the chrome", 10, 1, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, pagerStripHeight(tt.lines, tt.height))
+		})
+	}
+}
+
+func TestWithPagerIndexLinesNegative(t *testing.T) {
+	m := New(WithPagerIndexLines(-3))
+	assert.Equal(t, 0, m.pager.indexLines, "a negative count shows no strip")
 }
 
 // currentCall returns the callsign of the QSO under the index cursor.
@@ -157,8 +201,8 @@ func TestPagerMovesBetweenQSOs(t *testing.T) {
 func (m Model) pagerBody(t *testing.T) string {
 	t.Helper()
 	lines := strings.Split(m.View().Content, "\n")
-	require.Greater(t, len(lines), 1+pagerIndexLines)
-	return strings.Join(lines[1+pagerIndexLines:], "\n")
+	require.Greater(t, len(lines), 1+m.idx.height)
+	return strings.Join(lines[1+m.idx.height:], "\n")
 }
 
 func TestPagerStopsAtTheEnds(t *testing.T) {

@@ -33,6 +33,8 @@ const (
 	// DefaultIndexFormat is the default index.format, reproducing the
 	// built-in QSO index columns.
 	DefaultIndexFormat = indexfmt.Default
+	// DefaultPagerIndexLines is the default index.pager_index_lines.
+	DefaultPagerIndexLines = 10
 )
 
 // Distance units accepted in logbook.distance_unit.
@@ -63,6 +65,9 @@ type Index struct {
 	// package indexfmt for the syntax. Load keeps it verbatim because
 	// spacing is significant.
 	Format string `mapstructure:"format" toml:"format"`
+	// PagerIndexLines is the number of index rows kept above the QSO pager,
+	// as NeoMutt's pager_index_lines.
+	PagerIndexLines int `mapstructure:"pager_index_lines" toml:"pager_index_lines"`
 }
 
 // Logbook is the [logbook] table.

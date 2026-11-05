@@ -142,10 +142,15 @@ func (c Config) validateLogbook() []error {
 	}
 }
 
-// validateIndex checks that index.format parses as an index format.
+// validateIndex checks that index.format parses as an index format and
+// that index.pager_index_lines is not negative.
 func (c Config) validateIndex() []error {
+	var errs []error
 	if _, err := indexfmt.Parse(c.Index.Format); err != nil {
-		return []error{invalid("index.format", "%v", err)}
+		errs = append(errs, invalid("index.format", "%v", err))
 	}
-	return nil
+	if c.Index.PagerIndexLines < 0 {
+		errs = append(errs, invalid("index.pager_index_lines", "must be 0 or more, got %d", c.Index.PagerIndexLines))
+	}
+	return errs
 }
