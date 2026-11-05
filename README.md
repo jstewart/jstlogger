@@ -89,9 +89,11 @@ the QSOs you can see.
 ### Showing a QSO
 
 `enter` opens the QSO under the cursor in a pager, in the style of
-NeoMutt's split pager. Five index rows stay above it with the QSO
-highlighted. Below them, the QSO tab lists the date and time (UTC), call,
-band, frequency, mode and submode, the reports sent and received, grid,
+NeoMutt's split pager. Ten index rows stay above it with the QSO
+highlighted; set `[index] pager_index_lines` to keep more or fewer, or
+`0` for none. In a window too short for them, the strip shrinks so the
+top of the QSO tab stays visible. Below them, the QSO tab lists the date
+and time (UTC), call, band, frequency, mode and submode, the reports sent and received, grid,
 distance (in `[logbook] distance_unit`), state, county, name, comment,
 country and continent. An empty field shows `—`, so the layout doesn't
 shift between QSOs.
