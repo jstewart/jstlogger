@@ -238,6 +238,33 @@ func TestRunBackoff(t *testing.T) {
 	assert.Equal(t, []time.Duration{10 * ms, 20 * ms, 40 * ms, 40 * ms, 40 * ms}, got)
 }
 
+// TestRunRigOff covers a rigctld that accepts connections while the rig is
+// off: it must not report Connected, and the backoff must keep growing.
+func TestRunRigOff(t *testing.T) {
+	f := newFakeRigctld(t)
+	f.SetError("get_freq", -11)
+	events, _, _ := startRig(t, newTestRig(f.Addr(), time.Hour))
+
+	var got []time.Duration
+	for len(got) < 5 {
+		ev := next(t, events)
+		dc, ok := ev.(ConnectionChanged)
+		require.True(t, ok, "unexpected event %#v", ev)
+		require.NotEqual(t, Connected, dc.Status, "connected although the rig never answered")
+		if dc.Status == Disconnected {
+			require.Error(t, dc.Err)
+			got = append(got, dc.RetryIn)
+		}
+	}
+	ms := time.Millisecond
+	assert.Equal(t, []time.Duration{10 * ms, 20 * ms, 40 * ms, 40 * ms, 40 * ms}, got)
+
+	// Once the rig answers, it connects.
+	f.SetError("get_freq", 0)
+	waitFor[ConnectionChanged](t, events, func(c ConnectionChanged) bool { return c.Status == Connected })
+	assert.Equal(t, StateChanged{State: f.State()}, next(t, events))
+}
+
 func TestSetFreqUnreachable(t *testing.T) {
 	r := newTestRig(closedAddr(t), time.Hour)
 	r.backoffMin, r.backoffMax = time.Minute, time.Minute
