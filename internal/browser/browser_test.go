@@ -91,3 +91,17 @@ func TestRunDoesNotWaitForBrowser(t *testing.T) {
 	assert.NoError(t, run(context.Background(), script, "https://example.com"))
 	assert.Less(t, time.Since(start), 10*time.Second)
 }
+
+// TestRunForegroundBrowser covers an opener such as xdg-open with no
+// desktop environment, which runs the browser in the foreground and so
+// outlives ctx.
+func TestRunForegroundBrowser(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fake-open")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\nsleep 30\nexit 0\n"), 0o700))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	assert.NoError(t, run(ctx, script, "https://example.com"))
+	assert.Less(t, time.Since(start), 10*time.Second)
+}

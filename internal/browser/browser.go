@@ -4,6 +4,7 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -48,16 +49,33 @@ const outputDelay = time.Second
 // run runs name with url as its only argument and waits for it to exit.
 // The URL is passed as a single argument, never through a shell. When the
 // command fails, any output it produced is included in the error.
+//
+// A command still running when ctx is done is left running, and run
+// returns nil: xdg-open with no desktop environment runs the browser in
+// the foreground, so it exits only when the browser does.
 func run(ctx context.Context, name, url string) error {
-	cmd := exec.CommandContext(ctx, name, url)
+	cmd := exec.Command(name, url)
 	cmd.WaitDelay = outputDelay
-	out, err := cmd.CombinedOutput()
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("open %s: %w", url, err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	var err error
+	select {
+	case err = <-done:
+	case <-ctx.Done():
+		return nil
+	}
 	if err == nil || errors.Is(err, exec.ErrWaitDelay) {
 		// ErrWaitDelay means the opener succeeded but something it started
 		// still holds its output.
 		return nil
 	}
-	if msg := strings.TrimSpace(string(out)); msg != "" {
+	if msg := strings.TrimSpace(out.String()); msg != "" {
 		return fmt.Errorf("open %s: %w: %s", url, err, msg)
 	}
 	return fmt.Errorf("open %s: %w", url, err)
