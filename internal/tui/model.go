@@ -2,6 +2,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"charm.land/bubbles/v2/help"
@@ -32,6 +33,13 @@ type Model struct {
 	// successful command or key press.
 	rigErr error
 
+	// openURL opens a URL in the browser; nil disables the pager's lookup
+	// keys.
+	openURL func(ctx context.Context, url string) error
+	// lookupErr is the error from the last lookup, shown until the next
+	// successful lookup or key press.
+	lookupErr error
+
 	// logbook is nil when no logbook is open.
 	logbook logbook.Store
 	idx     index
@@ -60,7 +68,6 @@ type Model struct {
 // New returns the root model configured by opts.
 func New(opts ...Option) Model {
 	m := Model{
-		pagerKeys:  defaultPagerKeys(),
 		promptKeys: defaultPromptKeys(),
 		help:       help.New(),
 		styles:     defaultStyles(),
@@ -72,6 +79,7 @@ func New(opts ...Option) Model {
 		opt(&m)
 	}
 	m.keys = defaultKeys(m.rig != nil)
+	m.pagerKeys = defaultPagerKeys(m.openURL != nil)
 	m.indexKeys = defaultIndexKeys(m.logbook != nil)
 	if m.logbook != nil {
 		m.markedFuncs = m.bulkFuncs()
@@ -111,9 +119,15 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m.updatePrompt(msg)
 		}
 		m.rigErr = nil
+		m.lookupErr = nil
 		m.idx.msg = ""
 		if m.idx.prefix {
 			return m.updatePrefix(msg)
+		}
+		// The lookup-prefix comes before the global keys, so gq opens QRZ
+		// rather than closing the pager.
+		if m.pager.lookupPrefix {
+			return m.updateLookup(msg)
 		}
 		keys := m.globalKeys()
 		switch {
@@ -162,6 +176,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case rigResultMsg:
 		m.rigErr = msg.err
+
+	case lookupResultMsg:
+		m.lookupErr = msg.err
 
 	default:
 		// Other input, such as pastes, goes to the open prompt, but not to
@@ -215,7 +232,7 @@ func (m Model) headerView() string {
 }
 
 // footerView renders the help line, preceded by the open prompt or the last
-// rig command error.
+// rig command or lookup error.
 func (m Model) footerView() string {
 	var lines []string
 	// The global keys come first so a narrow window still shows them.
@@ -233,6 +250,8 @@ func (m Model) footerView() string {
 		}
 	case m.rigErr != nil:
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
+	case m.lookupErr != nil:
+		lines = append(lines, m.styles.err.Render(m.lookupErr.Error()))
 	}
 	lines = append(lines, m.help.View(keys))
 	return m.styles.footer.

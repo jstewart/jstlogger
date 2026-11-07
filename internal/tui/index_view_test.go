@@ -18,9 +18,13 @@ import (
 // sgr matches the ANSI styling sequences lipgloss emits.
 var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
-// plain strips styling from s.
+// osc8 matches the OSC 8 hyperlink sequences lipgloss emits, ended by BEL
+// or ST.
+var osc8 = regexp.MustCompile("\x1b]8;[^;]*;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
+
+// plain strips styling and hyperlinks from s.
 func plain(s string) string {
-	return sgr.ReplaceAllString(s, "")
+	return osc8.ReplaceAllString(sgr.ReplaceAllString(s, ""), "")
 }
 
 func TestIndexCells(t *testing.T) {

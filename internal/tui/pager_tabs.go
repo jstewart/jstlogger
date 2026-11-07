@@ -65,8 +65,9 @@ func tabBar(st styles, active pagerTab, width int) string {
 	return b.String() + st.muted.Render(strings.Repeat("─", max(room, 0)))
 }
 
-// pagerRow is one labeled row of a pager tab.
-type pagerRow struct{ label, value string }
+// pagerRow is one labeled row of a pager tab. suffix, already styled,
+// follows a value that leaves room for it, and is dropped otherwise.
+type pagerRow struct{ label, value, suffix string }
 
 // pagerRows renders rows with their labels padded to the widest, each fitted
 // to width cells. An empty value shows pagerEmpty, so the row keeps its
@@ -92,6 +93,11 @@ func pagerRows(st styles, rows []pagerRow, width int) string {
 		} else {
 			value = truncate(value, room, "…")
 		}
+		// The suffix is styled, so it is shown whole or not at all rather
+		// than truncated.
+		if r.suffix != "" && lipgloss.Width(value)+1+lipgloss.Width(r.suffix) <= room {
+			value += " " + r.suffix
+		}
 		lines[i] = label + "  " + value
 	}
 	return strings.Join(lines, "\n")
@@ -106,11 +112,11 @@ func stationTab(st styles, q logbook.QSO, stationName string, width int) string 
 		power = strconv.FormatFloat(q.TxPwr.V, 'f', -1, 64) + " W"
 	}
 	rows := []pagerRow{
-		{"Station callsign", q.StationCallsign},
-		{"Operator", q.Operator},
-		{"Station grid", q.MyGridsquare},
-		{"TX power", power},
-		{"Station name", stationName},
+		{label: "Station callsign", value: q.StationCallsign},
+		{label: "Operator", value: q.Operator},
+		{label: "Station grid", value: q.MyGridsquare},
+		{label: "TX power", value: power},
+		{label: "Station name", value: stationName},
 	}
 	var names []string
 	for name := range q.Fields {
@@ -120,7 +126,7 @@ func stationTab(st styles, q logbook.QSO, stationName string, width int) string 
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		rows = append(rows, pagerRow{name, q.Fields[name]})
+		rows = append(rows, pagerRow{label: name, value: q.Fields[name]})
 	}
 	return pagerRows(st, rows, width)
 }
@@ -168,8 +174,8 @@ func qslTab(st styles, q logbook.QSO, width int) string {
 			rcvd += " " + c.RcvdDate.V.UTC().Format(qslDateFormat)
 		}
 		rows = append(rows,
-			pagerRow{name + " sent", sent},
-			pagerRow{name + " received", rcvd},
+			pagerRow{label: name + " sent", value: sent},
+			pagerRow{label: name + " received", value: rcvd},
 		)
 	}
 	return pagerRows(st, rows, width)
@@ -182,7 +188,7 @@ func adifTab(st styles, q logbook.QSO, width int) string {
 	slices.SortStableFunc(r, func(a, b adif.Field) int { return cmp.Compare(a.Name, b.Name) })
 	rows := make([]pagerRow, len(r))
 	for i, f := range r {
-		rows[i] = pagerRow{f.Name, f.Value}
+		rows[i] = pagerRow{label: f.Name, value: f.Value}
 	}
 	return pagerRows(st, rows, width)
 }

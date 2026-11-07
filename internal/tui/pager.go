@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"jstlogger/internal/callsign"
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 )
@@ -38,6 +40,9 @@ type pager struct {
 	// stationName names our station from its callsign and grid; nil names
 	// none.
 	stationName func(callsign, grid string) string
+	// lookupPrefix reports whether the lookup-prefix is armed: the next
+	// key opens a lookup site for the QSO's callsign.
+	lookupPrefix bool
 
 	// The index rows lack some fields, so the tabs other than the QSO tab
 	// show the whole QSO, fetched from the logbook. fetched is the ID of
@@ -101,6 +106,14 @@ func WithStationName(name func(callsign, grid string) string) Option {
 	}
 }
 
+// WithURLOpener enables the pager's lookup keys, which open the QSO's
+// callsign on a lookup site by calling open with the site's URL.
+func WithURLOpener(open func(ctx context.Context, url string) error) Option {
+	return func(m *Model) {
+		m.openURL = open
+	}
+}
+
 // WithPagerIndexLines keeps n index rows above the pager, or none when n is
 // not positive.
 func WithPagerIndexLines(n int) Option {
@@ -122,10 +135,19 @@ type pagerKeyMap struct {
 	Close    key.Binding
 	// Quit replaces the global quit binding, since q closes the pager.
 	Quit key.Binding
+	// LookupPrefix arms the lookup-prefix; the lookup key that follows
+	// opens the QSO's callsign on its site, and LookupCancel cancels it.
+	LookupPrefix key.Binding
+	LookupCancel key.Binding
+	LookupQRZ    key.Binding
+	LookupHamQTH key.Binding
+	LookupEQSL   key.Binding
 }
 
-func defaultPagerKeys() pagerKeyMap {
-	return pagerKeyMap{
+// defaultPagerKeys returns the pager's keybindings, with the lookup keys
+// enabled only when lookup is true.
+func defaultPagerKeys(lookup bool) pagerKeyMap {
+	k := pagerKeyMap{
 		Next: key.NewBinding(
 			key.WithKeys("j", "down"),
 			key.WithHelp("j/↓", "next QSO"),
@@ -166,7 +188,32 @@ func defaultPagerKeys() pagerKeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		LookupPrefix: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "lookup-prefix"),
+		),
+		LookupCancel: key.NewBinding(
+			key.WithKeys("esc"),
+		),
+		LookupQRZ: key.NewBinding(
+			key.WithKeys("q"),
+			key.WithHelp("gq", "QRZ"),
+		),
+		LookupHamQTH: key.NewBinding(
+			key.WithKeys("h"),
+			key.WithHelp("gh", "HamQTH"),
+		),
+		LookupEQSL: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("ge", "eQSL"),
+		),
 	}
+	for _, b := range []*key.Binding{
+		&k.LookupPrefix, &k.LookupCancel, &k.LookupQRZ, &k.LookupHamQTH, &k.LookupEQSL,
+	} {
+		b.SetEnabled(lookup)
+	}
+	return k
 }
 
 func (k pagerKeyMap) ShortHelp() []key.Binding {
@@ -178,6 +225,7 @@ func (k pagerKeyMap) FullHelp() [][]key.Binding {
 		{k.Next, k.Prev, k.Close},
 		{k.NextTab, k.PrevTab},
 		{k.PageDown, k.PageUp, k.Top, k.Bottom},
+		{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL},
 	}
 }
 
@@ -205,6 +253,7 @@ func (m Model) openPager() Model {
 // shows any change made to it since.
 func (m Model) closePager() Model {
 	m.pager.open = false
+	m.pager.lookupPrefix = false
 	m.pager.fetched, m.pager.pending, m.pager.qso, m.pager.err = 0, 0, logbook.QSO{}, nil
 	return m
 }
@@ -237,6 +286,8 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		p.scroll = 0
 	case key.Matches(msg, k.Bottom):
 		p.scroll = bottom
+	case key.Matches(msg, k.LookupPrefix):
+		p.lookupPrefix = true
 	}
 	// Another QSO starts at the top; j or k at the end of the index leaves
 	// the scroll alone.
@@ -317,7 +368,11 @@ func (m Model) pagerView(width, height int) string {
 	for len(lines) < height-1 {
 		lines = append(lines, "")
 	}
-	return strings.Join(append(lines, x.statusView(st, width)), "\n")
+	var armed []string
+	if m.pager.lookupPrefix {
+		armed = append(armed, "lookup-prefix")
+	}
+	return strings.Join(append(lines, x.statusView(st, width, armed...)), "\n")
 }
 
 // qsoTab renders the QSO tab: one labeled row per field, each fitted to
@@ -349,20 +404,103 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 	}
 
 	return pagerRows(st, []pagerRow{
-		{"Date/time", date},
-		{"Call", q.Call},
-		{"Band", q.Band},
-		{"Frequency", freq},
-		{"Mode", mode},
-		{"RST sent", q.RSTSent},
-		{"RST rcvd", q.RSTRcvd},
-		{"Grid", q.Gridsquare},
-		{"Distance", dist},
-		{"State", q.State},
-		{"County", q.Cnty},
-		{"Name", q.Name},
-		{"Comment", q.Comment},
-		{"Country", q.Country},
-		{"Continent", q.Cont},
+		{label: "Date/time", value: date},
+		{label: "Call", value: q.Call, suffix: lookupBadges(st, q.Call)},
+		{label: "Band", value: q.Band},
+		{label: "Frequency", value: freq},
+		{label: "Mode", value: mode},
+		{label: "RST sent", value: q.RSTSent},
+		{label: "RST rcvd", value: q.RSTRcvd},
+		{label: "Grid", value: q.Gridsquare},
+		{label: "Distance", value: dist},
+		{label: "State", value: q.State},
+		{label: "County", value: q.Cnty},
+		{label: "Name", value: q.Name},
+		{label: "Comment", value: q.Comment},
+		{label: "Country", value: q.Country},
+		{label: "Continent", value: q.Cont},
 	}, width)
+}
+
+// lookupBadges renders the QRZ, HamQTH and eQSL badges for call, each a
+// hyperlink to the call's page on that site, or "" when call has no base
+// callsign to look up.
+func lookupBadges(st styles, call string) string {
+	if callsign.Base(call) == "" {
+		return ""
+	}
+	return strings.Join([]string{
+		st.qrz.Hyperlink(callsign.QRZURL(call)).Render("[Q]"),
+		st.hamQTH.Hyperlink(callsign.HamQTHURL(call)).Render("[H]"),
+		st.eQSL.Hyperlink(callsign.EQSLURL(call)).Render("[E]"),
+	}, " ")
+}
+
+// lookupTimeout bounds each call to the URL opener.
+const lookupTimeout = 10 * time.Second
+
+// msgNoLookupCall is the status message for a lookup on a QSO whose
+// callsign has no base callsign to look up.
+const msgNoLookupCall = "No callsign to look up."
+
+// lookupResultMsg reports the outcome of opening a lookup site.
+type lookupResultMsg struct {
+	err error
+}
+
+// notLookupMsg is the status message for a key, such as "x", that does not
+// follow the lookup-prefix.
+func notLookupMsg(k string) string {
+	return "g" + k + " is not a lookup."
+}
+
+// openURLCmd returns a command that opens url with open, with a timeout,
+// and reports the result as a lookupResultMsg. desc describes the page in
+// the error.
+func openURLCmd(open func(ctx context.Context, url string) error, desc, url string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), lookupTimeout)
+		defer cancel()
+		if err := open(ctx, url); err != nil {
+			return lookupResultMsg{err: fmt.Errorf("open %s: %w", desc, err)}
+		}
+		return lookupResultMsg{}
+	}
+}
+
+// updateLookup handles the key press that follows the lookup-prefix. Quit
+// still quits and esc cancels the prefix silently. A lookup key opens the
+// callsign of the QSO under the cursor on its site; any other key cancels
+// the prefix without running its own function.
+func (m Model) updateLookup(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	k := m.pagerKeys
+	if key.Matches(msg, k.Quit) {
+		return m, tea.Quit
+	}
+	m.pager.lookupPrefix = false
+	var desc string
+	var lookupURL func(call string) string
+	switch {
+	case key.Matches(msg, k.LookupCancel):
+		return m, nil
+	case key.Matches(msg, k.LookupQRZ):
+		desc, lookupURL = "QRZ page", callsign.QRZURL
+	case key.Matches(msg, k.LookupHamQTH):
+		desc, lookupURL = "HamQTH page", callsign.HamQTHURL
+	case key.Matches(msg, k.LookupEQSL):
+		desc, lookupURL = "eQSL page", callsign.EQSLURL
+	default:
+		m.idx.msg = notLookupMsg(msg.String())
+		return m, nil
+	}
+	q, ok := m.idx.current()
+	if !ok {
+		return m, nil
+	}
+	url := lookupURL(q.Call)
+	if url == "" {
+		m.idx.msg = msgNoLookupCall
+		return m, nil
+	}
+	return m, openURLCmd(m.openURL, desc, url)
 }
