@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// Default reconnect backoff: it doubles from min up to max and resets after
-// a successful connect.
+// Default reconnect backoff: it doubles from min up to max and resets once
+// the rig has answered.
 const (
 	defaultBackoffMin = time.Second
 	defaultBackoffMax = 30 * time.Second
@@ -176,9 +176,11 @@ func (a *actor) loop(ctx context.Context) error {
 		a.emit(ConnectionChanged{Status: Connecting})
 		conn, err := a.r.dial(ctx, a.r.opts.Addr)
 		if err == nil {
-			backoff = a.r.backoffMin
-			a.emit(ConnectionChanged{Status: Connected})
-			err = a.serve(ctx, newClient(conn, a.r.timeout))
+			var connected bool
+			connected, err = a.serve(ctx, newClient(conn, a.r.timeout))
+			if connected {
+				backoff = a.r.backoffMin
+			}
 		} else {
 			err = fmt.Errorf("connect to rigctld at %s: %w", a.r.opts.Addr, err)
 		}
@@ -194,8 +196,9 @@ func (a *actor) loop(ctx context.Context) error {
 }
 
 // serve polls and runs requests on c until an error or ctx is done. It
-// closes c before returning.
-func (a *actor) serve(ctx context.Context, c *client) (err error) {
+// emits Connected once the first poll succeeds and reports whether it did.
+// It closes c before returning.
+func (a *actor) serve(ctx context.Context, c *client) (connected bool, err error) {
 	// Closing on cancel interrupts a pending read.
 	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
 	defer func() {
@@ -206,45 +209,52 @@ func (a *actor) serve(ctx context.Context, c *client) (err error) {
 		}
 	}()
 
-	if err := a.poll(ctx, c, true); err != nil {
-		return err
+	// rigctld accepts connections even when the rig is off, so the rig
+	// counts as connected only once it answers.
+	s, err := c.getState(ctx)
+	if err != nil {
+		return false, fmt.Errorf("poll rig: %w", err)
 	}
+	a.emit(ConnectionChanged{Status: Connected})
+	a.last = s
+	a.emit(StateChanged{State: s})
+
 	ticker := time.NewTicker(a.r.opts.PollInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return true, ctx.Err()
 		case <-ticker.C:
-			if err := a.poll(ctx, c, false); err != nil {
-				return err
+			if err := a.poll(ctx, c); err != nil {
+				return true, err
 			}
 		case req := <-a.r.reqs:
 			err := req.do(ctx, c)
 			a.emit(CommandResult{Command: req.command, Err: err})
 			req.reply <- err
 			if isConnErr(err) {
-				return err
+				return true, err
 			}
-			if err := a.poll(ctx, c, false); err != nil {
-				return err
+			if err := a.poll(ctx, c); err != nil {
+				return true, err
 			}
 		case err := <-a.procExit:
 			a.procExit = nil
-			return err
+			return true, err
 		}
 	}
 }
 
-// poll reads the rig state and emits it if it changed or force is set. Any
-// error, including an RPRT error, is returned so the caller reconnects: a
-// rig that cannot report its state is treated as unavailable.
-func (a *actor) poll(ctx context.Context, c *client, force bool) error {
+// poll reads the rig state and emits it if it changed. Any error, including
+// an RPRT error, is returned so the caller reconnects: a rig that cannot
+// report its state is treated as unavailable.
+func (a *actor) poll(ctx context.Context, c *client) error {
 	s, err := c.getState(ctx)
 	if err != nil {
 		return fmt.Errorf("poll rig: %w", err)
 	}
-	if force || s != a.last {
+	if s != a.last {
 		a.last = s
 		a.emit(StateChanged{State: s})
 	}
