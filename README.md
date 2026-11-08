@@ -110,8 +110,9 @@ An `[L]` badge follows them when the station uploads to
 [LoTW](https://lotw.arrl.org), colored by how recently it last did:
 green within 30 days, amber within a year, dim for longer ago. It is not
 a link. The LoTW row under the call gives the detail, such as `last
-upload 3 days ago`, or `not a LoTW user` when the station is not in the
-feed. Like the other badges, it uses the base callsign.
+upload 3 days ago`, `not a LoTW user` when the station is not in the
+feed, or `lookup failed` (with the error on the status line). Like the
+other badges, it uses the base callsign.
 
 The LoTW data comes from the ARRL's
 [user activity feed](https://lotw.arrl.org/lotw-user-activity.csv),

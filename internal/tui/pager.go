@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -414,11 +415,6 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, width
 	rows := []pagerRow{
 		{label: "Date/time", value: date},
 		{label: "Call", value: q.Call, suffix: suffix},
-	}
-	if lotw.enabled {
-		rows = append(rows, pagerRow{label: "LoTW", value: lotw.text()})
-	}
-	return pagerRows(st, append(rows, []pagerRow{
 		{label: "Band", value: q.Band},
 		{label: "Frequency", value: freq},
 		{label: "Mode", value: mode},
@@ -432,7 +428,12 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, width
 		{label: "Comment", value: q.Comment},
 		{label: "Country", value: q.Country},
 		{label: "Continent", value: q.Cont},
-	}...), width)
+	}
+	if lotw.enabled {
+		// The LoTW row follows the Call row.
+		rows = slices.Insert(rows, 2, pagerRow{label: "LoTW", value: lotw.text()})
+	}
+	return pagerRows(st, rows, width)
 }
 
 // lookupBadges renders the QRZ, HamQTH and eQSL badges for call, each a
