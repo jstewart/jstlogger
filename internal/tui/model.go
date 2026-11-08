@@ -4,6 +4,7 @@ package tui
 import (
 	"context"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -11,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"jstlogger/internal/callsign"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/rig"
 )
@@ -39,6 +41,15 @@ type Model struct {
 	// lookupErr is the error from the last lookup, shown until the next
 	// successful lookup or key press.
 	lookupErr error
+
+	// lotw looks up the pager QSO's LoTW use; nil shows none.
+	lotw LoTWLookup
+	// lotwErr is the error from the last LoTW sync, shown until the next
+	// successful sync or key press.
+	lotwErr error
+
+	// now returns the current time.
+	now func() time.Time
 
 	// logbook is nil when no logbook is open.
 	logbook logbook.Store
@@ -74,6 +85,7 @@ func New(opts ...Option) Model {
 		input:      newInput(),
 		idx:        newIndex(),
 		pager:      pager{indexLines: defaultPagerIndexLines},
+		now:        time.Now,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -120,6 +132,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		m.rigErr = nil
 		m.lookupErr = nil
+		m.lotwErr = nil
 		m.idx.msg = ""
 		if m.idx.prefix {
 			return m.updatePrefix(msg)
@@ -166,6 +179,13 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case pagerQSOMsg:
 		q, _ := m.idx.current()
 		m.pager.applyQSO(msg, q.ID)
+
+	case lotwLookupMsg:
+		q, _ := m.idx.current()
+		m.pager.applyLoTW(msg, callsign.Base(q.Call))
+
+	case LoTWSynced:
+		m.applyLoTWSynced(msg)
 
 	case rig.StateChanged:
 		m.rigState.state = msg.State
@@ -232,7 +252,7 @@ func (m Model) headerView() string {
 }
 
 // footerView renders the help line, preceded by the open prompt or the last
-// rig command or lookup error.
+// rig command, lookup or LoTW sync error.
 func (m Model) footerView() string {
 	var lines []string
 	// The global keys come first so a narrow window still shows them.
@@ -252,6 +272,8 @@ func (m Model) footerView() string {
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
 	case m.lookupErr != nil:
 		lines = append(lines, m.styles.err.Render(m.lookupErr.Error()))
+	case m.lotwErr != nil:
+		lines = append(lines, m.styles.err.Render(m.lotwErr.Error()))
 	}
 	lines = append(lines, m.help.View(keys))
 	return m.styles.footer.
@@ -272,7 +294,7 @@ func (m Model) bodyWidth() int {
 // layout fits the index to the space between the header and footer, which
 // change height with the prompt and help, or to the strip above the open
 // pager, and returns a command loading any rows that come into view and
-// the whole QSO the pager shows.
+// the whole QSO the pager shows, and its LoTW use.
 func (m *Model) layout() tea.Cmd {
 	// A reload or bulk delete may have left no QSO for the pager to show.
 	if m.idx.total == 0 && m.pager.open {
@@ -291,7 +313,7 @@ func (m *Model) layout() tea.Cmd {
 	for _, b := range m.idx.missing() {
 		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
 	}
-	return tea.Batch(append(cmds, m.fetch())...)
+	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW())...)
 }
 
 // updateIndex handles a key press on the QSO index.

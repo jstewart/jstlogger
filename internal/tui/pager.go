@@ -51,6 +51,9 @@ type pager struct {
 	pending int64
 	qso     logbook.QSO
 	err     error
+
+	// lotw is the LoTW lookup for the base callsign of the QSO shown.
+	lotw lotwCache
 }
 
 // pagerQSOMsg carries the whole QSO, or the error fetching it, for the
@@ -249,12 +252,13 @@ func (m Model) openPager() Model {
 	return m
 }
 
-// closePager closes the pager. The fetched QSO is forgotten, so reopening
-// shows any change made to it since.
+// closePager closes the pager. The fetched QSO and LoTW lookup are
+// forgotten, so reopening shows any change made since.
 func (m Model) closePager() Model {
 	m.pager.open = false
 	m.pager.lookupPrefix = false
 	m.pager.fetched, m.pager.pending, m.pager.qso, m.pager.err = 0, 0, logbook.QSO{}, nil
+	m.pager.lotw = lotwCache{}
 	return m
 }
 
@@ -312,7 +316,7 @@ func (m Model) pagerContent(width int) []string {
 		return []string{st.muted.Render("Loading…")}
 	}
 	if p.tab == tabQSO {
-		return strings.Split(qsoTab(st, q, m.idx.unit, width), "\n")
+		return strings.Split(qsoTab(st, q, m.idx.unit, m.lotwStatus(q.Call), width), "\n")
 	}
 	switch {
 	case p.fetched != q.ID:
@@ -378,8 +382,8 @@ func (m Model) pagerView(width, height int) string {
 // qsoTab renders the QSO tab: one labeled row per field, each fitted to
 // width cells. An empty field shows pagerEmpty, so every QSO has the same
 // rows. Distances are shown in unit; any unit other than Mi shows
-// kilometers.
-func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
+// kilometers. A LoTW row follows the Call row when lotw is enabled.
+func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, width int) string {
 	mode := q.Mode
 	switch {
 	case q.Submode == "":
@@ -403,9 +407,18 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 		date = q.StartUTC.UTC().Format("2006-01-02 15:04:05") + " UTC"
 	}
 
-	return pagerRows(st, []pagerRow{
+	suffix := lookupBadges(st, q.Call)
+	if b := lotw.badge(st); b != "" {
+		suffix += " " + b
+	}
+	rows := []pagerRow{
 		{label: "Date/time", value: date},
-		{label: "Call", value: q.Call, suffix: lookupBadges(st, q.Call)},
+		{label: "Call", value: q.Call, suffix: suffix},
+	}
+	if lotw.enabled {
+		rows = append(rows, pagerRow{label: "LoTW", value: lotw.text()})
+	}
+	return pagerRows(st, append(rows, []pagerRow{
 		{label: "Band", value: q.Band},
 		{label: "Frequency", value: freq},
 		{label: "Mode", value: mode},
@@ -419,7 +432,7 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, width int) string {
 		{label: "Comment", value: q.Comment},
 		{label: "Country", value: q.Country},
 		{label: "Continent", value: q.Cont},
-	}, width)
+	}...), width)
 }
 
 // lookupBadges renders the QRZ, HamQTH and eQSL badges for call, each a
