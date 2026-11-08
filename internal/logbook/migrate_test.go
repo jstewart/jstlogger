@@ -166,8 +166,10 @@ func TestMigrateRealMigrations(t *testing.T) {
 
 	require.NoError(t, migrate(context.Background(), db, migrations.FS))
 
-	assert.Equal(t, 2, userVersion(t, db))
-	for _, table := range []string{"qso", "qso_adif_field", "qso_confirmation", "tag", "qso_tag"} {
+	assert.Equal(t, 3, userVersion(t, db))
+	for _, table := range []string{
+		"qso", "qso_adif_field", "qso_confirmation", "tag", "qso_tag", "lotw_user", "lotw_sync",
+	} {
 		assert.True(t, schemaObjectExists(t, db, "table", table), "table %s", table)
 	}
 	for _, index := range []string{
@@ -194,4 +196,37 @@ func TestMigrateAddsOperatorColumn(t *testing.T) {
 	var operator string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT operator FROM qso").Scan(&operator))
 	assert.Empty(t, operator, "existing rows default to no operator")
+}
+
+func TestMigrateAddsLoTWTables(t *testing.T) {
+	db := openRawDB(t)
+	ctx := t.Context()
+	first := fstest.MapFS{}
+	for _, name := range []string{"0001_init.sql", "0002_operator.sql"} {
+		body, err := fs.ReadFile(migrations.FS, name)
+		require.NoError(t, err)
+		first[name] = &fstest.MapFile{Data: body}
+	}
+	require.NoError(t, migrate(ctx, db, first))
+	require.Equal(t, 2, userVersion(t, db))
+
+	require.NoError(t, migrate(ctx, db, migrations.FS))
+
+	assert.Equal(t, 3, userVersion(t, db))
+	_, err := db.ExecContext(ctx,
+		"INSERT INTO lotw_user (call, last_upload) VALUES ('W1AW', '2026-11-01T12:00:00Z')")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx,
+		"INSERT INTO lotw_user (call, last_upload) VALUES ('W1AW', '2026-11-02T12:00:00Z')")
+	require.Error(t, err, "call is the primary key")
+
+	_, err = db.ExecContext(ctx, "INSERT INTO lotw_sync (id, synced_at) VALUES (1, '2026-11-01T12:00:00Z')")
+	require.NoError(t, err)
+	var etag, lastModified string
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT etag, last_modified FROM lotw_sync WHERE id = 1").Scan(&etag, &lastModified))
+	assert.Empty(t, etag)
+	assert.Empty(t, lastModified)
+	_, err = db.ExecContext(ctx, "INSERT INTO lotw_sync (id, synced_at) VALUES (2, '2026-11-01T12:00:00Z')")
+	require.Error(t, err, "lotw_sync holds a single row")
 }
