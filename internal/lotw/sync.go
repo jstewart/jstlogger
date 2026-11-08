@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -15,6 +16,13 @@ const DefaultURL = "https://lotw.arrl.org/lotw-user-activity.csv"
 // downloaded again.
 const MaxAge = 7 * 24 * time.Hour
 
+// DefaultMaxBytes caps the size of a downloaded feed, about ten times the
+// feed's size in 2026, so a misbehaving server cannot exhaust memory.
+const DefaultMaxBytes = 64 << 20
+
+// ErrFeedTooLarge reports a feed longer than the syncer's limit.
+var ErrFeedTooLarge = errors.New("lotw: feed exceeds the size limit")
+
 // Syncer downloads the LoTW activity feed into a Store.
 type Syncer struct {
 	// Store receives the feed. It is required.
@@ -25,6 +33,42 @@ type Syncer struct {
 	URL string
 	// Now returns the current time; nil means time.Now.
 	Now func() time.Time
+	// MaxBytes is the longest feed accepted; zero means DefaultMaxBytes.
+	MaxBytes int64
+}
+
+// maxBytes returns the longest feed to accept.
+func (s *Syncer) maxBytes() int64 {
+	if s.MaxBytes == 0 {
+		return DefaultMaxBytes
+	}
+	return s.MaxBytes
+}
+
+// cappedReader reads up to n bytes from r and fails with ErrFeedTooLarge if
+// r holds more, rather than ending early, so a feed cut off at the limit is
+// never mistaken for a whole one.
+type cappedReader struct {
+	r io.Reader
+	n int64
+}
+
+// Read reads from the underlying reader within the limit.
+func (c *cappedReader) Read(p []byte) (int, error) {
+	if c.n <= 0 {
+		// At the limit: the feed is whole only if nothing follows.
+		var one [1]byte
+		if n, err := c.r.Read(one[:]); n > 0 {
+			return 0, ErrFeedTooLarge
+		} else if err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+	p = p[:min(int64(len(p)), c.n)]
+	n, err := c.r.Read(p)
+	c.n -= int64(n)
+	return n, err
 }
 
 // Result describes a completed sync.
@@ -114,7 +158,7 @@ func (s *Syncer) sync(ctx context.Context) (res Result, err error) {
 	case http.StatusOK:
 		// Parse the whole body before writing, so the database write lock
 		// is held only for the insert, not for the download.
-		users, skipped, err := Parse(resp.Body)
+		users, skipped, err := Parse(&cappedReader{r: resp.Body, n: s.maxBytes()})
 		if err != nil {
 			return Result{}, err
 		}

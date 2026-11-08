@@ -169,6 +169,30 @@ func TestSyncFailuresKeepOldData(t *testing.T) {
 	}
 }
 
+func TestSyncRejectsOversizedFeed(t *testing.T) {
+	ctx := t.Context()
+	now := utc(2026, 11, 8, 10, 0, 0)
+	f := &feedServer{body: testFeed, etag: `"v1"`}
+	s := newSyncer(t, f, &now)
+	_, err := s.Sync(ctx)
+	require.NoError(t, err)
+
+	// A feed cut off at the limit would still parse as valid rows, so
+	// reaching the limit must fail rather than store a truncated feed.
+	f.set(func(f *feedServer) { f.etag, f.body = `"v2"`, "N0NEW,2026-11-01,12:00:00\n"+testFeed })
+	s.MaxBytes = int64(len(testFeed))
+	_, err = s.Sync(ctx)
+
+	require.ErrorIs(t, err, ErrFeedTooLarge)
+	_, ok, err := s.Store.LastUpload(ctx, "N0NEW")
+	require.NoError(t, err)
+	assert.False(t, ok, "truncated feed not stored")
+
+	s.MaxBytes = int64(len(f.body))
+	_, err = s.Sync(ctx)
+	require.NoError(t, err, "a feed exactly at the limit is accepted")
+}
+
 func TestSyncCancelledContext(t *testing.T) {
 	now := utc(2026, 11, 8, 10, 0, 0)
 	s := newSyncer(t, &feedServer{body: testFeed}, &now)
@@ -185,6 +209,7 @@ func TestSyncDefaults(t *testing.T) {
 	s := &Syncer{}
 	assert.Equal(t, http.DefaultClient, s.client())
 	assert.Equal(t, DefaultURL, s.url())
+	assert.Equal(t, int64(DefaultMaxBytes), s.maxBytes())
 	assert.WithinDuration(t, time.Now(), s.now(), time.Minute)
 }
 
