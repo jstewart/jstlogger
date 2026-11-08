@@ -91,14 +91,16 @@ func (m *Model) fetchLoTW() tea.Cmd {
 
 // applyLoTW keeps a LoTW lookup for the pager. A lookup for a callsign the
 // cursor has moved off, or one landing after the pager closed, is dropped.
-func (p *pager) applyLoTW(msg lotwLookupMsg, current string) {
+// It reports whether the lookup was kept.
+func (p *pager) applyLoTW(msg lotwLookupMsg, current string) bool {
 	if msg.call == p.lotw.pending {
 		p.lotw.pending = ""
 	}
 	if !p.open || msg.call != current {
-		return
+		return false
 	}
 	p.lotw.call, p.lotw.last, p.lotw.found, p.lotw.err = msg.call, msg.last, msg.found, msg.err
+	return true
 }
 
 // applyLoTWSynced records the outcome of a LoTW sync. A successful sync
@@ -122,6 +124,8 @@ type lotwStatus struct {
 	loaded bool
 	found  bool
 	last   time.Time
+	// failed reports whether the lookup failed.
+	failed bool
 	// now is the time recency is measured at.
 	now time.Time
 }
@@ -134,9 +138,14 @@ func (m Model) lotwStatus(call string) lotwStatus {
 	}
 	c := m.pager.lotw
 	s := lotwStatus{enabled: true, now: m.now()}
-	if base := callsign.Base(call); base != "" && c.call == base && c.err == nil {
-		s.loaded, s.found, s.last = true, c.found, c.last
+	if base := callsign.Base(call); base == "" || c.call != base {
+		return s
 	}
+	if c.err != nil {
+		s.failed = true
+		return s
+	}
+	s.loaded, s.found, s.last = true, c.found, c.last
 	return s
 }
 
@@ -161,6 +170,8 @@ func (s lotwStatus) badge(st styles) string {
 // text describes the callsign's last upload, or "" while it is not known.
 func (s lotwStatus) text() string {
 	switch {
+	case s.failed:
+		return "lookup failed"
 	case !s.loaded:
 		return ""
 	case !s.found:

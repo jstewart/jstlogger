@@ -44,8 +44,8 @@ type Model struct {
 
 	// lotw looks up the pager QSO's LoTW use; nil shows none.
 	lotw LoTWLookup
-	// lotwErr is the error from the last LoTW sync, shown until the next
-	// successful sync or key press.
+	// lotwErr is the error from the last LoTW sync or pager lookup, shown
+	// until the next successful sync or key press.
 	lotwErr error
 
 	// now returns the current time.
@@ -182,7 +182,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case lotwLookupMsg:
 		q, _ := m.idx.current()
-		m.pager.applyLoTW(msg, callsign.Base(q.Call))
+		if m.pager.applyLoTW(msg, callsign.Base(q.Call)) && msg.err != nil {
+			m.lotwErr = msg.err
+		}
 
 	case LoTWSynced:
 		m.applyLoTWSynced(msg)
