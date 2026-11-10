@@ -275,7 +275,7 @@ func TestQSOTab(t *testing.T) {
 		"Grid", "Distance", "State", "County", "Name", "Comment", "Country", "Continent",
 	}
 
-	full := plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, 80))
+	full := plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, lotwStatus{}, 80))
 	for _, want := range append(labels,
 		"2026-10-31 18:34:56 UTC", "JA1ABC", "20m", "14.074 MHz", "MFSK (FT4)",
 		"-10", "+02", "PM95", "10870 km", "MA,MIDDLESEX", "Taro", "Nice signal",
@@ -284,7 +284,7 @@ func TestQSOTab(t *testing.T) {
 		assert.Contains(t, full, want)
 	}
 
-	empty := plain(qsoTab(defaultStyles(), logbook.QSO{}, indexfmt.Mi, 80))
+	empty := plain(qsoTab(defaultStyles(), logbook.QSO{}, indexfmt.Mi, lotwStatus{}, 80))
 	for _, want := range labels {
 		assert.Contains(t, empty, want, "an empty field keeps its row")
 	}
@@ -294,11 +294,11 @@ func TestQSOTab(t *testing.T) {
 
 func TestQSOTabDetails(t *testing.T) {
 	q := logbook.QSO{Mode: "SSB", DistanceKm: sql.Null[float64]{V: 160.9344, Valid: true}}
-	tab := plain(qsoTab(defaultStyles(), q, indexfmt.Mi, 80))
+	tab := plain(qsoTab(defaultStyles(), q, indexfmt.Mi, lotwStatus{}, 80))
 	assert.Contains(t, tab, "SSB\n", "a mode without a submode is shown alone")
 	assert.Contains(t, tab, "100 mi")
 
-	for _, line := range strings.Split(plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, 20)), "\n") {
+	for _, line := range strings.Split(plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, lotwStatus{}, 20)), "\n") {
 		assert.LessOrEqual(t, lipgloss.Width(line), 20, "lines fit the width: %q", line)
 	}
 }
@@ -333,14 +333,14 @@ func TestPagerClosesWhenTheIndexEmpties(t *testing.T) {
 func TestQSOTabKeepsMultilineValuesOnOneRow(t *testing.T) {
 	q := fullQSO()
 	q.Comment = "line one\r\nline two\n"
-	tab := plain(qsoTab(defaultStyles(), q, indexfmt.Km, 80))
-	assert.Equal(t, lipgloss.Height(plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, 80))), lipgloss.Height(tab))
+	tab := plain(qsoTab(defaultStyles(), q, indexfmt.Km, lotwStatus{}, 80))
+	assert.Equal(t, lipgloss.Height(plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, lotwStatus{}, 80))), lipgloss.Height(tab))
 	assert.Contains(t, tab, "line one line two")
 	assert.NotContains(t, tab, "\r")
 }
 
 func TestQSOTabTooNarrowForValues(t *testing.T) {
-	tab := plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, 10))
+	tab := plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, lotwStatus{}, 10))
 	assert.NotContains(t, tab, "JA1ABC", "there is no room for values")
 	for _, line := range strings.Split(tab, "\n") {
 		assert.LessOrEqual(t, lipgloss.Width(line), 10, "lines fit the width: %q", line)
@@ -360,7 +360,7 @@ func TestQSOTabMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			q := logbook.QSO{Mode: tt.mode, Submode: tt.submode}
-			tab := plain(qsoTab(defaultStyles(), q, indexfmt.Km, 80))
+			tab := plain(qsoTab(defaultStyles(), q, indexfmt.Km, lotwStatus{}, 80))
 			assert.Contains(t, strings.Split(tab, "\n"), tt.want)
 		})
 	}

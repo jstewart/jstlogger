@@ -20,6 +20,7 @@ import (
 	"jstlogger/internal/config"
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
+	"jstlogger/internal/lotw"
 	"jstlogger/internal/rig"
 	"jstlogger/internal/tui"
 )
@@ -28,9 +29,11 @@ import (
 // -ldflags "-X main.version=...".
 var version = "dev"
 
-// runTUI starts the terminal UI on store, and the rig when the session
-// enables one, and blocks until the UI exits. Rig events are logged to logger
-// and sent to the UI. Tests replace it so the TUI never starts.
+// runTUI starts the terminal UI on store, the rig when the session enables
+// one, and a background LoTW activity feed sync when store is a SQLite
+// logbook, and blocks until the UI exits. Rig events and the sync's outcome
+// are logged to logger and sent to the UI. Tests replace it so the TUI never
+// starts.
 var runTUI = func(ctx context.Context, session config.Session, store logbook.Store, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -50,26 +53,37 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		tui.WithURLOpener(browser.Open),
 	}
 
-	opts, ok := rigOptions(session)
-	if !ok {
-		_, err = tea.NewProgram(tui.New(tuiOpts...), tea.WithContext(ctx)).Run()
-		return err
+	var syncer *lotw.Syncer
+	if db, ok := store.(*logbook.SQLiteStore); ok {
+		users := lotw.NewStore(db.DB())
+		syncer = newLoTWSyncer(users)
+		tuiOpts = append(tuiOpts, tui.WithLoTW(users))
+	}
+	var r *rig.Rig
+	if opts, ok := rigOptions(session); ok {
+		r = rig.New(opts)
+		tuiOpts = append(tuiOpts, tui.WithRig(session.RigProfileName, r))
 	}
 
-	r := rig.New(opts)
-	p := tea.NewProgram(tui.New(append(tuiOpts, tui.WithRig(session.RigProfileName, r))...), tea.WithContext(ctx))
-	emit := func(event any) {
-		logEvent(logger, event)
-		p.Send(event)
-	}
-
+	p := tea.NewProgram(tui.New(tuiOpts...), tea.WithContext(ctx))
+	// The background work stops, and is waited for, before the caller
+	// closes the store.
 	var wg sync.WaitGroup
-	wg.Go(func() {
-		if err := r.Run(ctx, emit); err != nil {
-			// Rig control failed to start; the logger keeps running without it.
-			emit(rig.ConnectionChanged{Status: rig.Disconnected, Err: err})
+	if r != nil {
+		emit := func(event any) {
+			logEvent(logger, event)
+			p.Send(event)
 		}
-	})
+		wg.Go(func() {
+			if err := r.Run(ctx, emit); err != nil {
+				// Rig control failed to start; the logger keeps running without it.
+				emit(rig.ConnectionChanged{Status: rig.Disconnected, Err: err})
+			}
+		})
+	}
+	if syncer != nil {
+		wg.Go(func() { syncLoTWInBackground(ctx, syncer, logger, p.Send) })
+	}
 	_, err = p.Run()
 	cancel()
 	wg.Wait()
@@ -112,6 +126,7 @@ type options struct {
 	importADIF         string
 	exportADIF         string
 	tags               []string
+	syncLoTW           bool
 }
 
 func main() {
@@ -149,8 +164,11 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	}
 
 	ctx := context.Background()
-	if opts.importADIF != "" || opts.exportADIF != "" {
+	switch {
+	case opts.importADIF != "" || opts.exportADIF != "":
 		return report(stderr, runADIF(ctx, session, opts, stdout, stderr))
+	case opts.syncLoTW:
+		return report(stderr, runLoTWSync(ctx, session, stdout))
 	}
 
 	logger, closeLog := slog.New(slog.DiscardHandler), func() error { return nil }
@@ -200,6 +218,8 @@ func newFlagSet(opts *options, stderr io.Writer) *pflag.FlagSet {
 	fs.StringSliceVar(&opts.tags, "tag", nil, "`tags` for --import-adif or --export-adif; repeatable or comma-separated. "+
 		"On import, tags newly imported QSOs (duplicates are skipped and not tagged); "+
 		"on export, exports only QSOs carrying all of these tags")
+	fs.BoolVar(&opts.syncLoTW, "sync-lotw", false, "download the LoTW user activity feed into the logbook now, then exit "+
+		"(the TUI refreshes it in the background when it is over a week old)")
 	fs.BoolVar(&opts.debug, "debug", false, "write a debug log to $XDG_STATE_HOME/jstlogger/debug.log")
 	return fs
 }
@@ -222,7 +242,7 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 	opts.overrides.OperatorSet = fs.Changed("operator")
 
 	var modes []string
-	for _, name := range []string{"check-config", "print-config", "print-default-config", "version", "import-adif", "export-adif"} {
+	for _, name := range []string{"check-config", "print-config", "print-default-config", "version", "import-adif", "export-adif", "sync-lotw"} {
 		if fs.Changed(name) {
 			modes = append(modes, "--"+name)
 		}

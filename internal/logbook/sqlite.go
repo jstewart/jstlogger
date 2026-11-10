@@ -77,6 +77,13 @@ func sqliteDSN(path string) (string, error) {
 	return u.String(), nil
 }
 
+// DB returns the store's shared, migrated connection pool, for packages such
+// as lotw that keep their own tables in the logbook file. Callers must not
+// close it; Close does that.
+func (s *SQLiteStore) DB() *sql.DB {
+	return s.db
+}
+
 // Close closes the database.
 func (s *SQLiteStore) Close() error {
 	if err := s.db.Close(); err != nil {

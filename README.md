@@ -93,7 +93,7 @@ NeoMutt's split pager. Ten index rows stay above it with the QSO
 highlighted; set `[index] pager_index_lines` to keep more or fewer, or
 `0` for none. In a window too short for them, the strip shrinks so the
 top of the QSO tab stays visible. Below them, the QSO tab lists the date
-and time (UTC), call, band, frequency, mode and submode, the reports sent and received, grid,
+and time (UTC), call, LoTW status, band, frequency, mode and submode, the reports sent and received, grid,
 distance (in `[logbook] distance_unit`), state, county, name, comment,
 country and continent. An empty field shows `—`, so the layout doesn't
 shift between QSOs.
@@ -105,6 +105,29 @@ open it. From the keyboard, `gq`, `gh` and `ge` open the same pages with
 `open` on macOS or `xdg-open` on Linux; `esc` after `g` cancels. The
 links use the base callsign, so `VE3/W1AW/P` looks up `W1AW`. The badges
 are left out when the pager is too narrow for them.
+
+An `[L]` badge follows them when the station uploads to
+[LoTW](https://lotw.arrl.org), colored by how recently it last did:
+green within 30 days, amber within a year, dim for longer ago. It is not
+a link. The LoTW row under the call gives the detail, such as `last
+upload 3 days ago`, `—` when the station is not in the feed, or
+`lookup failed` (with the error on the status line). Like the other
+badges, it uses the base callsign.
+
+The LoTW data comes from the ARRL's
+[user activity feed](https://lotw.arrl.org/lotw-user-activity.csv),
+stored in the logbook. When the TUI starts and the stored copy is more
+than a week old (or there is none yet), it is refreshed in the
+background; the badge appears once the first download finishes. A
+failed refresh shows `LoTW sync failed: …` on the status line and keeps
+the stored copy. To refresh it now, run:
+
+```sh
+jstlogger --sync-lotw   # prints e.g. "LoTW: 237123 users (2 rows skipped)"
+```
+
+The download is conditional, so an unchanged feed costs no download and
+prints `LoTW: feed unchanged`.
 
 `j`/`↓` and `k`/`↑` move to the next or previous QSO in index order
 without leaving the pager, and the index rows follow. `q` or `esc` closes
@@ -271,7 +294,7 @@ rigctld address (for example `localhost:4532`).
 ### Debug log
 
 Run `jstlogger --debug` to log rig events (state changes, connection
-changes and commands) to `$XDG_STATE_HOME/jstlogger/debug.log`
+changes and commands) and the background LoTW sync to `$XDG_STATE_HOME/jstlogger/debug.log`
 (`~/.local/state/jstlogger/debug.log` by default). Watch it with
 `tail -f` in another terminal.
 
@@ -375,6 +398,7 @@ internal/adif/     ADIF .adi file reading, writing and comparison
 internal/config/   config file loading, validation and session overrides
 internal/indexfmt/ QSO index format parsing and column values
 internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
+internal/lotw/     LoTW user activity feed download, storage and recency
 internal/rig/      rigctld client: polls the rig and sends it commands
 internal/tui/      Bubble Tea models, keybindings and styles for the UI
 migrations/        SQL schema migrations, embedded and applied at startup
