@@ -451,3 +451,16 @@ func TestIndexHelpListsNewQSO(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 120, 24)
 	assert.Contains(t, plain(m.footerView()), "a new QSO")
 }
+
+func TestEntryTagLoadErrorIsShown(t *testing.T) {
+	s := &entryStore{MockStore: mock.NewMockStore(gomock.NewController(t))}
+	e := s.EXPECT()
+	e.Count(gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
+	e.Index(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	e.Tags(gomock.Any()).Return(nil, assert.AnError)
+
+	m := newEntryModel(t, s)
+
+	assert.Contains(t, bodyText(m), "load tags: "+assert.AnError.Error())
+	assert.True(t, m.entry.open, "the form still works without completion")
+}
