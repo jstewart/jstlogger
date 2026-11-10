@@ -115,3 +115,10 @@ func TestPickerView(t *testing.T) {
 	assert.Equal(t, "CW", plain(p.view(st, false)))
 	assert.Equal(t, "‹ CW ›", plain(p.view(st, true)))
 }
+
+func TestPickerEraseMultibyte(t *testing.T) {
+	p := pick(newPicker([]string{"", "Ä", "ÄÖ"}), keyPress('ä', 0), keyPress('ö', 0))
+	assert.Equal(t, "ÄÖ", p.value())
+	p = pick(p, special(tea.KeyBackspace))
+	assert.Equal(t, "Ä", p.value(), "backspace drops the whole last character")
+}

@@ -3,6 +3,7 @@ package tui
 import (
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -88,7 +89,8 @@ func (p *picker) update(msg tea.KeyPressMsg) bool {
 		if p.typed == "" {
 			break
 		}
-		p.typed = p.typed[:len(p.typed)-1]
+		_, n := utf8.DecodeLastRuneInString(p.typed)
+		p.typed = p.typed[:len(p.typed)-n]
 		if p.typed == "" {
 			p.i = 0
 		} else {
