@@ -286,9 +286,12 @@ func (m Model) openEntry() (Model, tea.Cmd) {
 	return m, tea.Batch(cmd, loadTagsCmd(m.logbook))
 }
 
-// closeEntry closes the New QSO screen, discarding the form.
+// closeEntry closes the New QSO screen, discarding the form. The tags are
+// kept to complete the tags field when it opens again.
 func (m Model) closeEntry() Model {
+	tags := m.entry.tags
 	m.entry = newEntry()
+	m.entry.tags = tags
 	return m
 }
 
@@ -347,6 +350,8 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, k.Quit):
 		return m, tea.Quit
+	case e.saving:
+		// Other keys wait for the save, so it lands on the form it saved.
 	case key.Matches(msg, k.Save):
 		return m.saveEntry(false)
 	case key.Matches(msg, k.SaveClose):
@@ -379,11 +384,10 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 }
 
 // editEntry sends msg, a key press or other input such as a paste, to the
-// field with focus, then fills in what follows from the change: the
-// submodes and default reports from the mode, and the bands from the freqs.
+// field with focus, then fills in what follows from the change.
 func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 	e := &m.entry
-	if e.tab != entryTabQSO {
+	if e.tab != entryTabQSO || e.saving {
 		return m, nil
 	}
 	before := e.form()
@@ -408,10 +412,19 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		e.inputs[e.focus], cmd = e.inputs[e.focus].Update(msg)
 	}
-	after := e.form()
-	if after == before {
-		return m, cmd
+	if after := e.form(); after != before {
+		e.fillIn(before, after)
+		if e.errs != nil {
+			m.validateEntry()
+		}
 	}
+	return m, cmd
+}
+
+// fillIn fills in what follows from a change to the form from before to
+// after: the submodes and default reports from the mode, the bands from the
+// freqs and the tag completions from the tags.
+func (e *entry) fillIn(before, after qsoentry.Form) {
 	changed := func(f qsoentry.Field) bool { return after[f] != before[f] }
 	if changed(qsoentry.Mode) {
 		e.submode.setOptions(append([]string{""}, adif.Submodes(after[qsoentry.Mode])...))
@@ -425,13 +438,9 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 	if changed(qsoentry.FreqRX) {
 		e.bandRX = e.fillBand(qsoentry.FreqRX, qsoentry.BandRX, e.bandRX)
 	}
-	if e.focus == qsoentry.Tags {
+	if changed(qsoentry.Tags) {
 		e.setTagSuggestions()
 	}
-	if e.errs != nil {
-		m.validateEntry()
-	}
-	return m, cmd
 }
 
 // fillRST fills in the default report for the mode and submode, in each
@@ -533,10 +542,19 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 func (m Model) entryView(width, height int) string {
 	st, e := m.styles, m.entry
 	lines := []string{tabBar(st, entryTabNames[:], int(e.tab), width)}
+	// end is the line after the focused row and its errors.
+	var end int
 	if e.tab == entryTabQSO {
-		lines = append(lines, m.entryFields(width)...)
+		fields, row, rows := m.entryFields(width)
+		// Scroll a window too short for every row to show the focused
+		// row and its errors, keeping the tab bar.
+		end = 1 + row + rows
+		lines = append(lines, fields...)
 	} else {
 		lines = append(lines, st.muted.Render(truncate("The "+entryTabNames[e.tab]+" tab is not available yet.", width, "…")))
+	}
+	if skip := end - (height - 1); skip > 0 {
+		lines = append(lines[:1], lines[1+skip:]...)
 	}
 	lines = lines[:min(len(lines), max(height-1, 0))]
 	for len(lines) < height-1 {
@@ -555,10 +573,11 @@ func (m Model) entryView(width, height int) string {
 }
 
 // entryFields renders the QSO tab's rows, each fitted to width cells and
-// followed by a line with the errors of its fields, if any.
-func (m Model) entryFields(width int) []string {
+// followed by a line with the errors of its fields, if any. It also returns
+// the line of the focused field's row and the number of lines that row
+// takes.
+func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 	e := m.entry
-	var lines []string
 	for _, row := range entryRows {
 		colWidth := width
 		if len(row) > 1 {
@@ -573,12 +592,16 @@ func (m Model) entryFields(width int) []string {
 			}
 			errs = append(errs, pad(strings.Repeat(" ", entryLabelWidth+2)+msg, colWidth))
 		}
+		start := len(lines)
 		lines = append(lines, strings.TrimRight(strings.Join(cells, "  "), " "))
 		if slices.ContainsFunc(row, func(f qsoentry.Field) bool { return e.errs[f] != nil }) {
 			lines = append(lines, strings.TrimRight(strings.Join(errs, "  "), " "))
 		}
+		if slices.Contains(row, e.focus) {
+			focus, rows = start, len(lines)-start
+		}
 	}
-	return lines
+	return lines, focus, rows
 }
 
 // entryCell renders field f, labeled, in width cells. The grid is followed

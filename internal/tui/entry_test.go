@@ -464,3 +464,39 @@ func TestEntryTagLoadErrorIsShown(t *testing.T) {
 	assert.Contains(t, bodyText(m), "load tags: "+assert.AnError.Error())
 	assert.True(t, m.entry.open, "the form still works without completion")
 }
+
+func TestEntryKeysWaitForTheSave(t *testing.T) {
+	s := newEntryStore(t, nil)
+	s.EXPECT().Add(gomock.Any(), gomock.Any()).Return(logbook.QSO{}, assert.AnError)
+	m := newEntryModel(t, s)
+	m = fill(t, m, paperQSO)
+
+	m, save := update(t, m, saveKey)
+	require.True(t, m.entry.saving)
+	m = press(t, m, keyPress('x', 0), tab(), esc())
+	m = runIndex(t, m, save)
+
+	assert.True(t, m.entry.open, "esc during the save doesn't close the screen")
+	assert.Equal(t, promptNone, m.prompt)
+	assert.Equal(t, "pota", entryValue(m, qsoentry.Tags), "keys during the save don't edit the form")
+	assert.Contains(t, bodyText(m), assert.AnError.Error(), "the failed save is shown")
+}
+
+func TestEntryKeepsTagsWhenClosed(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, []string{"pota"}))
+	m = press(t, m, esc())
+	assert.Equal(t, []string{"pota"}, m.entry.tags)
+}
+
+func TestEntryScrollsToTheFocusedField(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m, _ = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 12})
+
+	assert.Contains(t, bodyText(m), "Date ")
+	m = focusOn(t, m, qsoentry.Tags)
+	body := bodyText(m)
+	assert.Contains(t, body, "Tags ")
+	assert.Contains(t, body, " QSO ", "the tab bar stays")
+	assert.Contains(t, body, "New QSO · post", "the status line stays")
+	assert.LessOrEqual(t, strings.Count(m.View().Content, "\n")+1, 12)
+}
