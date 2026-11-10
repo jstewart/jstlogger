@@ -264,7 +264,8 @@ func (b *builder) clock(k Field, name string, required bool) (time.Duration, boo
 	}
 	for _, layout := range clockLayouts {
 		if t, err := time.Parse(layout, s); err == nil {
-			return t.Sub(t.Truncate(24 * time.Hour)), true
+			h, m, sec := t.Clock()
+			return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second, true
 		}
 	}
 	b.fail(k, "%s must be HH:MM or HH:MM:SS", name)

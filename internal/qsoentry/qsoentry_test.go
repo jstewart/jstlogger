@@ -106,6 +106,10 @@ func TestBuildTimeOff(t *testing.T) {
 			want: time.Date(2026, 11, 9, 14, 10, 0, 0, time.UTC),
 		},
 		{
+			name: "seconds", date: "2026-11-09", on: "000000", timeOff: "235959",
+			want: time.Date(2026, 11, 9, 23, 59, 59, 0, time.UTC),
+		},
+		{
 			name: "past midnight", date: "2026-11-09", on: "23:58", timeOff: "00:03",
 			want: time.Date(2026, 11, 10, 0, 3, 0, 0, time.UTC),
 		},
