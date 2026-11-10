@@ -581,16 +581,16 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 	for _, row := range entryRows {
 		colWidth := width
 		if len(row) > 1 {
-			colWidth = (width - 2) / 2
+			colWidth = max(width-2, 0) / 2
 		}
 		var cells, errs []string
 		for _, f := range row {
-			cells = append(cells, pad(m.entryCell(f, colWidth), colWidth))
+			cells = append(cells, fit(m.entryCell(f, colWidth), colWidth))
 			var msg string
 			if err := e.errs[f]; err != nil {
 				msg = m.styles.err.Render(truncate("✗ "+err.Error(), max(colWidth-entryLabelWidth-2, 0), "…"))
 			}
-			errs = append(errs, pad(strings.Repeat(" ", entryLabelWidth+2)+msg, colWidth))
+			errs = append(errs, fit(strings.Repeat(" ", entryLabelWidth+2)+msg, colWidth))
 		}
 		start := len(lines)
 		lines = append(lines, strings.TrimRight(strings.Join(cells, "  "), " "))
@@ -657,4 +657,13 @@ func (m Model) entryPath() string {
 	}
 	// A bearing that rounds up to 360° is due north.
 	return fmt.Sprintf("%d° · %s %s", int(math.Round(bearing))%360, indexfmt.FormatDistance(km, unit), unit)
+}
+
+// fit cuts the styled s to width cells, or pads it out to width.
+func fit(s string, width int) string {
+	if width <= 0 {
+		// MaxWidth(0) is no limit.
+		return ""
+	}
+	return pad(lipgloss.NewStyle().MaxWidth(width).Render(s), width)
 }

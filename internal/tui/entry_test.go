@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -499,4 +501,42 @@ func TestEntryScrollsToTheFocusedField(t *testing.T) {
 	assert.Contains(t, body, " QSO ", "the tab bar stays")
 	assert.Contains(t, body, "New QSO · post", "the status line stays")
 	assert.LessOrEqual(t, strings.Count(m.View().Content, "\n")+1, 12)
+}
+
+func TestEntryFitsNarrowWindows(t *testing.T) {
+	for _, width := range []int{12, 20, 40, 60} {
+		t.Run(strconv.Itoa(width), func(t *testing.T) {
+			st := qsoentry.Station{Grid: "FN31"}
+			m := newEntryModel(t, newEntryStore(t, nil), WithStation(st))
+			m = fill(t, m, map[qsoentry.Field]string{
+				qsoentry.Mode: "digitalvoice", qsoentry.Submode: "c", qsoentry.Gridsquare: "io91",
+			})
+			m = press(t, m, saveKey)
+
+			m, _ = update(t, m, tea.WindowSizeMsg{Width: width, Height: 30})
+
+			v := m.View().Content
+			assert.Equal(t, 30, lipgloss.Height(v), "the view fills the window without wrapping")
+			for i, line := range strings.Split(v, "\n") {
+				assert.LessOrEqual(t, lipgloss.Width(line), width, "line %d: %q", i, plain(line))
+			}
+		})
+	}
+}
+
+func TestEntryColumnsLineUp(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Mode: "digitalvoice"})
+	m, _ = update(t, m, tea.WindowSizeMsg{Width: 40, Height: 30})
+
+	col := func(label string) int {
+		for line := range strings.SplitSeq(bodyText(m), "\n") {
+			if i := strings.Index(line, label); i >= 0 {
+				return lipgloss.Width(line[:i])
+			}
+		}
+		t.Fatalf("no %q in the view", label)
+		return 0
+	}
+	assert.Equal(t, col("Time on"), col("Submode"), "a long mode doesn't push the submode over")
 }
