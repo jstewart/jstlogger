@@ -94,3 +94,24 @@ func KmToMiles(km float64) float64 { return km / kmPerMile }
 
 // MilesToKm converts international miles to kilometers.
 func MilesToKm(miles float64) float64 { return miles * kmPerMile }
+
+// GridBearing returns the initial great-circle bearing, in degrees clockwise
+// from true north in [0, 360), from the center of one Maidenhead locator to
+// the center of another.
+func GridBearing(from, to string) (float64, error) {
+	lat1, lon1, err := GridCenter(from)
+	if err != nil {
+		return 0, fmt.Errorf("logbook: grid bearing: %w", err)
+	}
+	lat2, lon2, err := GridCenter(to)
+	if err != nil {
+		return 0, fmt.Errorf("logbook: grid bearing: %w", err)
+	}
+	rad := math.Pi / 180
+	latRad1, latRad2 := lat1*rad, lat2*rad
+	dLon := (lon2 - lon1) * rad
+	y := math.Sin(dLon) * math.Cos(latRad2)
+	x := math.Cos(latRad1)*math.Sin(latRad2) - math.Sin(latRad1)*math.Cos(latRad2)*math.Cos(dLon)
+	deg := math.Mod(math.Atan2(y, x)/rad+360, 360)
+	return deg, nil
+}

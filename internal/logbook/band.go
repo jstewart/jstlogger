@@ -1,5 +1,10 @@
 package logbook
 
+import (
+	"slices"
+	"strings"
+)
+
 // band is one entry of the ADIF Band enumeration; edges are inclusive Hz.
 type band struct {
 	name   string
@@ -54,4 +59,10 @@ func BandForFreq(hz int64) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// IsBand reports whether name, ignoring case, is a band of the ADIF Band
+// enumeration that BandForFreq knows.
+func IsBand(name string) bool {
+	return slices.ContainsFunc(bands, func(b band) bool { return strings.EqualFold(b.name, name) })
 }
