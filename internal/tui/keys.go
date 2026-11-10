@@ -113,6 +113,7 @@ type indexKeyMap struct {
 	Last           key.Binding
 	Jump           key.Binding
 	Open           key.Binding
+	NewQSO         key.Binding
 	Mark           key.Binding
 	MarkPattern    key.Binding
 	UnmarkPattern  key.Binding
@@ -199,6 +200,10 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "show QSO"),
 		),
+		NewQSO: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "new QSO"),
+		),
 		Mark: key.NewBinding(
 			key.WithKeys("t"),
 			key.WithHelp("t", "mark"),
@@ -268,7 +273,7 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
 		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
-		&k.First, &k.Last, &k.Jump, &k.Open, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
+		&k.First, &k.Last, &k.Jump, &k.Open, &k.NewQSO, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
 		&k.Limit, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
 		&k.SearchOpposite, &k.Delete, &k.MarkPrefix, &k.PrefixCancel,
 		&k.BulkDelete, &k.BulkSave, &k.BulkTag, &k.BulkUntag,
@@ -279,7 +284,7 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 }
 
 func (k indexKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Next, k.Prev, k.Open, k.Mark, k.Jump}
+	return []key.Binding{k.Next, k.Prev, k.Open, k.NewQSO, k.Mark, k.Jump}
 }
 
 func (k indexKeyMap) FullHelp() [][]key.Binding {
@@ -287,7 +292,7 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 		{k.Next, k.Prev, k.NextLine, k.PrevLine},
 		{k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp},
 		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
-		{k.First, k.Last, k.Limit, k.Reload, k.Open},
+		{k.First, k.Last, k.Limit, k.Reload, k.Open, k.NewQSO},
 		{k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix},
 		{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite},
 		{k.Delete, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag},
