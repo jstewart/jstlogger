@@ -140,7 +140,7 @@ func TestLoTWNotAUser(t *testing.T) {
 	assert.NotContains(t, callLine(t, m), "[L]")
 	line, ok := lotwLine(m)
 	require.True(t, ok)
-	assert.Contains(t, line, "not a LoTW user")
+	assert.Equal(t, pagerEmpty, strings.TrimSpace(strings.TrimPrefix(line, "LoTW")), "a non-user shows the empty-field dash")
 }
 
 func TestLoTWLookupErrorShowsNoBadge(t *testing.T) {
@@ -151,9 +151,8 @@ func TestLoTWLookupErrorShowsNoBadge(t *testing.T) {
 	line, ok := lotwLine(m)
 	require.True(t, ok, "the row keeps its place")
 	assert.Contains(t, line, "lookup failed")
-	view := plain(m.View().Content)
-	assert.NotContains(t, view, "not a LoTW user")
-	assert.Contains(t, view, "disk on fire", "the error is shown on the status line")
+	assert.NotContains(t, line, pagerEmpty)
+	assert.Contains(t, plain(m.View().Content), "disk on fire", "the error is shown on the status line")
 }
 
 func TestLoTWWithoutLookup(t *testing.T) {

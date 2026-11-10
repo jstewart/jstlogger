@@ -167,15 +167,14 @@ func (s lotwStatus) badge(st styles) string {
 	}
 }
 
-// text describes the callsign's last upload, or "" while it is not known.
+// text describes the callsign's last upload, or "" while it is not known
+// or the callsign is not a LoTW user.
 func (s lotwStatus) text() string {
 	switch {
 	case s.failed:
 		return "lookup failed"
-	case !s.loaded:
+	case !s.loaded || !s.found:
 		return ""
-	case !s.found:
-		return "not a LoTW user"
 	}
 	switch days := lotw.DaysAgo(s.last, s.now); days {
 	case 0:
