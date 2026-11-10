@@ -46,18 +46,18 @@ func (t pagerTab) prev() pagerTab {
 // qslDateFormat is the layout of the dates on the QSL tab.
 const qslDateFormat = "2006-01-02"
 
-// tabBar renders the pager's tab bar, with the active tab highlighted,
-// ruled to width cells. Tabs that don't fit are cut off.
-func tabBar(st styles, active pagerTab, width int) string {
+// tabBar renders a tab bar of the named tabs, with the tab at index active
+// highlighted, ruled to width cells. Tabs that don't fit are cut off.
+func tabBar(st styles, names []string, active, width int) string {
 	var b strings.Builder
 	room := width
-	for t := range pagerTabCount {
+	for i, n := range names {
 		if room <= 0 {
 			break
 		}
-		name := truncate(" "+t.String()+" ", room, "")
+		name := truncate(" "+n+" ", room, "")
 		room -= lipgloss.Width(name)
-		if t == active {
+		if i == active {
 			name = st.tab.Render(name)
 		}
 		b.WriteString(name)
