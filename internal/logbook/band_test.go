@@ -46,3 +46,13 @@ func TestBandForFreq(t *testing.T) {
 		})
 	}
 }
+
+func TestIsBand(t *testing.T) {
+	for _, b := range []string{"20m", "160m", "70cm", "1.25m", "2190m", "1mm"} {
+		assert.True(t, IsBand(b), b)
+	}
+	assert.True(t, IsBand("20M"), "case is ignored")
+	for _, b := range []string{"", "21m", "20", "submm", " 20m"} {
+		assert.False(t, IsBand(b), b)
+	}
+}

@@ -144,3 +144,34 @@ func TestMilesKmConversion(t *testing.T) {
 		})
 	}
 }
+
+func TestGridBearing(t *testing.T) {
+	tests := []struct {
+		name     string
+		from, to string
+		want     float64
+	}{
+		{name: "due north", from: "JJ00", to: "JJ09", want: 0},
+		{name: "due east on the equator", from: "JJ00", to: "KJ00", want: 90},
+		{name: "due south", from: "JJ09", to: "JJ00", want: 180},
+		{name: "due west on the equator", from: "KJ00", to: "JJ00", want: 270},
+		// The centers of FN42 (Boston) and IO91 (London).
+		{name: "great circle", from: "FN42", to: "IO91", want: 53.5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GridBearing(tt.from, tt.to)
+			require.NoError(t, err)
+			assert.InDelta(t, tt.want, got, 1)
+			assert.GreaterOrEqual(t, got, 0.0)
+			assert.Less(t, got, 360.0)
+		})
+	}
+}
+
+func TestGridBearingInvalid(t *testing.T) {
+	_, err := GridBearing("FN42", "XX")
+	require.ErrorIs(t, err, ErrInvalidGrid)
+	_, err = GridBearing("", "FN42")
+	assert.ErrorIs(t, err, ErrInvalidGrid)
+}

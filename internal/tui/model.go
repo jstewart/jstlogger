@@ -14,6 +14,7 @@ import (
 
 	"jstlogger/internal/callsign"
 	"jstlogger/internal/logbook"
+	"jstlogger/internal/qsoentry"
 	"jstlogger/internal/rig"
 )
 
@@ -24,6 +25,7 @@ type Model struct {
 	indexKeys  indexKeyMap
 	pagerKeys  pagerKeyMap
 	promptKeys promptKeyMap
+	entryKeys  entryKeyMap
 	help       help.Model
 	styles     styles
 
@@ -63,6 +65,11 @@ type Model struct {
 	idx     index
 	// pager is shown in the body, below a strip of the index, while open.
 	pager pager
+	// entry is the New QSO screen, shown in the body in place of the index
+	// while open.
+	entry entry
+	// station is our side of the QSOs the New QSO screen logs.
+	station qsoentry.Station
 
 	// markedFuncs are the index functions that accept the mark-prefix. The
 	// bulk operations register here.
@@ -87,11 +94,13 @@ type Model struct {
 func New(opts ...Option) Model {
 	m := Model{
 		promptKeys: defaultPromptKeys(),
+		entryKeys:  defaultEntryKeys(),
 		help:       help.New(),
 		styles:     defaultStyles(),
 		input:      newInput(),
 		idx:        newIndex(),
 		pager:      pager{indexLines: defaultPagerIndexLines},
+		entry:      newEntry(),
 		now:        time.Now,
 	}
 	for _, opt := range opts {
@@ -143,6 +152,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.lotwErr = nil
 		m.eqslErr = nil
 		m.idx.msg = ""
+		if m.entry.open {
+			return m.updateEntry(msg)
+		}
 		if m.idx.prefix {
 			return m.updatePrefix(msg)
 		}
@@ -191,6 +203,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case indexBulkMsg:
 		return m.applyBulk(msg)
 
+	case entryTagsMsg:
+		m.entry.applyTags(msg)
+
+	case entrySavedMsg:
+		return m.applySaved(msg)
+
 	case pagerQSOMsg:
 		q, _ := m.idx.current()
 		m.pager.applyQSO(msg, q.ID)
@@ -233,11 +251,14 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	default:
 		// Other input, such as pastes, goes to the open prompt, but not to
-		// a y/N question.
+		// a y/N question, or else to the New QSO screen.
 		if m.promptOpen() && m.prompt != promptConfirm {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
 			return m, cmd
+		}
+		if m.entry.open && !m.promptOpen() {
+			return m.editEntry(msg)
 		}
 	}
 
@@ -251,6 +272,8 @@ func (m Model) View() tea.View {
 	bodyHeight := m.bodyHeight()
 	content := m.styles.muted.Render("No QSOs yet.")
 	switch {
+	case m.logbook != nil && m.entry.open:
+		content = m.entryView(m.bodyWidth(), bodyHeight)
 	case m.logbook != nil && m.pager.open:
 		content = m.pagerView(m.bodyWidth(), bodyHeight)
 	case m.logbook != nil:
@@ -290,6 +313,9 @@ func (m Model) footerView() string {
 	var keys help.KeyMap = joinedKeyMap{m.keys, m.indexKeys}
 	if m.pager.open {
 		keys = joinedKeyMap{m.globalKeys(), m.pagerKeys}
+	}
+	if m.entry.open {
+		keys = m.entryKeys
 	}
 	switch {
 	case m.promptOpen():
@@ -385,6 +411,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		x.last()
 	case key.Matches(msg, k.Open):
 		return m.openPager(), nil
+	case key.Matches(msg, k.NewQSO):
+		return m.openEntry()
 	case key.Matches(msg, k.Mark):
 		x.toggleMark()
 	case key.Matches(msg, k.Jump):

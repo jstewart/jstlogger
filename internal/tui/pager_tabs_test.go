@@ -139,7 +139,7 @@ func TestPagerTabPersistsAcrossQSOs(t *testing.T) {
 func TestTabBarMarksActiveTab(t *testing.T) {
 	st := defaultStyles()
 	for tb := range pagerTabCount {
-		bar := tabBar(st, tb, 80)
+		bar := tabBar(st, pagerTabNames[:], int(tb), 80)
 		assert.Equal(t, 80, lipgloss.Width(bar))
 		assert.Contains(t, bar, st.tab.Render(" "+tb.String()+" "), "%s is active", tb)
 		for other := range pagerTabCount {
@@ -150,7 +150,7 @@ func TestTabBarMarksActiveTab(t *testing.T) {
 		}
 	}
 	for _, w := range []int{0, 1, 5, 12, 30} {
-		assert.LessOrEqual(t, lipgloss.Width(tabBar(st, tabADIF, w)), w, "width %d", w)
+		assert.LessOrEqual(t, lipgloss.Width(tabBar(st, pagerTabNames[:], int(tabADIF), w)), w, "width %d", w)
 	}
 }
 

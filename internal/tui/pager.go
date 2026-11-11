@@ -375,7 +375,7 @@ func (m Model) pagerView(width, height int) string {
 	for len(lines) < x.height {
 		lines = append(lines, "")
 	}
-	lines = append(lines, tabBar(st, m.pager.tab, width))
+	lines = append(lines, tabBar(st, pagerTabNames[:], int(m.pager.tab), width))
 	content := m.pagerContent(width)
 	room := m.pagerRoom(height)
 	scroll := min(m.pager.scroll, max(len(content)-room, 0))

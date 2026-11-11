@@ -22,6 +22,7 @@ import (
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/lotw"
+	"jstlogger/internal/qsoentry"
 	"jstlogger/internal/rig"
 	"jstlogger/internal/tui"
 )
@@ -52,6 +53,11 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 			return config.StationName(session.Config.Stations, callsign, grid)
 		}),
 		tui.WithURLOpener(browser.Open),
+		tui.WithStation(qsoentry.Station{
+			Callsign: session.Station.Callsign,
+			Operator: session.Operator,
+			Grid:     session.Station.Gridsquare,
+		}),
 	}
 
 	var syncer *lotw.Syncer
