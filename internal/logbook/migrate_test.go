@@ -166,9 +166,10 @@ func TestMigrateRealMigrations(t *testing.T) {
 
 	require.NoError(t, migrate(context.Background(), db, migrations.FS))
 
-	assert.Equal(t, 3, userVersion(t, db))
+	assert.Equal(t, 4, userVersion(t, db))
 	for _, table := range []string{
 		"qso", "qso_adif_field", "qso_confirmation", "tag", "qso_tag", "lotw_user", "lotw_sync",
+		"eqsl_ag", "eqsl_sync",
 	} {
 		assert.True(t, schemaObjectExists(t, db, "table", table), "table %s", table)
 	}
@@ -212,7 +213,7 @@ func TestMigrateAddsLoTWTables(t *testing.T) {
 
 	require.NoError(t, migrate(ctx, db, migrations.FS))
 
-	assert.Equal(t, 3, userVersion(t, db))
+	assert.Equal(t, 4, userVersion(t, db))
 	_, err := db.ExecContext(ctx,
 		"INSERT INTO lotw_user (call, last_upload) VALUES ('W1AW', '2026-11-01T12:00:00Z')")
 	require.NoError(t, err)
@@ -229,4 +230,35 @@ func TestMigrateAddsLoTWTables(t *testing.T) {
 	assert.Empty(t, lastModified)
 	_, err = db.ExecContext(ctx, "INSERT INTO lotw_sync (id, synced_at) VALUES (2, '2026-11-01T12:00:00Z')")
 	require.Error(t, err, "lotw_sync holds a single row")
+}
+
+func TestMigrateAddsEQSLTables(t *testing.T) {
+	db := openRawDB(t)
+	ctx := t.Context()
+	first := fstest.MapFS{}
+	for _, name := range []string{"0001_init.sql", "0002_operator.sql", "0003_lotw_users.sql"} {
+		body, err := fs.ReadFile(migrations.FS, name)
+		require.NoError(t, err)
+		first[name] = &fstest.MapFile{Data: body}
+	}
+	require.NoError(t, migrate(ctx, db, first))
+	require.Equal(t, 3, userVersion(t, db))
+
+	require.NoError(t, migrate(ctx, db, migrations.FS))
+
+	assert.Equal(t, 4, userVersion(t, db))
+	_, err := db.ExecContext(ctx, "INSERT INTO eqsl_ag (call) VALUES ('W1AW')")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "INSERT INTO eqsl_ag (call) VALUES ('W1AW')")
+	require.Error(t, err, "call is the primary key")
+
+	_, err = db.ExecContext(ctx, "INSERT INTO eqsl_sync (id, synced_at) VALUES (1, '2026-11-01T12:00:00Z')")
+	require.NoError(t, err)
+	var etag, lastModified string
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT etag, last_modified FROM eqsl_sync WHERE id = 1").Scan(&etag, &lastModified))
+	assert.Empty(t, etag)
+	assert.Empty(t, lastModified)
+	_, err = db.ExecContext(ctx, "INSERT INTO eqsl_sync (id, synced_at) VALUES (2, '2026-11-01T12:00:00Z')")
+	require.Error(t, err, "eqsl_sync holds a single row")
 }
