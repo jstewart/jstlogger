@@ -230,6 +230,18 @@ func TestEQSLSyncFailedShown(t *testing.T) {
 	assert.Equal(t, "yes", eqslValue(t, m), "the stored data keeps working")
 }
 
+func TestLoTWAndEQSLSyncFailuresBothShown(t *testing.T) {
+	f := &fakeEQSL{members: map[string]bool{}}
+	m := newEQSLModel(t, f, []logbook.QSO{lotwQSO(1, "W1AW")})
+
+	m, _ = update(t, m, LoTWSynced{Err: errors.New("feed down")})
+	m, _ = update(t, m, EQSLSynced{Err: errors.New("list down")})
+
+	footer := plain(m.footerView())
+	assert.Contains(t, footer, "LoTW sync failed: feed down")
+	assert.Contains(t, footer, "eQSL sync failed: list down", "one failure doesn't hide the other")
+}
+
 func TestEQSLSyncedLooksUpAgain(t *testing.T) {
 	f := &fakeEQSL{members: map[string]bool{}}
 	m := newEQSLModel(t, f, []logbook.QSO{lotwQSO(1, "W1AW")})

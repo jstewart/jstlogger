@@ -303,10 +303,14 @@ func (m Model) footerView() string {
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
 	case m.lookupErr != nil:
 		lines = append(lines, m.styles.err.Render(m.lookupErr.Error()))
-	case m.lotwErr != nil:
-		lines = append(lines, m.styles.err.Render(m.lotwErr.Error()))
-	case m.eqslErr != nil:
-		lines = append(lines, m.styles.err.Render(m.eqslErr.Error()))
+	default:
+		// Both background syncs can fail at once, as when offline, so
+		// neither error hides the other.
+		for _, err := range []error{m.lotwErr, m.eqslErr} {
+			if err != nil {
+				lines = append(lines, m.styles.err.Render(err.Error()))
+			}
+		}
 	}
 	lines = append(lines, m.help.View(keys))
 	return m.styles.footer.
