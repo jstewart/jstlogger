@@ -127,13 +127,16 @@ func (m *Model) applyLoTWSynced(msg LoTWSynced) tea.Cmd {
 }
 
 // indexLoTW caches, by base callsign, the LoTW lookups an index %L column
-// shows.
+// shows. It holds one entry per distinct base callsign shown, which is
+// bounded by the logbook, so entries are not evicted with their blocks.
 type indexLoTW struct {
 	// last holds the last upload of each base callsign looked up, or the
 	// zero time for one that is not a LoTW user.
 	last map[string]time.Time
-	// pending holds the base callsigns being looked up, and those whose
-	// lookup failed, which are not retried until the next sync.
+	// prev holds lookups made before the latest sync, shown until a new
+	// lookup replaces them so the column doesn't blank while it runs.
+	prev map[string]time.Time
+	// pending holds the base callsigns being looked up.
 	pending map[string]bool
 	// gen counts syncs; lookups started before the latest sync are
 	// dropped.
@@ -144,12 +147,19 @@ type indexLoTW struct {
 
 // newIndexLoTW returns an empty indexLoTW on the system clock.
 func newIndexLoTW() indexLoTW {
-	return indexLoTW{last: map[string]time.Time{}, pending: map[string]bool{}, now: time.Now}
+	return indexLoTW{
+		last:    map[string]time.Time{},
+		prev:    map[string]time.Time{},
+		pending: map[string]bool{},
+		now:     time.Now,
+	}
 }
 
-// forget drops every lookup, and the lookups under way.
+// forget marks every lookup out of date, so it is looked up again, and drops
+// the lookups under way. The old lookups show until new ones replace them.
 func (c *indexLoTW) forget() {
 	c.gen++
+	maps.Copy(c.prev, c.last)
 	c.last = map[string]time.Time{}
 	c.pending = map[string]bool{}
 }
@@ -157,7 +167,11 @@ func (c *indexLoTW) forget() {
 // lastUpload returns when the base callsign of call last uploaded to LoTW,
 // and whether it is known to be a LoTW user. It does no I/O.
 func (c indexLoTW) lastUpload(call string) (time.Time, bool) {
-	last := c.last[callsign.Base(call)]
+	base := callsign.Base(call)
+	last, ok := c.last[base]
+	if !ok {
+		last = c.prev[base]
+	}
 	return last, !last.IsZero()
 }
 
@@ -211,18 +225,21 @@ func (m *Model) lookupIndexLoTW(rows []logbook.QSO) tea.Cmd {
 }
 
 // apply caches a batch lookup. A lookup started before the latest sync is
-// dropped. A failed lookup leaves its callsigns pending, so their rows stay
-// blank, and is returned to be shown.
+// dropped. A failed lookup is returned to be shown; its callsigns are not
+// cached, so they are looked up again when their rows next load.
 func (c *indexLoTW) apply(msg lotwUsersMsg) error {
 	if msg.gen != c.gen {
 		return nil
+	}
+	for _, call := range msg.calls {
+		delete(c.pending, call)
 	}
 	if msg.err != nil {
 		return msg.err
 	}
 	for _, call := range msg.calls {
-		delete(c.pending, call)
 		c.last[call] = msg.last[call]
+		delete(c.prev, call)
 	}
 	return nil
 }

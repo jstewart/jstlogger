@@ -163,7 +163,39 @@ func TestIndexLoTWLookupError(t *testing.T) {
 
 	m = pressPager(t, m, keyPress('j', 0))
 	m = runPager(t, m, m.layout())
-	assert.Len(t, f.lookedUpBatches(), 1, "a failed lookup is not retried until the next sync")
+	assert.Len(t, f.lookedUpBatches(), 1, "moving the cursor does not retry a failed lookup")
+}
+
+func TestIndexLoTWLookupRetriedOnReload(t *testing.T) {
+	f := &fakeLoTW{users: lotwUsers(), err: errors.New("database is locked")}
+	m := newIndexLoTWModel(t, f, lotwIndexFormat, lotwQSO(2, "W1AW"), lotwQSO(1, "K1ABC"))
+	require.Len(t, f.lookedUpBatches(), 1)
+
+	f.mu.Lock()
+	f.err = nil
+	f.mu.Unlock()
+	m = pressPager(t, m, keyPress('l', tea.ModCtrl))
+
+	assert.Equal(t, [][]string{{"K1ABC", "W1AW"}, {"K1ABC", "W1AW"}}, f.lookedUpBatches(),
+		"reloading the index retries the failed lookup")
+	assert.Contains(t, plain(rowLine(t, m, "W1AW")), "L W1AW")
+}
+
+func TestIndexLoTWKeptUntilSyncLookupLands(t *testing.T) {
+	f := &fakeLoTW{users: lotwUsers()}
+	m := newIndexLoTWModel(t, f, lotwIndexFormat, lotwQSO(1, "W1AW"))
+	require.Contains(t, plain(rowLine(t, m, "W1AW")), "L W1AW")
+
+	m, cmd := update(t, m, LoTWSynced{})
+	require.NotNil(t, cmd, "a successful sync looks the rows up again")
+	assert.Contains(t, plain(rowLine(t, m, "W1AW")), "L W1AW",
+		"the old status shows until the new lookup lands")
+
+	f.mu.Lock()
+	delete(f.users, "W1AW")
+	f.mu.Unlock()
+	m = runPager(t, m, cmd)
+	assert.Contains(t, plain(rowLine(t, m, "W1AW")), "  W1AW", "the new lookup replaces it")
 }
 
 func TestIndexLoTWSynced(t *testing.T) {
