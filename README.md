@@ -93,7 +93,7 @@ NeoMutt's split pager. Ten index rows stay above it with the QSO
 highlighted; set `[index] pager_index_lines` to keep more or fewer, or
 `0` for none. In a window too short for them, the strip shrinks so the
 top of the QSO tab stays visible. Below them, the QSO tab lists the date
-and time (UTC), call, LoTW status, band, frequency, mode and submode, the reports sent and received, grid,
+and time (UTC), call, LoTW status, eQSL AG status, band, frequency, mode and submode, the reports sent and received, grid,
 distance (in `[logbook] distance_unit`), state, county, name, comment,
 country and continent. An empty field shows `—`, so the layout doesn't
 shift between QSOs.
@@ -128,6 +128,26 @@ jstlogger --sync-lotw   # prints e.g. "LoTW: 237123 users (2 rows skipped)"
 
 The download is conditional, so an unchanged feed costs no download and
 prints `LoTW: feed unchanged`.
+
+The `[E]` badge also shows whether the station is an eQSL Authenticity
+Guaranteed (AG) member: bright and bold for a member, dim for a station
+that is not one, and its usual color while that is not yet known or the
+lookup failed. It stays a link either way. The eQSL AG row, after the
+LoTW row, says `yes` for a member, `—` otherwise, or `lookup failed`
+(with the error on the status line). It uses the base callsign too.
+
+The AG data comes from eQSL's
+[AG member list](https://www.eqsl.cc/qslcard/DownloadedFiles/AGMemberList.txt),
+stored in the logbook and refreshed in the background like the LoTW feed
+when it is more than a week old. A failed refresh shows `eQSL sync
+failed: …` on the status line and keeps the stored copy. To refresh it
+now, run:
+
+```sh
+jstlogger --sync-eqsl   # prints e.g. "eQSL: 199457 AG members (850 rows skipped)"
+```
+
+An unchanged list prints `eQSL: AG list unchanged`.
 
 `j`/`↓` and `k`/`↑` move to the next or previous QSO in index order
 without leaving the pager, and the index rows follow. `q` or `esc` closes
@@ -296,7 +316,7 @@ rigctld address (for example `localhost:4532`).
 ### Debug log
 
 Run `jstlogger --debug` to log rig events (state changes, connection
-changes and commands) and the background LoTW sync to `$XDG_STATE_HOME/jstlogger/debug.log`
+changes and commands) and the background LoTW and eQSL syncs to `$XDG_STATE_HOME/jstlogger/debug.log`
 (`~/.local/state/jstlogger/debug.log` by default). Watch it with
 `tail -f` in another terminal.
 
@@ -398,6 +418,8 @@ JSTLOGGER_ROUNDTRIP_ADIF=/path/to/log.adi go test -run TestRoundTripExternalFile
 main.go            entry point; parses flags, loads config and starts the app
 internal/adif/     ADIF .adi file reading, writing and comparison
 internal/config/   config file loading, validation and session overrides
+internal/eqsl/     eQSL AG member list download, storage and lookup
+internal/feed/     conditional download and sync metadata shared by the lists
 internal/indexfmt/ QSO index format parsing and column values
 internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
 internal/lotw/     LoTW user activity feed download, storage and recency

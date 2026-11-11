@@ -165,6 +165,7 @@ func TestRunModeFlagsExclusive(t *testing.T) {
 		{"--import-adif", "in.adi"},
 		{"--export-adif", "out.adi"},
 		{"--sync-lotw"},
+		{"--sync-eqsl"},
 	}
 	for i, a := range modes {
 		for _, b := range modes[i+1:] {
@@ -589,4 +590,12 @@ func TestRigOptions(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestParseFlagsSyncEQSL(t *testing.T) {
+	var stderr strings.Builder
+	opts, _, ok := parseFlags([]string{"--sync-eqsl"}, &stderr)
+	require.True(t, ok, stderr.String())
+	assert.True(t, opts.syncEQSL)
+	assert.False(t, opts.syncLoTW)
 }
