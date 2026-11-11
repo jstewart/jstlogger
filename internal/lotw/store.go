@@ -9,18 +9,11 @@ import (
 	"time"
 
 	"jstlogger/internal/callsign"
+	"jstlogger/internal/feed"
 )
 
 // Meta describes the last successful download of the feed.
-type Meta struct {
-	// ETag is the feed's ETag response header, sent back as If-None-Match.
-	ETag string
-	// LastModified is the feed's Last-Modified response header, sent back
-	// as If-Modified-Since.
-	LastModified string
-	// SyncedAt is when the feed was last downloaded or confirmed unchanged.
-	SyncedAt time.Time
-}
+type Meta = feed.Meta
 
 // Store keeps the LoTW activity feed in the logbook database. It is safe
 // for concurrent use.
@@ -62,7 +55,7 @@ func (s *Store) lastUpload(ctx context.Context, call string) (time.Time, bool, e
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("lotw: look up %s: %w", call, err)
 	}
-	at, err := parseTime(text)
+	at, err := feed.ParseTime(text)
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("lotw: look up %s: %w", call, err)
 	}
@@ -83,7 +76,7 @@ func (s *Store) LastSync(ctx context.Context) (Meta, bool, error) {
 	if err != nil {
 		return Meta{}, false, fmt.Errorf("lotw: last sync: %w", err)
 	}
-	if m.SyncedAt, err = parseTime(syncedAt); err != nil {
+	if m.SyncedAt, err = feed.ParseTime(syncedAt); err != nil {
 		return Meta{}, false, fmt.Errorf("lotw: last sync: %w", err)
 	}
 	return m, true, nil
@@ -104,7 +97,7 @@ func (s *Store) replace(ctx context.Context, users []User, meta Meta) error {
 		if err := insertUsers(ctx, tx, users); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, formatTime(meta.SyncedAt)); err != nil {
+		if _, err := tx.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, feed.FormatTime(meta.SyncedAt)); err != nil {
 			return fmt.Errorf("write meta: %w", err)
 		}
 		return nil
@@ -129,7 +122,7 @@ func insertUsers(ctx context.Context, tx *sql.Tx, users []User) (err error) {
 		}
 	}()
 	for _, u := range users {
-		if _, err := stmt.ExecContext(ctx, u.Call, formatTime(u.LastUpload)); err != nil {
+		if _, err := stmt.ExecContext(ctx, u.Call, feed.FormatTime(u.LastUpload)); err != nil {
 			return fmt.Errorf("insert %s: %w", u.Call, err)
 		}
 	}
@@ -139,7 +132,7 @@ func insertUsers(ctx context.Context, tx *sql.Tx, users []User) (err error) {
 // touch records meta without changing the stored users, for a feed the
 // server reports unchanged.
 func (s *Store) touch(ctx context.Context, meta Meta) error {
-	if _, err := s.db.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, formatTime(meta.SyncedAt)); err != nil {
+	if _, err := s.db.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, feed.FormatTime(meta.SyncedAt)); err != nil {
 		return fmt.Errorf("lotw: touch sync time: %w", err)
 	}
 	return nil
@@ -167,19 +160,4 @@ func (s *Store) inTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error)
 		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
-}
-
-// formatTime encodes t as RFC 3339 UTC text with second precision, so that
-// text order equals time order.
-func formatTime(t time.Time) string {
-	return t.UTC().Truncate(time.Second).Format(time.RFC3339)
-}
-
-// parseTime decodes a time written by formatTime.
-func parseTime(s string) (time.Time, error) {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("parse time: %w", err)
-	}
-	return t.UTC(), nil
 }
