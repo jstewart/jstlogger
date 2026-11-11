@@ -33,8 +33,8 @@ var version = "dev"
 // runTUI starts the terminal UI on store, the rig when the session enables
 // one, and background syncs of the LoTW activity feed and the eQSL AG member
 // list when store is a SQLite logbook, and blocks until the UI exits. Rig
-// events and the syncs' outcomes are logged to logger and sent to the UI. Tests replace it so the TUI never
-// starts.
+// events and the syncs' outcomes are logged to logger and sent to the UI.
+// Tests replace it so the TUI never starts.
 var runTUI = func(ctx context.Context, session config.Session, store logbook.Store, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
