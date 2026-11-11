@@ -15,6 +15,7 @@ import (
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/lotw"
+	"jstlogger/internal/qsoentry"
 )
 
 // LoTWLookup reports when callsigns last uploaded to LoTW.
@@ -98,23 +99,84 @@ func (m *Model) fetchLoTW() tea.Cmd {
 	return lotwLookupCmd(m.lotw, base)
 }
 
+// apply keeps a LoTW lookup for the base callsign current, shown on a
+// screen that is open. A lookup for another callsign, or one landing after
+// the screen closed, is dropped. It reports whether the lookup was kept.
+func (c *lotwCache) apply(msg lotwLookupMsg, open bool, current string) bool {
+	if msg.call == c.pending {
+		c.pending = ""
+	}
+	if !open || msg.call != current {
+		return false
+	}
+	c.call, c.last, c.found, c.err = msg.call, msg.last, msg.found, msg.err
+	return true
+}
+
 // applyLoTW keeps a LoTW lookup for the pager. A lookup for a callsign the
 // cursor has moved off, or one landing after the pager closed, is dropped.
 // It reports whether the lookup was kept.
 func (p *pager) applyLoTW(msg lotwLookupMsg, current string) bool {
-	if msg.call == p.lotw.pending {
-		p.lotw.pending = ""
+	return p.lotw.apply(msg, p.open, current)
+}
+
+// entryLoTWMsg carries the result of a LoTW lookup for the call typed into
+// the New QSO screen.
+type entryLoTWMsg lotwLookupMsg
+
+// entryLoTWCmd returns a command that looks up the base callsign call in l
+// for the New QSO screen.
+func entryLoTWCmd(l LoTWLookup, call string) tea.Cmd {
+	lookup := lotwLookupCmd(l, call)
+	return func() tea.Msg {
+		return entryLoTWMsg(lookup().(lotwLookupMsg))
 	}
-	if !p.open || msg.call != current {
-		return false
+}
+
+// fetchEntryLoTW returns a command looking up the base callsign of the call
+// typed into the New QSO screen, unless it has been looked up or is being
+// looked up.
+func (m *Model) fetchEntryLoTW() tea.Cmd {
+	if !m.entry.open || m.lotw == nil {
+		return nil
 	}
-	p.lotw.call, p.lotw.last, p.lotw.found, p.lotw.err = msg.call, msg.last, msg.found, msg.err
-	return true
+	base, c := callsign.Base(m.entry.inputs[qsoentry.Call].Value()), &m.entry.lotw
+	if base == "" || base == c.call || base == c.pending {
+		return nil
+	}
+	c.pending = base
+	return entryLoTWCmd(m.lotw, base)
+}
+
+// applyEntryLoTW keeps a LoTW lookup for the New QSO screen. A lookup for a
+// call since changed, or one landing after the screen closed, is dropped.
+func (m *Model) applyEntryLoTW(msg entryLoTWMsg) {
+	current := callsign.Base(m.entry.inputs[qsoentry.Call].Value())
+	if m.entry.lotw.apply(lotwLookupMsg(msg), m.entry.open, current) && msg.err != nil {
+		m.lotwErr = msg.err
+	}
+}
+
+// entryLoTW returns the LoTW status of the call typed into the New QSO
+// screen, styled: its [L] badge and last upload, or that the lookup failed.
+// It is "" while the call is not looked up, or is not a LoTW user.
+func (m Model) entryLoTW() string {
+	st := m.styles
+	s := m.lotwStatusOf(m.entry.lotw, m.entry.inputs[qsoentry.Call].Value())
+	if s.failed {
+		return st.err.Render("LoTW lookup failed")
+	}
+	badge := s.badge(st)
+	if badge == "" {
+		return ""
+	}
+	return badge + " " + st.muted.Render(s.text())
 }
 
 // applyLoTWSynced records the outcome of a LoTW sync. A successful sync
-// forgets the pager's lookup and the index's, so the QSO shown is looked up
-// again, and returns a command looking up the index's cached rows again.
+// forgets the pager's lookup, the New QSO screen's and the index's, so the
+// QSO shown and the call being entered are looked up again, and returns a
+// command looking up the index's cached rows again.
 func (m *Model) applyLoTWSynced(msg LoTWSynced) tea.Cmd {
 	if msg.Err != nil {
 		m.lotwErr = fmt.Errorf("LoTW sync failed: %w", msg.Err)
@@ -122,6 +184,7 @@ func (m *Model) applyLoTWSynced(msg LoTWSynced) tea.Cmd {
 	}
 	m.lotwErr = nil
 	m.pager.lotw = lotwCache{}
+	m.entry.lotw = lotwCache{}
 	m.idx.lotw.forget()
 	return m.lookupIndexLoTW(slices.Concat(slices.Collect(maps.Values(m.idx.blocks))...))
 }
@@ -263,10 +326,15 @@ type lotwStatus struct {
 // lotwStatus returns the LoTW status of the QSO with call, from the pager's
 // lookup. It does no I/O.
 func (m Model) lotwStatus(call string) lotwStatus {
+	return m.lotwStatusOf(m.pager.lotw, call)
+}
+
+// lotwStatusOf returns the LoTW status of call from the lookup c. It does
+// no I/O.
+func (m Model) lotwStatusOf(c lotwCache, call string) lotwStatus {
 	if m.lotw == nil {
 		return lotwStatus{}
 	}
-	c := m.pager.lotw
 	s := lotwStatus{enabled: true, now: m.now()}
 	if base := callsign.Base(call); base == "" || c.call != base {
 		return s
