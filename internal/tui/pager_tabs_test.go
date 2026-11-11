@@ -429,3 +429,36 @@ func TestPagerHelpListsTabKeys(t *testing.T) {
 		assert.Contains(t, footer, want)
 	}
 }
+
+func TestPagerStoredStationName(t *testing.T) {
+	name := func(_, _ string) string { return "Portable" }
+	tests := []struct {
+		name   string
+		stored *string
+		opts   []Option
+		want   string
+	}{
+		{"stored wins over config", new("Field Day"), []Option{WithStationName(name)}, "Field Day"},
+		{"stored is trimmed", new("  Field Day  "), []Option{WithStationName(name)}, "Field Day"},
+		{"blank falls back", new(""), []Option{WithStationName(name)}, "Portable"},
+		{"whitespace falls back", new("   "), []Option{WithStationName(name)}, "Portable"},
+		{"none stored falls back", nil, []Option{WithStationName(name)}, "Portable"},
+		{"none stored and no match", nil, []Option{WithStationName(func(_, _ string) string { return "" })}, pagerEmpty},
+		{"none stored and no option", nil, nil, pagerEmpty},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, s := newIndexModel(t, 3, 80, 40, tt.opts...)
+			if tt.stored != nil {
+				s.qsos[0].Fields = map[string]string{logbook.StationField: *tt.stored}
+			}
+			m = pressPager(t, m, enter(), tab())
+
+			var lines []string
+			for l := range strings.SplitSeq(plain(m.pagerBody(t)), "\n") {
+				lines = append(lines, strings.TrimSpace(l))
+			}
+			assert.Contains(t, lines, "Station name      "+tt.want)
+		})
+	}
+}

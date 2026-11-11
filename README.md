@@ -141,9 +141,11 @@ QSOs.
 - **QSO** — the details above.
 - **Station** — the station callsign, operator, station grid, TX power
   and station name, followed by any `MY_*` ADIF fields such as `MY_RIG`
-  or `MY_POTA_REF`. The station name shows when the QSO's station
-  callsign and grid match exactly one `[stations.*]` entry, ignoring
-  case; otherwise it is blank.
+  or `MY_POTA_REF`. The station name is the one stored on the QSO in its
+  `APP_JSTLOGGER_STATION` ADIF field, which records the station it was
+  logged from. A QSO without one shows the `[stations.*]` entry whose
+  callsign and grid match the QSO's station callsign and grid, ignoring
+  case, when exactly one does; otherwise it is blank.
 - **QSL** — one row per confirmation (card, LoTW, eQSL…) with its sent
   and received status and dates.
 - **ADIF** — every field of the QSO as ADIF name/value pairs, sorted by

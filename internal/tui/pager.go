@@ -102,8 +102,21 @@ func (p *pager) applyQSO(msg pagerQSOMsg, current int64) {
 	p.fetched, p.qso, p.err = msg.id, msg.qso, msg.err
 }
 
+// stationNameOf names the station q was logged from: the name stored on
+// q, or else the name stationName gives its station callsign and grid.
+func (p pager) stationNameOf(q logbook.QSO) string {
+	if name := strings.TrimSpace(q.Fields[logbook.StationField]); name != "" {
+		return name
+	}
+	if p.stationName == nil {
+		return ""
+	}
+	return p.stationName(q.StationCallsign, q.MyGridsquare)
+}
+
 // WithStationName names our station on the pager's Station tab with name,
-// called with the QSO's station callsign and grid.
+// called with the QSO's station callsign and grid, for a QSO with no
+// station name stored in logbook.StationField.
 func WithStationName(name func(callsign, grid string) string) Option {
 	return func(m *Model) {
 		m.pager.stationName = name
@@ -328,11 +341,7 @@ func (m Model) pagerContent(width int) []string {
 	var tab string
 	switch p.tab {
 	case tabStation:
-		var name string
-		if p.stationName != nil {
-			name = p.stationName(p.qso.StationCallsign, p.qso.MyGridsquare)
-		}
-		tab = stationTab(st, p.qso, name, width)
+		tab = stationTab(st, p.qso, p.stationNameOf(p.qso), width)
 	case tabQSL:
 		tab = qslTab(st, p.qso, width)
 	case tabADIF:
