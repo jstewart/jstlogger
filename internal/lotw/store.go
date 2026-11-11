@@ -5,22 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
 	"jstlogger/internal/callsign"
+	"jstlogger/internal/feed"
 )
 
 // Meta describes the last successful download of the feed.
-type Meta struct {
-	// ETag is the feed's ETag response header, sent back as If-None-Match.
-	ETag string
-	// LastModified is the feed's Last-Modified response header, sent back
-	// as If-Modified-Since.
-	LastModified string
-	// SyncedAt is when the feed was last downloaded or confirmed unchanged.
-	SyncedAt time.Time
-}
+type Meta = feed.Meta
 
 // Store keeps the LoTW activity feed in the logbook database. It is safe
 // for concurrent use.
@@ -62,11 +57,85 @@ func (s *Store) lastUpload(ctx context.Context, call string) (time.Time, bool, e
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("lotw: look up %s: %w", call, err)
 	}
-	at, err := parseTime(text)
+	at, err := feed.ParseTime(text)
 	if err != nil {
 		return time.Time{}, false, fmt.Errorf("lotw: look up %s: %w", call, err)
 	}
 	return at, true, nil
+}
+
+// lookupChunk is the most callsigns one LastUploads query looks up, well
+// under SQLite's limit on query parameters.
+const lookupChunk = 500
+
+// LastUploads returns, for each of calls that is a known LoTW user, the time
+// it last uploaded, keyed by the call as given. Calls that are not users,
+// and calls with no base callsign, are left out. Each call is looked up as
+// LastUpload does: by its base callsign and then, if that is not listed, as
+// given.
+func (s *Store) LastUploads(ctx context.Context, calls []string) (map[string]time.Time, error) {
+	type forms struct{ base, exact string }
+	keys := make([]forms, len(calls))
+	want := map[string]bool{}
+	for i, call := range calls {
+		base := callsign.Base(call)
+		if base == "" {
+			continue
+		}
+		keys[i] = forms{base: base, exact: strings.ToUpper(strings.TrimSpace(call))}
+		want[keys[i].base], want[keys[i].exact] = true, true
+	}
+	found := map[string]time.Time{}
+	for chunk := range slices.Chunk(slices.Sorted(maps.Keys(want)), lookupChunk) {
+		if err := s.lastUploads(ctx, chunk, found); err != nil {
+			return nil, err
+		}
+	}
+	out := map[string]time.Time{}
+	for i, call := range calls {
+		if keys[i].base == "" {
+			continue
+		}
+		if at, ok := found[keys[i].base]; ok {
+			out[call] = at
+		} else if at, ok := found[keys[i].exact]; ok {
+			out[call] = at
+		}
+	}
+	return out, nil
+}
+
+// lastUploads looks up exactly calls, adding the users among them to found.
+func (s *Store) lastUploads(ctx context.Context, calls []string, found map[string]time.Time) (err error) {
+	query := "SELECT call, last_upload FROM lotw_user WHERE call IN (?" + strings.Repeat(", ?", len(calls)-1) + ")"
+	args := make([]any, len(calls))
+	for i, c := range calls {
+		args[i] = c
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("lotw: look up users: %w", err)
+	}
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			err = errors.Join(err, fmt.Errorf("lotw: look up users: %w", cerr))
+		}
+	}()
+	for rows.Next() {
+		var call, text string
+		if err := rows.Scan(&call, &text); err != nil {
+			return fmt.Errorf("lotw: look up users: %w", err)
+		}
+		at, err := feed.ParseTime(text)
+		if err != nil {
+			return fmt.Errorf("lotw: look up %s: %w", call, err)
+		}
+		found[call] = at
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("lotw: look up users: %w", err)
+	}
+	return nil
 }
 
 // LastSync returns the metadata of the last successful sync, and false if
@@ -83,7 +152,7 @@ func (s *Store) LastSync(ctx context.Context) (Meta, bool, error) {
 	if err != nil {
 		return Meta{}, false, fmt.Errorf("lotw: last sync: %w", err)
 	}
-	if m.SyncedAt, err = parseTime(syncedAt); err != nil {
+	if m.SyncedAt, err = feed.ParseTime(syncedAt); err != nil {
 		return Meta{}, false, fmt.Errorf("lotw: last sync: %w", err)
 	}
 	return m, true, nil
@@ -104,7 +173,7 @@ func (s *Store) replace(ctx context.Context, users []User, meta Meta) error {
 		if err := insertUsers(ctx, tx, users); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, formatTime(meta.SyncedAt)); err != nil {
+		if _, err := tx.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, feed.FormatTime(meta.SyncedAt)); err != nil {
 			return fmt.Errorf("write meta: %w", err)
 		}
 		return nil
@@ -129,7 +198,7 @@ func insertUsers(ctx context.Context, tx *sql.Tx, users []User) (err error) {
 		}
 	}()
 	for _, u := range users {
-		if _, err := stmt.ExecContext(ctx, u.Call, formatTime(u.LastUpload)); err != nil {
+		if _, err := stmt.ExecContext(ctx, u.Call, feed.FormatTime(u.LastUpload)); err != nil {
 			return fmt.Errorf("insert %s: %w", u.Call, err)
 		}
 	}
@@ -139,7 +208,7 @@ func insertUsers(ctx context.Context, tx *sql.Tx, users []User) (err error) {
 // touch records meta without changing the stored users, for a feed the
 // server reports unchanged.
 func (s *Store) touch(ctx context.Context, meta Meta) error {
-	if _, err := s.db.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, formatTime(meta.SyncedAt)); err != nil {
+	if _, err := s.db.ExecContext(ctx, upsertMeta, meta.ETag, meta.LastModified, feed.FormatTime(meta.SyncedAt)); err != nil {
 		return fmt.Errorf("lotw: touch sync time: %w", err)
 	}
 	return nil
@@ -167,19 +236,4 @@ func (s *Store) inTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error)
 		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
-}
-
-// formatTime encodes t as RFC 3339 UTC text with second precision, so that
-// text order equals time order.
-func formatTime(t time.Time) string {
-	return t.UTC().Truncate(time.Second).Format(time.RFC3339)
-}
-
-// parseTime decodes a time written by formatTime.
-func parseTime(s string) (time.Time, error) {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("parse time: %w", err)
-	}
-	return t.UTC(), nil
 }

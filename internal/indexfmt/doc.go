@@ -22,6 +22,7 @@
 // The expandos and their header titles are:
 //
 //	%Z    mark: "*" when marked, else " "; 1 cell wide by default  (none)
+//	%L    LoTW: "L" for a LoTW user, else ""; 1 cell by default    L
 //	%c    call                                                     Call
 //	%m    submode, or mode when there is no submode                Mode
 //	%s    RST sent                                                 RST S
@@ -37,6 +38,9 @@
 //	%k    continent                                                Cont
 //	%x    DXCC entity number                                       DXCC
 //	%{}   start time                                               Time or Date
+//
+// The caller supplies the state %Z and %L show (see Row); %L is not in the
+// default format.
 //
 // A %{} column is titled Time when its layout has only time-of-day
 // conversions (%H, %M, %S) and Date otherwise. Layouts use this strftime

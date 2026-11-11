@@ -2,7 +2,9 @@ package lotw
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,4 +115,88 @@ func TestStoreCancelledContext(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 	require.Error(t, s.replace(ctx, nil, Meta{}))
+}
+
+func TestStoreLastUploads(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	w1aw := utc(2026, 11, 1, 12, 0, 0)
+	slashed := utc(2026, 10, 1, 8, 30, 0)
+	k1abc := utc(2025, 1, 1, 0, 0, 0)
+	require.NoError(t, s.replace(ctx, []User{
+		{Call: "W1AW", LastUpload: w1aw},
+		{Call: "KH6/N0XYZ", LastUpload: slashed},
+		{Call: "K1ABC", LastUpload: k1abc},
+	}, Meta{SyncedAt: utc(2026, 11, 8, 0, 0, 0)}))
+
+	tests := []struct {
+		name  string
+		calls []string
+		want  map[string]time.Time
+	}{
+		{name: "none", calls: nil, want: map[string]time.Time{}},
+		{name: "exact", calls: []string{"W1AW"}, want: map[string]time.Time{"W1AW": w1aw}},
+		{
+			name:  "keyed by the calls as given",
+			calls: []string{"  w1aw ", "ve3/w1aw/p", "K1ABC"},
+			want:  map[string]time.Time{"  w1aw ": w1aw, "ve3/w1aw/p": w1aw, "K1ABC": k1abc},
+		},
+		{
+			name:  "slashed call stored verbatim falls back to exact match",
+			calls: []string{"kh6/n0xyz"},
+			want:  map[string]time.Time{"kh6/n0xyz": slashed},
+		},
+		{
+			name:  "non-users and calls without a base are left out",
+			calls: []string{"K9XYZ", "", "/P", "W1AW"},
+			want:  map[string]time.Time{"W1AW": w1aw},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.LastUploads(ctx, tt.calls)
+
+			require.NoError(t, err)
+			require.Len(t, got, len(tt.want))
+			for call, at := range tt.want {
+				require.Contains(t, got, call)
+				assert.True(t, at.Equal(got[call]), "%s: got %v, want %v", call, got[call], at)
+				assert.Equal(t, "UTC", got[call].Location().String())
+			}
+		})
+	}
+}
+
+func TestStoreLastUploadsManyCalls(t *testing.T) {
+	s := newTestStore(t)
+	ctx := t.Context()
+	at := utc(2026, 11, 1, 12, 0, 0)
+	var users []User
+	var calls []string
+	for i := range 2500 {
+		call := fmt.Sprintf("K%dAB", i)
+		calls = append(calls, call)
+		if i%2 == 0 {
+			users = append(users, User{Call: call, LastUpload: at})
+		}
+	}
+	require.NoError(t, s.replace(ctx, users, Meta{SyncedAt: at}))
+
+	got, err := s.LastUploads(ctx, calls)
+
+	require.NoError(t, err)
+	assert.Len(t, got, len(users), "more calls than one query takes are looked up in chunks")
+	assert.Contains(t, got, "K2498AB")
+	assert.NotContains(t, got, "K2499AB")
+}
+
+func TestStoreLastUploadsCancelledContext(t *testing.T) {
+	s := newTestStore(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := s.LastUploads(ctx, []string{"W1AW"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Contains(t, err.Error(), "lotw: ")
 }

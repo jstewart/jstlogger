@@ -11,6 +11,9 @@ var (
 	yellow = lipgloss.Color("3")
 	blue   = lipgloss.Color("4")
 	purple = lipgloss.Color("5")
+	// brightPurple is the bright variant of purple, which the eQSL badge
+	// uses.
+	brightPurple = lipgloss.Color("13")
 	// amber is distinct from yellow, which HamQTH's badge uses.
 	amber = lipgloss.Color("214")
 )
@@ -44,6 +47,11 @@ type styles struct {
 	hamQTH lipgloss.Style
 	eQSL   lipgloss.Style
 
+	// eQSLAG and eQSLNotAG render the eQSL badge for a callsign known to
+	// be, or known not to be, an eQSL Authenticity Guaranteed member.
+	eQSLAG    lipgloss.Style
+	eQSLNotAG lipgloss.Style
+
 	// lotwRecent, lotwActive and lotwInactive render the pager's LoTW
 	// badge for a callsign that uploaded recently, within the year, or
 	// longer ago.
@@ -70,6 +78,8 @@ func defaultStyles() styles {
 		qrz:          lipgloss.NewStyle().Bold(true).Foreground(blue),
 		hamQTH:       lipgloss.NewStyle().Bold(true).Foreground(yellow),
 		eQSL:         lipgloss.NewStyle().Bold(true).Foreground(purple),
+		eQSLAG:       lipgloss.NewStyle().Bold(true).Foreground(brightPurple),
+		eQSLNotAG:    lipgloss.NewStyle().Foreground(purple).Faint(true),
 		lotwRecent:   lipgloss.NewStyle().Bold(true).Foreground(good),
 		lotwActive:   lipgloss.NewStyle().Bold(true).Foreground(amber),
 		lotwInactive: lipgloss.NewStyle().Foreground(muted).Faint(true),

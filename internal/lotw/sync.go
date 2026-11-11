@@ -2,11 +2,12 @@ package lotw
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"jstlogger/internal/feed"
 )
 
 // DefaultURL is the ARRL's LoTW user activity feed.
@@ -21,7 +22,7 @@ const MaxAge = 7 * 24 * time.Hour
 const DefaultMaxBytes = 64 << 20
 
 // ErrFeedTooLarge reports a feed longer than the syncer's limit.
-var ErrFeedTooLarge = errors.New("lotw: feed exceeds the size limit")
+var ErrFeedTooLarge = feed.ErrTooLarge
 
 // Syncer downloads the LoTW activity feed into a Store.
 type Syncer struct {
@@ -43,32 +44,6 @@ func (s *Syncer) maxBytes() int64 {
 		return DefaultMaxBytes
 	}
 	return s.MaxBytes
-}
-
-// cappedReader reads up to n bytes from r and fails with ErrFeedTooLarge if
-// r holds more, rather than ending early, so a feed cut off at the limit is
-// never mistaken for a whole one.
-type cappedReader struct {
-	r io.Reader
-	n int64
-}
-
-// Read reads from the underlying reader within the limit.
-func (c *cappedReader) Read(p []byte) (int, error) {
-	if c.n <= 0 {
-		// At the limit: the feed is whole only if nothing follows.
-		var one [1]byte
-		if n, err := c.r.Read(one[:]); n > 0 {
-			return 0, ErrFeedTooLarge
-		} else if err != nil {
-			return 0, err
-		}
-		return 0, nil
-	}
-	p = p[:min(int64(len(p)), c.n)]
-	n, err := c.r.Read(p)
-	c.n -= int64(n)
-	return n, err
 }
 
 // Result describes a completed sync.
@@ -118,65 +93,41 @@ func (s *Syncer) Sync(ctx context.Context) (Result, error) {
 	return res, nil
 }
 
-func (s *Syncer) sync(ctx context.Context) (res Result, err error) {
-	meta, synced, err := s.Store.LastSync(ctx)
+// sync does the work of Sync, returning unprefixed errors.
+func (s *Syncer) sync(ctx context.Context) (Result, error) {
+	// LastSync returns the zero Meta when there is no stored feed, which
+	// makes the request unconditional.
+	prev, _, err := s.Store.LastSync(ctx)
 	if err != nil {
 		return Result{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.url(), nil)
+	// Parse the whole body before writing, so the database write lock is
+	// held only for the insert, not for the download.
+	var users []User
+	var skipped int
+	resp, err := feed.Fetch(ctx, s.client(), s.url(), prev, s.maxBytes(), func(r io.Reader) error {
+		var err error
+		users, skipped, err = Parse(r)
+		return err
+	})
 	if err != nil {
-		return Result{}, fmt.Errorf("build request: %w", err)
+		return Result{}, err
 	}
-	if synced {
-		if meta.ETag != "" {
-			req.Header.Set("If-None-Match", meta.ETag)
-		}
-		if meta.LastModified != "" {
-			req.Header.Set("If-Modified-Since", meta.LastModified)
-		}
-	}
-	resp, err := s.client().Do(req)
-	if err != nil {
-		return Result{}, fmt.Errorf("download: %w", err)
-	}
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			err = errors.Join(err, fmt.Errorf("close body: %w", cerr))
-		}
-	}()
-
-	switch resp.StatusCode {
-	case http.StatusNotModified:
-		if !synced {
-			return Result{}, errors.New("server reported not modified, but there is no stored feed")
-		}
-		meta.SyncedAt = s.now().UTC()
-		if err := s.Store.touch(ctx, meta); err != nil {
+	if resp.NotModified {
+		prev.SyncedAt = s.now().UTC()
+		if err := s.Store.touch(ctx, prev); err != nil {
 			return Result{}, err
 		}
 		return Result{NotModified: true}, nil
-	case http.StatusOK:
-		// Parse the whole body before writing, so the database write lock
-		// is held only for the insert, not for the download.
-		users, skipped, err := Parse(&cappedReader{r: resp.Body, n: s.maxBytes()})
-		if err != nil {
-			return Result{}, err
-		}
-		if len(users) == 0 {
-			return Result{}, fmt.Errorf("feed has no valid rows (%d skipped)", skipped)
-		}
-		meta := Meta{
-			ETag:         resp.Header.Get("ETag"),
-			LastModified: resp.Header.Get("Last-Modified"),
-			SyncedAt:     s.now().UTC(),
-		}
-		if err := s.Store.replace(ctx, users, meta); err != nil {
-			return Result{}, err
-		}
-		return Result{Users: len(users), Skipped: skipped}, nil
-	default:
-		return Result{}, fmt.Errorf("unexpected status %s", resp.Status)
 	}
+	if len(users) == 0 {
+		return Result{}, fmt.Errorf("feed has no valid rows (%d skipped)", skipped)
+	}
+	meta := Meta{ETag: resp.ETag, LastModified: resp.LastModified, SyncedAt: s.now().UTC()}
+	if err := s.Store.replace(ctx, users, meta); err != nil {
+		return Result{}, err
+	}
+	return Result{Users: len(users), Skipped: skipped}, nil
 }
 
 // SyncIfStale syncs when the feed has never been synced or was last synced
@@ -184,11 +135,11 @@ func (s *Syncer) sync(ctx context.Context) (res Result, err error) {
 // it is false, res is zero and err is nil unless reading the sync time
 // failed.
 func (s *Syncer) SyncIfStale(ctx context.Context, maxAge time.Duration) (res Result, synced bool, err error) {
-	meta, ok, err := s.Store.LastSync(ctx)
+	meta, _, err := s.Store.LastSync(ctx)
 	if err != nil {
 		return Result{}, false, fmt.Errorf("lotw: sync: %w", err)
 	}
-	if ok && s.now().Sub(meta.SyncedAt) <= maxAge {
+	if !meta.Stale(s.now(), maxAge) {
 		return Result{}, false, nil
 	}
 	res, err = s.Sync(ctx)

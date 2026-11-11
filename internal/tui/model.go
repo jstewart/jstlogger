@@ -42,11 +42,18 @@ type Model struct {
 	// successful lookup or key press.
 	lookupErr error
 
-	// lotw looks up the pager QSO's LoTW use; nil shows none.
+	// lotw looks up the LoTW use of the pager QSO and of the index rows
+	// a %L column shows; nil shows none.
 	lotw LoTWLookup
-	// lotwErr is the error from the last LoTW sync or pager lookup, shown
+	// lotwErr is the error from the last LoTW sync or lookup, shown
 	// until the next successful sync or key press.
 	lotwErr error
+
+	// eqsl looks up the pager QSO's eQSL AG membership; nil shows none.
+	eqsl EQSLLookup
+	// eqslErr is the error from the last eQSL sync or pager lookup, shown
+	// until the next successful sync or key press.
+	eqslErr error
 
 	// now returns the current time.
 	now func() time.Time
@@ -90,6 +97,7 @@ func New(opts ...Option) Model {
 	for _, opt := range opts {
 		opt(&m)
 	}
+	m.idx.lotw.now = m.now
 	m.keys = defaultKeys(m.rig != nil)
 	m.pagerKeys = defaultPagerKeys(m.openURL != nil)
 	m.indexKeys = defaultIndexKeys(m.logbook != nil)
@@ -133,6 +141,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.rigErr = nil
 		m.lookupErr = nil
 		m.lotwErr = nil
+		m.eqslErr = nil
 		m.idx.msg = ""
 		if m.idx.prefix {
 			return m.updatePrefix(msg)
@@ -159,13 +168,19 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 	case indexLoadedMsg:
-		m.idx.applyLoad(msg)
+		if m.idx.applyLoad(msg) {
+			return m, m.lookupIndexLoTW(msg.rows)
+		}
 
 	case indexBlockMsg:
-		m.idx.applyBlock(msg)
+		if m.idx.applyBlock(msg) {
+			return m, m.lookupIndexLoTW(msg.rows)
+		}
 
 	case indexLimitMsg:
-		m.idx.applyLimit(msg)
+		if m.idx.applyLimit(msg) {
+			return m, m.lookupIndexLoTW(msg.rows)
+		}
 
 	case indexMarksMsg:
 		m.idx.applyMarks(msg)
@@ -186,8 +201,22 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.lotwErr = msg.err
 		}
 
+	case lotwUsersMsg:
+		if err := m.idx.lotw.apply(msg); err != nil {
+			m.lotwErr = err
+		}
+
 	case LoTWSynced:
-		m.applyLoTWSynced(msg)
+		return m, m.applyLoTWSynced(msg)
+
+	case eqslLookupMsg:
+		q, _ := m.idx.current()
+		if m.pager.applyEQSL(msg, callsign.Base(q.Call)) && msg.err != nil {
+			m.eqslErr = msg.err
+		}
+
+	case EQSLSynced:
+		m.applyEQSLSynced(msg)
 
 	case rig.StateChanged:
 		m.rigState.state = msg.State
@@ -254,7 +283,7 @@ func (m Model) headerView() string {
 }
 
 // footerView renders the help line, preceded by the open prompt or the last
-// rig command, lookup or LoTW sync error.
+// rig command, lookup, LoTW sync or eQSL sync error.
 func (m Model) footerView() string {
 	var lines []string
 	// The global keys come first so a narrow window still shows them.
@@ -274,8 +303,14 @@ func (m Model) footerView() string {
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
 	case m.lookupErr != nil:
 		lines = append(lines, m.styles.err.Render(m.lookupErr.Error()))
-	case m.lotwErr != nil:
-		lines = append(lines, m.styles.err.Render(m.lotwErr.Error()))
+	default:
+		// Both background syncs can fail at once, as when offline, so
+		// neither error hides the other.
+		for _, err := range []error{m.lotwErr, m.eqslErr} {
+			if err != nil {
+				lines = append(lines, m.styles.err.Render(err.Error()))
+			}
+		}
 	}
 	lines = append(lines, m.help.View(keys))
 	return m.styles.footer.
@@ -296,7 +331,7 @@ func (m Model) bodyWidth() int {
 // layout fits the index to the space between the header and footer, which
 // change height with the prompt and help, or to the strip above the open
 // pager, and returns a command loading any rows that come into view and
-// the whole QSO the pager shows, and its LoTW use.
+// the whole QSO the pager shows, and its LoTW use and eQSL AG membership.
 func (m *Model) layout() tea.Cmd {
 	// A reload or bulk delete may have left no QSO for the pager to show.
 	if m.idx.total == 0 && m.pager.open {
@@ -315,7 +350,7 @@ func (m *Model) layout() tea.Cmd {
 	for _, b := range m.idx.missing() {
 		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
 	}
-	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW())...)
+	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL())...)
 }
 
 // updateIndex handles a key press on the QSO index.

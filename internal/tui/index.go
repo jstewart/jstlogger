@@ -90,6 +90,10 @@ type index struct {
 	format indexfmt.Format
 	unit   indexfmt.Unit
 
+	// lotw caches the LoTW use of the rows' callsigns, which a %L column
+	// shows.
+	lotw indexLoTW
+
 	// msg is shown on the status line until the next key press.
 	msg string
 	// err is the last load error, shown until a reload succeeds.
@@ -113,6 +117,7 @@ func newIndex() index {
 		marks:   map[int64]bool{},
 		format:  defaultIndexFormat,
 		unit:    indexfmt.Mi,
+		lotw:    newIndexLoTW(),
 	}
 }
 
@@ -250,38 +255,42 @@ func loadBlockCmd(s logbook.Store, gen int, limit logbook.Expr, block int) tea.C
 }
 
 // applyLoad replaces the cache with the result of a (re)load. The cursor
-// keeps its place on screen when it can.
-func (x *index) applyLoad(msg indexLoadedMsg) {
+// keeps its place on screen when it can. It reports whether the rows were
+// kept.
+func (x *index) applyLoad(msg indexLoadedMsg) bool {
 	if msg.gen != x.gen {
-		return
+		return false
 	}
 	if msg.err != nil {
 		x.err = msg.err
-		return
+		return false
 	}
 	x.replace(msg)
+	return true
 }
 
 // applyLimit adopts a new limit and the rows loaded under it. As in mutt,
 // a limit no QSO matches is not adopted, and neither is one whose load
-// failed: the index keeps its old limit and rows.
-func (x *index) applyLimit(msg indexLimitMsg) {
+// failed: the index keeps its old limit and rows. It reports whether the
+// limit was adopted.
+func (x *index) applyLimit(msg indexLimitMsg) bool {
 	if msg.gen != x.gen {
-		return
+		return false
 	}
 	switch {
 	case msg.err != nil:
 		// x.err would hide the old rows, which are still good.
 		x.msg = msg.err.Error()
-		return
+		return false
 	case msg.total == 0 && msg.limit.expr != nil:
 		x.msg = msgNoMatch
-		return
+		return false
 	}
 	x.limit = msg.limit
 	// Blocks requested while the limit loaded hold rows of the old limit.
 	x.gen++
 	x.replace(msg.indexLoadedMsg)
+	return true
 }
 
 // replace replaces the cache with the result of a successful (re)load.
@@ -310,19 +319,20 @@ func (x *index) restart() int64 {
 	return 0
 }
 
-// applyBlock caches a loaded block.
-func (x *index) applyBlock(msg indexBlockMsg) {
+// applyBlock caches a loaded block. It reports whether the block was kept.
+func (x *index) applyBlock(msg indexBlockMsg) bool {
 	if msg.gen != x.gen {
-		return
+		return false
 	}
 	if msg.err != nil {
 		// Leave the block pending so it isn't retried on every update.
 		x.err = msg.err
-		return
+		return false
 	}
 	delete(x.pending, msg.block)
 	x.blocks[msg.block] = msg.rows
 	x.evict()
+	return true
 }
 
 // evict drops the cached blocks farthest from the cursor until at most

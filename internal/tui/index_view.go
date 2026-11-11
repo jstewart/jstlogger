@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/indexfmt"
+	"jstlogger/internal/lotw"
 )
 
 // indexChrome is the number of body lines the index uses besides its rows:
@@ -27,6 +28,14 @@ const minLimitWidth = 8
 // padded to its width, aligned as the item says, and the flexible one takes
 // the width the others leave, but at least minFlexWidth.
 func formatLine(f indexfmt.Format, cells []string, width int) string {
+	return formatStyledLine(f, cells, width, nil)
+}
+
+// formatStyledLine lays out cells as formatLine does, then passes each
+// cell, padded and cut to fit, and its item number to style, unless style
+// is nil, and writes what style returns. Styling after the cells are
+// measured keeps escape sequences out of the widths.
+func formatStyledLine(f indexfmt.Format, cells []string, width int, style func(i int, s string) string) string {
 	used := 0
 	for i, it := range f.Items {
 		switch {
@@ -39,23 +48,34 @@ func formatLine(f indexfmt.Format, cells []string, width int) string {
 	}
 
 	var b strings.Builder
+	room := width
 	for i, it := range f.Items {
-		w := it.Width
-		switch {
+		v := cells[i]
+		switch w := it.Width; {
 		case it.Flex:
 			w = max(width-used, minFlexWidth)
-		case it.IsLiteral() || w == 0:
-			b.WriteString(cells[i])
-			continue
+			fallthrough
+		case !it.IsLiteral() && w > 0:
+			v = truncate(v, w, "…")
+			if it.Left {
+				v = pad(v, w)
+			} else {
+				v = strings.Repeat(" ", max(w-lipgloss.Width(v), 0)) + v
+			}
 		}
-		v := truncate(cells[i], w, "…")
-		if it.Left {
-			b.WriteString(pad(v, w))
-		} else {
-			b.WriteString(strings.Repeat(" ", max(w-lipgloss.Width(v), 0)) + v)
+		// Cut the line at width, as truncating it whole would.
+		cut := truncate(v, room, "")
+		n := lipgloss.Width(cut)
+		if style != nil && cut != "" {
+			cut = style(i, cut)
+		}
+		b.WriteString(cut)
+		room -= n
+		if n < lipgloss.Width(v) {
+			break
 		}
 	}
-	return pad(truncate(b.String(), width, ""), width)
+	return b.String() + strings.Repeat(" ", room)
 }
 
 // truncate shortens s to at most width cells, ending it with tail when it
@@ -161,13 +181,26 @@ func (x index) rowView(st styles, i, width, nw int) string {
 		}
 		return st.muted.Render(line)
 	}
-	line := numberLine(num, nw, width, func(w int) string {
-		return formatLine(x.format, x.format.Values(q, x.marks[q.ID], x.unit), w)
-	})
+	last, user := x.lotw.lastUpload(q.Call)
+	cells := x.format.Values(q, indexfmt.Row{Marked: x.marks[q.ID], LoTW: user}, x.unit)
 	if i == x.cursor {
-		return st.cursor.Render(line)
+		// Colors inside the cursor's reverse video would break it up.
+		return st.cursor.Render(numberLine(num, nw, width, func(w int) string {
+			return formatLine(x.format, cells, w)
+		}))
 	}
-	return line
+	var style func(int, string) string
+	if s, ok := lotwStyle(st, lotw.RecencyOf(last, x.lotw.now())); ok {
+		style = func(i int, v string) string {
+			if x.format.Items[i].Field != indexfmt.FieldLoTW {
+				return v
+			}
+			return s.Render(v)
+		}
+	}
+	return numberLine(num, nw, width, func(w int) string {
+		return formatStyledLine(x.format, cells, w, style)
+	})
 }
 
 // statusView renders the position, the limit, the mark count, the armed

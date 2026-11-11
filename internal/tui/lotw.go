@@ -3,24 +3,33 @@ package tui
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/callsign"
+	"jstlogger/internal/indexfmt"
+	"jstlogger/internal/logbook"
 	"jstlogger/internal/lotw"
 )
 
-// LoTWLookup reports when a callsign last uploaded to LoTW.
+// LoTWLookup reports when callsigns last uploaded to LoTW.
 type LoTWLookup interface {
 	// LastUpload returns the time call last uploaded, and whether call is
 	// a known LoTW user.
 	LastUpload(ctx context.Context, call string) (time.Time, bool, error)
+	// LastUploads returns, for each of calls that is a known LoTW user,
+	// the time it last uploaded, keyed by the call as given.
+	LastUploads(ctx context.Context, calls []string) (map[string]time.Time, error)
 }
 
-// WithLoTW shows, on the pager's QSO tab, whether the QSO's callsign uses
-// LoTW and how recently it uploaded, as looked up in l.
+// WithLoTW shows, on the pager's QSO tab and in an index %L column, whether
+// the QSO's callsign uses LoTW and how recently it uploaded, as looked up
+// in l.
 func WithLoTW(l LoTWLookup) Option {
 	return func(m *Model) {
 		m.lotw = l
@@ -104,14 +113,135 @@ func (p *pager) applyLoTW(msg lotwLookupMsg, current string) bool {
 }
 
 // applyLoTWSynced records the outcome of a LoTW sync. A successful sync
-// forgets the pager's lookup, so the QSO shown is looked up again.
-func (m *Model) applyLoTWSynced(msg LoTWSynced) {
+// forgets the pager's lookup and the index's, so the QSO shown is looked up
+// again, and returns a command looking up the index's cached rows again.
+func (m *Model) applyLoTWSynced(msg LoTWSynced) tea.Cmd {
 	if msg.Err != nil {
 		m.lotwErr = fmt.Errorf("LoTW sync failed: %w", msg.Err)
-		return
+		return nil
 	}
 	m.lotwErr = nil
 	m.pager.lotw = lotwCache{}
+	m.idx.lotw.forget()
+	return m.lookupIndexLoTW(slices.Concat(slices.Collect(maps.Values(m.idx.blocks))...))
+}
+
+// indexLoTW caches, by base callsign, the LoTW lookups an index %L column
+// shows. It holds one entry per distinct base callsign shown, which is
+// bounded by the logbook, so entries are not evicted with their blocks.
+type indexLoTW struct {
+	// last holds the last upload of each base callsign looked up, or the
+	// zero time for one that is not a LoTW user.
+	last map[string]time.Time
+	// prev holds lookups made before the latest sync, shown until a new
+	// lookup replaces them so the column doesn't blank while it runs.
+	prev map[string]time.Time
+	// pending holds the base callsigns being looked up.
+	pending map[string]bool
+	// gen counts syncs; lookups started before the latest sync are
+	// dropped.
+	gen int
+	// now returns the time recency is measured at.
+	now func() time.Time
+}
+
+// newIndexLoTW returns an empty indexLoTW on the system clock.
+func newIndexLoTW() indexLoTW {
+	return indexLoTW{
+		last:    map[string]time.Time{},
+		prev:    map[string]time.Time{},
+		pending: map[string]bool{},
+		now:     time.Now,
+	}
+}
+
+// forget marks every lookup out of date, so it is looked up again, and drops
+// the lookups under way. The old lookups show until new ones replace them.
+func (c *indexLoTW) forget() {
+	c.gen++
+	maps.Copy(c.prev, c.last)
+	c.last = map[string]time.Time{}
+	c.pending = map[string]bool{}
+}
+
+// lastUpload returns when the base callsign of call last uploaded to LoTW,
+// and whether it is known to be a LoTW user. It does no I/O.
+func (c indexLoTW) lastUpload(call string) (time.Time, bool) {
+	base := callsign.Base(call)
+	last, ok := c.last[base]
+	if !ok {
+		last = c.prev[base]
+	}
+	return last, !last.IsZero()
+}
+
+// lotwUsersMsg carries the result of a batch LoTW lookup for the index:
+// the last upload of each of calls that is a LoTW user.
+type lotwUsersMsg struct {
+	gen   int
+	calls []string
+	last  map[string]time.Time
+	err   error
+}
+
+// lotwUsersCmd returns a command that looks up the base callsigns calls in
+// l in one batch.
+func lotwUsersCmd(l LoTWLookup, gen int, calls []string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		last, err := l.LastUploads(ctx, calls)
+		if err != nil {
+			err = fmt.Errorf("look up LoTW users: %w", err)
+		}
+		return lotwUsersMsg{gen: gen, calls: calls, last: last, err: err}
+	}
+}
+
+// lookupIndexLoTW returns a command looking up, in one batch, the base
+// callsigns of rows that are neither looked up nor being looked up. It
+// returns nil when the index format has no %L column or no LoTW lookup is
+// configured.
+func (m *Model) lookupIndexLoTW(rows []logbook.QSO) tea.Cmd {
+	if m.lotw == nil || !m.idx.format.Has(indexfmt.FieldLoTW) {
+		return nil
+	}
+	c := &m.idx.lotw
+	want := map[string]bool{}
+	for _, q := range rows {
+		base := callsign.Base(q.Call)
+		if _, done := c.last[base]; base != "" && !done && !c.pending[base] {
+			want[base] = true
+		}
+	}
+	if len(want) == 0 {
+		return nil
+	}
+	calls := slices.Sorted(maps.Keys(want))
+	for _, call := range calls {
+		c.pending[call] = true
+	}
+	return lotwUsersCmd(m.lotw, c.gen, calls)
+}
+
+// apply caches a batch lookup. A lookup started before the latest sync is
+// dropped. A failed lookup is returned to be shown; its callsigns are not
+// cached, so they are looked up again when their rows next load.
+func (c *indexLoTW) apply(msg lotwUsersMsg) error {
+	if msg.gen != c.gen {
+		return nil
+	}
+	for _, call := range msg.calls {
+		delete(c.pending, call)
+	}
+	if msg.err != nil {
+		return msg.err
+	}
+	for _, call := range msg.calls {
+		c.last[call] = msg.last[call]
+		delete(c.prev, call)
+	}
+	return nil
 }
 
 // lotwStatus is what the QSO tab shows of a callsign's LoTW use.
@@ -155,15 +285,24 @@ func (s lotwStatus) badge(st styles) string {
 	if !s.loaded || !s.found {
 		return ""
 	}
-	switch lotw.RecencyOf(s.last, s.now) {
+	if style, ok := lotwStyle(st, lotw.RecencyOf(s.last, s.now)); ok {
+		return style.Render("[L]")
+	}
+	return ""
+}
+
+// lotwStyle returns the style the pager's [L] badge and an index %L column
+// show a LoTW user in, by how recently it uploaded, and false for Unknown.
+func lotwStyle(st styles, r lotw.Recency) (lipgloss.Style, bool) {
+	switch r {
 	case lotw.Recent:
-		return st.lotwRecent.Render("[L]")
+		return st.lotwRecent, true
 	case lotw.Active:
-		return st.lotwActive.Render("[L]")
+		return st.lotwActive, true
 	case lotw.Inactive:
-		return st.lotwInactive.Render("[L]")
+		return st.lotwInactive, true
 	default:
-		return ""
+		return lipgloss.Style{}, false
 	}
 }
 

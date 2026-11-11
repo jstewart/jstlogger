@@ -431,7 +431,7 @@ func TestSQLiteStoreReopenKeepsData(t *testing.T) {
 
 	var v int
 	require.NoError(t, second.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v))
-	assert.Equal(t, 3, v)
+	assert.Equal(t, 4, v)
 }
 
 func TestSQLiteStoreEnablesPragmas(t *testing.T) {
@@ -467,7 +467,7 @@ func TestSQLiteStoreDBIsMigratedPool(t *testing.T) {
 	require.NotNil(t, db)
 	var v int
 	require.NoError(t, db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v))
-	assert.Equal(t, 3, v)
+	assert.Equal(t, 4, v)
 	var timeout int
 	require.NoError(t, db.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&timeout))
 	assert.Equal(t, 5000, timeout, "DB shares the store's configured pool")

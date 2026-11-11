@@ -93,7 +93,7 @@ NeoMutt's split pager. Ten index rows stay above it with the QSO
 highlighted; set `[index] pager_index_lines` to keep more or fewer, or
 `0` for none. In a window too short for them, the strip shrinks so the
 top of the QSO tab stays visible. Below them, the QSO tab lists the date
-and time (UTC), call, LoTW status, band, frequency, mode and submode, the reports sent and received, grid,
+and time (UTC), call, LoTW status, eQSL AG status, band, frequency, mode and submode, the reports sent and received, grid,
 distance (in `[logbook] distance_unit`), state, county, name, comment,
 country and continent. An empty field shows `—`, so the layout doesn't
 shift between QSOs.
@@ -129,6 +129,26 @@ jstlogger --sync-lotw   # prints e.g. "LoTW: 237123 users (2 rows skipped)"
 The download is conditional, so an unchanged feed costs no download and
 prints `LoTW: feed unchanged`.
 
+The `[E]` badge also shows whether the station is an eQSL Authenticity
+Guaranteed (AG) member: bright and bold for a member, dim for a station
+that is not one, and its usual color while that is not yet known or the
+lookup failed. It stays a link either way. The eQSL AG row, after the
+LoTW row, says `yes` for a member, `—` otherwise, or `lookup failed`
+(with the error on the status line). It uses the base callsign too.
+
+The AG data comes from eQSL's
+[AG member list](https://www.eqsl.cc/qslcard/DownloadedFiles/AGMemberList.txt),
+stored in the logbook and refreshed in the background like the LoTW feed
+when it is more than a week old. A failed refresh shows `eQSL sync
+failed: …` on the status line and keeps the stored copy. To refresh it
+now, run:
+
+```sh
+jstlogger --sync-eqsl   # prints e.g. "eQSL: 199457 AG members (850 rows skipped)"
+```
+
+An unchanged list prints `eQSL: AG list unchanged`.
+
 `j`/`↓` and `k`/`↑` move to the next or previous QSO in index order
 without leaving the pager, and the index rows follow. `q` or `esc` closes
 the pager and returns to the index with the cursor where it was. While
@@ -141,9 +161,11 @@ QSOs.
 - **QSO** — the details above.
 - **Station** — the station callsign, operator, station grid, TX power
   and station name, followed by any `MY_*` ADIF fields such as `MY_RIG`
-  or `MY_POTA_REF`. The station name shows when the QSO's station
-  callsign and grid match exactly one `[stations.*]` entry, ignoring
-  case; otherwise it is blank.
+  or `MY_POTA_REF`. The station name is the one stored on the QSO in its
+  `APP_JSTLOGGER_STATION` ADIF field, which records the station it was
+  logged from. A QSO without one shows the `[stations.*]` entry whose
+  callsign and grid match the QSO's station callsign and grid, ignoring
+  case, when exactly one does; otherwise it is blank.
 - **QSL** — one row per confirmation (card, LoTW, eQSL…) with its sent
   and received status and dates.
 - **ADIF** — every field of the QSO as ADIF name/value pairs, sorted by
@@ -177,6 +199,7 @@ is a column, written `%[-][width]X`:
 | `%Z`        | `*` when the QSO is marked                               |
 | `%{format}` | start date and time (UTC), in strftime `format`          |
 | `%c`        | call                                                     |
+| `%L`        | `L` when the station uses LoTW, colored by last upload   |
 | `%m`        | mode, or the submode when there is one                   |
 | `%s`, `%r`  | report sent, received                                    |
 | `%b`        | band                                                     |
@@ -194,6 +217,13 @@ A date and time format can use `%Y` `%y` `%m` `%d` `%e` `%j` `%H` `%M`
 `%S` `%b` `%B` `%a` `%A` and `%%`. The header row shows each column's
 name in the same layout. A format needs at least one expando; an unknown
 expando or conversion is reported as a config error at startup.
+
+`%L` is one cell wide unless given a width, and is not in the default
+format. Its `L` is colored like the pager's `[L]` badge (green, amber or
+dim by how recently the station last uploaded), except on the cursor's
+row. It is blank when the station is not in the LoTW feed, while it is
+being looked up, when the lookup fails (with the error on the status line)
+and when the logbook has no LoTW data.
 
 ### Patterns
 
@@ -294,7 +324,7 @@ rigctld address (for example `localhost:4532`).
 ### Debug log
 
 Run `jstlogger --debug` to log rig events (state changes, connection
-changes and commands) and the background LoTW sync to `$XDG_STATE_HOME/jstlogger/debug.log`
+changes and commands) and the background LoTW and eQSL syncs to `$XDG_STATE_HOME/jstlogger/debug.log`
 (`~/.local/state/jstlogger/debug.log` by default). Watch it with
 `tail -f` in another terminal.
 
@@ -396,6 +426,8 @@ JSTLOGGER_ROUNDTRIP_ADIF=/path/to/log.adi go test -run TestRoundTripExternalFile
 main.go            entry point; parses flags, loads config and starts the app
 internal/adif/     ADIF .adi file reading, writing and comparison
 internal/config/   config file loading, validation and session overrides
+internal/eqsl/     eQSL AG member list download, storage and lookup
+internal/feed/     conditional download and sync metadata shared by the lists
 internal/indexfmt/ QSO index format parsing and column values
 internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
 internal/lotw/     LoTW user activity feed download, storage and recency
