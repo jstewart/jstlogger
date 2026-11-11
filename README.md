@@ -26,7 +26,7 @@ Some of the features that I envision for jstlogger. These are the ones that are 
 
 ## Requirements
 
-- **Go 1.27.3** (pinned in `.tool-versions` for [asdf](https://asdf-vm.com)
+- **Go 1.27.4** (pinned in `.tool-versions` for [asdf](https://asdf-vm.com)
   / [mise](https://mise.jdx.dev) users; `go.mod` requires the same version)
 - **[just](https://github.com/casey/just)** (optional) to run the project
   recipes
