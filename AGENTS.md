@@ -23,7 +23,7 @@ rediscovering the underlying commands.
 
 Before making changes, verify that your local environment aligns with these system-level dependencies:
 
-- **Go Toolchain:** Go 1.27.3, as pinned in `go.mod` and `.tool-versions`.
+- **Go Toolchain:** Go 1.27.4, as pinned in `go.mod` and `.tool-versions`.
 
 ## Architectural Patterns & Directory Structure
 
