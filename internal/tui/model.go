@@ -42,9 +42,10 @@ type Model struct {
 	// successful lookup or key press.
 	lookupErr error
 
-	// lotw looks up the pager QSO's LoTW use; nil shows none.
+	// lotw looks up the LoTW use of the pager QSO and of the index rows
+	// a %L column shows; nil shows none.
 	lotw LoTWLookup
-	// lotwErr is the error from the last LoTW sync or pager lookup, shown
+	// lotwErr is the error from the last LoTW sync or lookup, shown
 	// until the next successful sync or key press.
 	lotwErr error
 
@@ -96,6 +97,7 @@ func New(opts ...Option) Model {
 	for _, opt := range opts {
 		opt(&m)
 	}
+	m.idx.lotw.now = m.now
 	m.keys = defaultKeys(m.rig != nil)
 	m.pagerKeys = defaultPagerKeys(m.openURL != nil)
 	m.indexKeys = defaultIndexKeys(m.logbook != nil)
@@ -166,13 +168,19 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 	case indexLoadedMsg:
-		m.idx.applyLoad(msg)
+		if m.idx.applyLoad(msg) {
+			return m, m.lookupIndexLoTW(msg.rows)
+		}
 
 	case indexBlockMsg:
-		m.idx.applyBlock(msg)
+		if m.idx.applyBlock(msg) {
+			return m, m.lookupIndexLoTW(msg.rows)
+		}
 
 	case indexLimitMsg:
-		m.idx.applyLimit(msg)
+		if m.idx.applyLimit(msg) {
+			return m, m.lookupIndexLoTW(msg.rows)
+		}
 
 	case indexMarksMsg:
 		m.idx.applyMarks(msg)
@@ -193,8 +201,13 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.lotwErr = msg.err
 		}
 
+	case lotwUsersMsg:
+		if err := m.idx.lotw.apply(msg); err != nil {
+			m.lotwErr = err
+		}
+
 	case LoTWSynced:
-		m.applyLoTWSynced(msg)
+		return m, m.applyLoTWSynced(msg)
 
 	case eqslLookupMsg:
 		q, _ := m.idx.current()

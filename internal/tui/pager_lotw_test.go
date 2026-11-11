@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -23,13 +24,15 @@ type lotwUser struct {
 	last time.Time
 }
 
-// fakeLoTW serves LastUpload from users, keyed by callsign, records the
-// calls looked up and fails every lookup with err.
+// fakeLoTW serves LastUpload and LastUploads from users, keyed by
+// callsign, records the calls looked up and the LastUploads batches, and
+// fails every lookup with err.
 type fakeLoTW struct {
-	mu    sync.Mutex
-	users map[string]lotwUser
-	calls []string
-	err   error
+	mu      sync.Mutex
+	users   map[string]lotwUser
+	calls   []string
+	batches [][]string
+	err     error
 }
 
 func (f *fakeLoTW) LastUpload(ctx context.Context, call string) (time.Time, bool, error) {
@@ -44,6 +47,32 @@ func (f *fakeLoTW) LastUpload(ctx context.Context, call string) (time.Time, bool
 	}
 	u, ok := f.users[call]
 	return u.last, ok, nil
+}
+
+func (f *fakeLoTW) LastUploads(ctx context.Context, calls []string) (map[string]time.Time, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return nil, errors.New("fakeLoTW: ctx has no deadline")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.batches = append(f.batches, slices.Clone(calls))
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := map[string]time.Time{}
+	for _, call := range calls {
+		if u, ok := f.users[call]; ok {
+			out[call] = u.last
+		}
+	}
+	return out, nil
+}
+
+// lookedUpBatches returns the LastUploads batches looked up so far.
+func (f *fakeLoTW) lookedUpBatches() [][]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.batches)
 }
 
 // lookedUp returns the calls looked up so far.

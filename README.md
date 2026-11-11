@@ -199,6 +199,7 @@ is a column, written `%[-][width]X`:
 | `%Z`        | `*` when the QSO is marked                               |
 | `%{format}` | start date and time (UTC), in strftime `format`          |
 | `%c`        | call                                                     |
+| `%L`        | `L` when the station uses LoTW, colored by last upload   |
 | `%m`        | mode, or the submode when there is one                   |
 | `%s`, `%r`  | report sent, received                                    |
 | `%b`        | band                                                     |
@@ -216,6 +217,13 @@ A date and time format can use `%Y` `%y` `%m` `%d` `%e` `%j` `%H` `%M`
 `%S` `%b` `%B` `%a` `%A` and `%%`. The header row shows each column's
 name in the same layout. A format needs at least one expando; an unknown
 expando or conversion is reported as a config error at startup.
+
+`%L` is one cell wide unless given a width, and is not in the default
+format. Its `L` is colored like the pager's `[L]` badge (green, amber or
+dim by how recently the station last uploaded), except on the cursor's
+row. It is blank when the station is not in the LoTW feed, while it is
+being looked up, when the lookup fails (with the error on the status line)
+and when the logbook has no LoTW data.
 
 ### Patterns
 

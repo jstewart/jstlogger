@@ -44,10 +44,10 @@ func TestIndexCells(t *testing.T) {
 
 	assert.Equal(t,
 		[]string{" ", " ", "2026-10-31", " ", "18:34", " ", "JA1ABC", " ", "FT4", " ", "-10", " ", "+02", " ", "20m", " ", "Japan", " ", "W1AW"},
-		x.format.Values(q, false, x.unit), "UTC date and time without seconds, submode over mode")
+		x.format.Values(q, indexfmt.Row{}, x.unit), "UTC date and time without seconds, submode over mode")
 
 	q.Submode = ""
-	cells := x.format.Values(q, true, x.unit)
+	cells := x.format.Values(q, indexfmt.Row{Marked: true}, x.unit)
 	assert.Equal(t, "*", cells[0])
 	assert.Equal(t, "MFSK", cells[8], "mode when there is no submode")
 }

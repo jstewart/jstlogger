@@ -78,12 +78,12 @@ func TestParseDefault(t *testing.T) {
 	assert.Equal(t, "%Y-%m-%d", f.Items[2].Time)
 	assert.Equal(t, "%H:%M", f.Items[4].Time)
 
-	vals := f.Values(sampleQSO(), true, Km)
+	vals := f.Values(sampleQSO(), Row{Marked: true}, Km)
 	assert.Equal(t, []string{
 		"*", " ", "2024-03-05", " ", "12:08", " ", "W1AW", " ", "FT4", " ",
 		"-10", " ", "+03", " ", "20m", " ", "United States", " ", "K1ABC",
 	}, vals)
-	assert.Equal(t, " ", f.Values(sampleQSO(), false, Km)[0])
+	assert.Equal(t, " ", f.Values(sampleQSO(), Row{}, Km)[0])
 }
 
 func TestParseItems(t *testing.T) {
@@ -102,6 +102,9 @@ func TestParseItems(t *testing.T) {
 		{"left flex", "%-*C", []Item{{Field: 'C', Flex: true, Left: true}}},
 		{"mark intrinsic", "%Z", []Item{{Field: 'Z', Width: 1}}},
 		{"mark explicit", "%3Z", []Item{{Field: 'Z', Width: 3}}},
+		{"lotw intrinsic", "%L", []Item{{Field: FieldLoTW, Width: 1}}},
+		{"lotw explicit left", "%-3L", []Item{{Field: FieldLoTW, Width: 3, Left: true}}},
+		{"lotw flex", "%*L", []Item{{Field: FieldLoTW, Flex: true}}},
 		{"time", "%{%H}|", []Item{{Field: '{', Time: "%H"}, {Literal: "|"}}},
 		{"multi digit", "%12n", []Item{{Field: 'n', Width: 12}}},
 	}
@@ -184,7 +187,7 @@ func TestValues(t *testing.T) {
 			}
 			f, err := Parse(tt.format)
 			require.NoError(t, err)
-			assert.Equal(t, []string{tt.want}, f.Values(qq, false, tt.unit))
+			assert.Equal(t, []string{tt.want}, f.Values(qq, Row{}, tt.unit))
 		})
 	}
 }
@@ -209,10 +212,51 @@ func TestFormatDistance(t *testing.T) {
 }
 
 func TestTitles(t *testing.T) {
-	f, err := Parse("%c|%m%s%r%b%f%C%S%o%n%g%D%k%x%Z%{%H:%M}%{%d}%{%b}")
+	f, err := Parse("%c|%m%s%r%b%f%C%S%o%n%g%D%k%x%Z%L%{%H:%M}%{%d}%{%b}")
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"Call", "|", "Mode", "RST S", "RST R", "Band", "Freq", "Country", "Station",
-		"Op", "Name", "Grid", "Dist", "Cont", "DXCC", "", "Time", "Date", "Date",
+		"Op", "Name", "Grid", "Dist", "Cont", "DXCC", "", "L", "Time", "Date", "Date",
 	}, f.Titles())
+}
+
+func TestValuesRow(t *testing.T) {
+	f, err := Parse("%Z|%L|%c")
+	require.NoError(t, err)
+	tests := []struct {
+		name string
+		row  Row
+		want []string
+	}{
+		{"neither", Row{}, []string{" ", "|", "", "|", "W1AW"}},
+		{"marked", Row{Marked: true}, []string{"*", "|", "", "|", "W1AW"}},
+		{"lotw user", Row{LoTW: true}, []string{" ", "|", "L", "|", "W1AW"}},
+		{"both", Row{Marked: true, LoTW: true}, []string{"*", "|", "L", "|", "W1AW"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, f.Values(sampleQSO(), tt.row, Km))
+		})
+	}
+}
+
+func TestHas(t *testing.T) {
+	tests := []struct {
+		format string
+		field  byte
+		want   bool
+	}{
+		{"%c %L", FieldLoTW, true},
+		{Default, FieldLoTW, false},
+		{"%c L", FieldLoTW, false},
+		{"%c %%L", FieldLoTW, false},
+		{"%{%H}", FieldTime, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			f, err := Parse(tt.format)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, f.Has(tt.field))
+		})
+	}
 }

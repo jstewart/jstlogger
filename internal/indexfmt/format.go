@@ -22,6 +22,20 @@ var ErrSyntax = errors.New("syntax error")
 // Item.Time.
 const FieldTime byte = '{'
 
+// FieldLoTW is the Item.Field of a %L expando, whose value is "L" when the
+// QSO's callsign is a LoTW user (see Row).
+const FieldLoTW byte = 'L'
+
+// Row is the state of a QSO's row that the caller knows and the QSO does
+// not.
+type Row struct {
+	// Marked sets the %Z mark.
+	Marked bool
+	// LoTW reports whether the QSO's callsign is a known LoTW user, which
+	// %L shows.
+	LoTW bool
+}
+
 // Unit is a distance unit for the %D expando. Its values match the config
 // distance_unit strings, so a caller can convert with Unit(s).
 type Unit string
@@ -60,8 +74,8 @@ type Item struct {
 	// Time is the strftime layout of a FieldTime item.
 	Time string
 	// Width is the fixed column width in cells, or 0 for natural width (or
-	// for a flexible column). %Z with no width is given its intrinsic width
-	// of 1.
+	// for a flexible column). %Z and %L with no width are given their
+	// intrinsic width of 1.
 	Width int
 	// Left left-aligns the value in its width; otherwise it is right-aligned.
 	Left bool
@@ -80,8 +94,8 @@ type expando struct {
 	value func(q logbook.QSO, unit Unit) string
 }
 
-// expandos are the supported expando letters other than Z and {, which
-// need the mark state and the strftime layout respectively.
+// expandos are the supported expando letters other than Z, L and {, which
+// need the mark state, the LoTW state and the strftime layout respectively.
 var expandos = map[byte]expando{
 	'c': {"Call", func(q logbook.QSO, _ Unit) string { return q.Call }},
 	'm': {"Mode", func(q logbook.QSO, _ Unit) string {
@@ -201,8 +215,8 @@ func Parse(s string) (Format, error) {
 			it.Field = FieldTime
 			it.Time = layout
 			i += len([]rune(layout)) + 1
-		case c == 'Z':
-			it.Field = 'Z'
+		case c == 'Z' || c == rune(FieldLoTW):
+			it.Field = byte(c)
 			if it.Width == 0 && !it.Flex {
 				it.Width = 1
 			}
@@ -221,6 +235,12 @@ func Parse(s string) (Format, error) {
 	return f, nil
 }
 
+// Has reports whether f has an expando with the given Field, such as
+// FieldLoTW.
+func (f Format) Has(field byte) bool {
+	return slices.ContainsFunc(f.Items, func(it Item) bool { return !it.IsLiteral() && it.Field == field })
+}
+
 // Titles returns the header title of each item, in order. A literal's
 // title is its text.
 func (f Format) Titles() []string {
@@ -231,6 +251,8 @@ func (f Format) Titles() []string {
 			out[i] = it.Literal
 		case it.Field == 'Z':
 			out[i] = ""
+		case it.Field == FieldLoTW:
+			out[i] = "L"
 		case it.Field == FieldTime:
 			if timeOnly(it.Time) {
 				out[i] = "Time"
@@ -245,10 +267,11 @@ func (f Format) Titles() []string {
 }
 
 // Values returns the cell value of each item for q, in order. A literal's
-// value is its text. marked sets the %Z mark, and unit is the unit of %D;
-// any unit other than Mi formats kilometers. Times are formatted in UTC.
-// Values are not padded or truncated to the item widths.
-func (f Format) Values(q logbook.QSO, marked bool, unit Unit) []string {
+// value is its text. row sets the %Z mark and %L, which is "L" for a LoTW
+// user and "" otherwise, and unit is the unit of %D; any unit other than Mi
+// formats kilometers. Times are formatted in UTC. Values are not padded or
+// truncated to the item widths.
+func (f Format) Values(q logbook.QSO, row Row, unit Unit) []string {
 	out := make([]string, len(f.Items))
 	for i, it := range f.Items {
 		switch {
@@ -256,8 +279,12 @@ func (f Format) Values(q logbook.QSO, marked bool, unit Unit) []string {
 			out[i] = it.Literal
 		case it.Field == 'Z':
 			out[i] = " "
-			if marked {
+			if row.Marked {
 				out[i] = "*"
+			}
+		case it.Field == FieldLoTW:
+			if row.LoTW {
+				out[i] = "L"
 			}
 		case it.Field == FieldTime:
 			out[i] = strftime(q.StartUTC.UTC(), it.Time)
