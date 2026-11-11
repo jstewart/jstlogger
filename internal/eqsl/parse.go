@@ -19,7 +19,7 @@ const maxLineBytes = 1 << 20
 // Parse reads an eQSL AG member list from r. It returns the upper-case
 // callsigns in the order they first appear, each once, and the number of
 // malformed lines it skipped: lines holding anything but ASCII letters,
-// digits and '/'. Blank lines and the header line are ignored without being
+// digits and '/', or no digit. Blank lines and the header line are ignored without being
 // counted. It returns an error only when r cannot be read.
 func Parse(r io.Reader) (calls []string, skipped int, err error) {
 	sc := bufio.NewScanner(r)
@@ -48,17 +48,22 @@ func Parse(r io.Reader) (calls []string, skipped int, err error) {
 }
 
 // parseCall upper-cases a trimmed, non-empty line, reporting false if it
-// holds any byte other than an ASCII letter, digit or '/'.
+// holds any byte other than an ASCII letter, digit or '/', or no digit.
+// Every callsign has a digit, so a word from an error page served in place
+// of the list is not taken for one.
 func parseCall(line string) (string, bool) {
 	b := []byte(line)
+	var digit bool
 	for i, c := range b {
 		switch {
 		case c >= 'a' && c <= 'z':
 			b[i] = c - ('a' - 'A')
-		case c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '/':
+		case c >= '0' && c <= '9':
+			digit = true
+		case c >= 'A' && c <= 'Z', c == '/':
 		default:
 			return "", false
 		}
 	}
-	return string(b), true
+	return string(b), digit
 }

@@ -61,6 +61,12 @@ func TestParse(t *testing.T) {
 			wantSkipped: 5,
 		},
 		{
+			name:        "words without a digit are skipped",
+			in:          "Forbidden\r\nService unavailable\r\nError\r\nMWOKMS\r\nK1ABC\r\n",
+			want:        []string{"K1ABC"},
+			wantSkipped: 4,
+		},
+		{
 			name: "empty input",
 			in:   "",
 		},
@@ -82,12 +88,13 @@ func TestParse(t *testing.T) {
 
 func TestParseLongLine(t *testing.T) {
 	// Well past bufio.Scanner's default 64 KiB token limit.
-	in := "W1AW\r\n" + strings.Repeat("A", 200<<10) + "\r\nK1ABC\r\n"
+	long := strings.Repeat("A", 200<<10) + "1"
+	in := "W1AW\r\n" + long + "\r\nK1ABC\r\n"
 
 	got, skipped, err := Parse(strings.NewReader(in))
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{"W1AW", strings.Repeat("A", 200<<10), "K1ABC"}, got)
+	assert.Equal(t, []string{"W1AW", long, "K1ABC"}, got)
 	assert.Zero(t, skipped)
 }
 
