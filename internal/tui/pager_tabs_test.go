@@ -42,7 +42,7 @@ func shiftTab() tea.KeyPressMsg { return tea.KeyPressMsg{Code: tea.KeyTab, Mod: 
 func tab() tea.KeyPressMsg      { return special(tea.KeyTab) }
 
 // runPager runs cmd as runIndex does, also feeding the pager's QSO fetches
-// back into m.
+// back into m, and its LoTW and eQSL lookups.
 func runPager(t *testing.T, m Model, cmd tea.Cmd) Model {
 	t.Helper()
 	queue := []tea.Cmd{cmd}
@@ -55,7 +55,7 @@ func runPager(t *testing.T, m Model, cmd tea.Cmd) Model {
 		switch msg := c().(type) {
 		case tea.BatchMsg:
 			queue = append(queue, msg...)
-		case indexLoadedMsg, indexBlockMsg, indexLimitMsg, indexMarksMsg, indexSearchMsg, indexBulkMsg, pagerQSOMsg, lotwLookupMsg:
+		case indexLoadedMsg, indexBlockMsg, indexLimitMsg, indexMarksMsg, indexSearchMsg, indexBulkMsg, pagerQSOMsg, lotwLookupMsg, eqslLookupMsg:
 			var next tea.Cmd
 			m, next = update(t, m, msg)
 			queue = append(queue, next)

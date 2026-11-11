@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/callsign"
 	"jstlogger/internal/indexfmt"
@@ -55,6 +56,8 @@ type pager struct {
 
 	// lotw is the LoTW lookup for the base callsign of the QSO shown.
 	lotw lotwCache
+	// eqsl is the eQSL lookup for the base callsign of the QSO shown.
+	eqsl eqslCache
 }
 
 // pagerQSOMsg carries the whole QSO, or the error fetching it, for the
@@ -266,13 +269,14 @@ func (m Model) openPager() Model {
 	return m
 }
 
-// closePager closes the pager. The fetched QSO and LoTW lookup are
+// closePager closes the pager. The fetched QSO and LoTW and eQSL lookups are
 // forgotten, so reopening shows any change made since.
 func (m Model) closePager() Model {
 	m.pager.open = false
 	m.pager.lookupPrefix = false
 	m.pager.fetched, m.pager.pending, m.pager.qso, m.pager.err = 0, 0, logbook.QSO{}, nil
 	m.pager.lotw = lotwCache{}
+	m.pager.eqsl = eqslCache{}
 	return m
 }
 
@@ -330,7 +334,7 @@ func (m Model) pagerContent(width int) []string {
 		return []string{st.muted.Render("Loading…")}
 	}
 	if p.tab == tabQSO {
-		return strings.Split(qsoTab(st, q, m.idx.unit, m.lotwStatus(q.Call), width), "\n")
+		return strings.Split(qsoTab(st, q, m.idx.unit, m.lotwStatus(q.Call), m.eqslStatus(q.Call), width), "\n")
 	}
 	switch {
 	case p.fetched != q.ID:
@@ -392,8 +396,9 @@ func (m Model) pagerView(width, height int) string {
 // qsoTab renders the QSO tab: one labeled row per field, each fitted to
 // width cells. An empty field shows pagerEmpty, so every QSO has the same
 // rows. Distances are shown in unit; any unit other than Mi shows
-// kilometers. A LoTW row follows the Call row when lotw is enabled.
-func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, width int) string {
+// kilometers. A LoTW row follows the Call row when lotw is enabled, then an
+// eQSL AG row when eqsl is enabled.
+func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, eqsl eqslStatus, width int) string {
 	mode := q.Mode
 	switch {
 	case q.Submode == "":
@@ -417,7 +422,7 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, width
 		date = q.StartUTC.UTC().Format("2006-01-02 15:04:05") + " UTC"
 	}
 
-	suffix := lookupBadges(st, q.Call)
+	suffix := lookupBadges(st, q.Call, eqsl.badgeStyle(st))
 	if b := lotw.badge(st); b != "" {
 		suffix += " " + b
 	}
@@ -438,24 +443,29 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, width
 		{label: "Country", value: q.Country},
 		{label: "Continent", value: q.Cont},
 	}
+	// The LoTW row follows the Call row, and the eQSL AG row follows them.
+	after := 2
 	if lotw.enabled {
-		// The LoTW row follows the Call row.
-		rows = slices.Insert(rows, 2, pagerRow{label: "LoTW", value: lotw.text()})
+		rows = slices.Insert(rows, after, pagerRow{label: "LoTW", value: lotw.text()})
+		after++
+	}
+	if eqsl.enabled {
+		rows = slices.Insert(rows, after, pagerRow{label: "eQSL AG", value: eqsl.text()})
 	}
 	return pagerRows(st, rows, width)
 }
 
 // lookupBadges renders the QRZ, HamQTH and eQSL badges for call, each a
-// hyperlink to the call's page on that site, or "" when call has no base
-// callsign to look up.
-func lookupBadges(st styles, call string) string {
+// hyperlink to the call's page on that site, with the eQSL badge in
+// eqslStyle, or "" when call has no base callsign to look up.
+func lookupBadges(st styles, call string, eqslStyle lipgloss.Style) string {
 	if callsign.Base(call) == "" {
 		return ""
 	}
 	return strings.Join([]string{
 		st.qrz.Hyperlink(callsign.QRZURL(call)).Render("[Q]"),
 		st.hamQTH.Hyperlink(callsign.HamQTHURL(call)).Render("[H]"),
-		st.eQSL.Hyperlink(callsign.EQSLURL(call)).Render("[E]"),
+		eqslStyle.Hyperlink(callsign.EQSLURL(call)).Render("[E]"),
 	}, " ")
 }
 
