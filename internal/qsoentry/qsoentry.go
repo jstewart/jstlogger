@@ -81,6 +81,9 @@ func (f Form) Carry() Form {
 
 // Station is our side of the QSO, which the form does not ask for.
 type Station struct {
+	// Name is the configured station's name, stored on each QSO in
+	// logbook.StationField since ADIF has no field for it.
+	Name string
 	// Callsign is our callsign (ADIF STATION_CALLSIGN).
 	Callsign string
 	// Operator is the operator's callsign (ADIF OPERATOR).
@@ -138,8 +141,16 @@ func Build(f Form, station Station, now time.Time) (logbook.QSO, error) {
 	q.FreqHz, q.Band = b.freqBand(Freq, Band, "freq", "band")
 	var bandRX string
 	q.FreqRxHz, bandRX = b.freqBand(FreqRX, BandRX, "freq RX", "band RX")
+	// Fields holds what has no column of its own.
+	fields := map[string]string{}
 	if bandRX != "" {
-		q.Fields = map[string]string{BandRX.String(): bandRX}
+		fields[BandRX.String()] = bandRX
+	}
+	if name := strings.TrimSpace(station.Name); name != "" {
+		fields[logbook.StationField] = name
+	}
+	if len(fields) > 0 {
+		q.Fields = fields
 	}
 	if len(b.errs) > 0 {
 		return logbook.QSO{}, b.errs

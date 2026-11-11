@@ -323,7 +323,7 @@ var paperQSO = map[qsoentry.Field]string{
 func TestEntrySave(t *testing.T) {
 	s := newEntryStore(t, nil, testQSOs(2)...)
 	s.expectAdd()
-	st := qsoentry.Station{Callsign: "W1AW", Operator: "K1XX", Grid: "FN31"}
+	st := qsoentry.Station{Name: "home", Callsign: "W1AW", Operator: "K1XX", Grid: "FN31"}
 	m := newEntryModel(t, s, WithStation(st))
 	m = fill(t, m, paperQSO)
 
@@ -345,6 +345,7 @@ func TestEntrySave(t *testing.T) {
 	assert.Equal(t, "W1AW", q.StationCallsign)
 	assert.Equal(t, "K1XX", q.Operator)
 	assert.Equal(t, "FN31", q.MyGridsquare)
+	assert.Equal(t, "home", q.Fields[logbook.StationField])
 
 	assert.True(t, m.entry.open, "ctrl+s leaves the screen open for the next QSO")
 	for f, want := range map[qsoentry.Field]string{
