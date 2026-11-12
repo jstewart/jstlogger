@@ -409,12 +409,19 @@ func (e *entry) syncRig(s rig.State) {
 func (e entry) unsaved() bool {
 	f, b := e.form(), e.base
 	for k := range qsoentry.FieldCount {
-		isRST := k == qsoentry.RSTSent || k == qsoentry.RSTRcvd
-		if e.readOnly(k) || e.followsRig(k) || e.live && isRST && f[k] == e.rst {
+		if e.filledIn(k, f[k]) {
 			f[k], b[k] = "", ""
 		}
 	}
 	return f != b
+}
+
+// filledIn reports whether v, the value of field f, was filled in rather
+// than typed in live mode: by the clock, by the rig or as the default
+// report.
+func (e entry) filledIn(f qsoentry.Field, v string) bool {
+	isRST := f == qsoentry.RSTSent || f == qsoentry.RSTRcvd
+	return e.readOnly(f) || e.followsRig(f) || e.live && isRST && v == e.rst
 }
 
 // focusField gives field f focus, with the cursor at the end of its value.
@@ -498,6 +505,16 @@ func (m Model) tickEntry(msg entryTickMsg) (Model, tea.Cmd) {
 // if empty, and fills in the rig fields from the rig's last state.
 func (m Model) toggleLive() (Model, tea.Cmd) {
 	e := &m.entry
+	if e.live {
+		// The values filled in become the form's own, not unsaved
+		// changes, as post mode takes them over.
+		f := e.form()
+		for k := range qsoentry.FieldCount {
+			if e.filledIn(k, f[k]) {
+				e.base[k] = f[k]
+			}
+		}
+	}
 	e.live = !e.live
 	if !e.live {
 		return m, nil

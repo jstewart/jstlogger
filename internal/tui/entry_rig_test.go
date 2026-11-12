@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
@@ -157,5 +158,15 @@ func TestEntryRigIsNotAnUnsavedChange(t *testing.T) {
 	m = press(t, m, esc())
 
 	assert.False(t, m.entry.open)
+	assert.Equal(t, promptNone, m.prompt)
+}
+
+func TestEntrySwitchToPostKeepsFilledInValuesSaved(t *testing.T) {
+	m := newLiveEntryModel(t, newEntryStore(t, nil), rigAt(7_030_000, "CW"))
+	m, _ = at(t, m, 5*time.Second)
+
+	m = press(t, m, liveKey, esc())
+
+	assert.False(t, m.entry.open, "what the clock and rig filled in isn't an unsaved change")
 	assert.Equal(t, promptNone, m.prompt)
 }
