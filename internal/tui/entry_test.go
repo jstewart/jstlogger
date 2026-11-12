@@ -96,9 +96,16 @@ func newEntryModel(t *testing.T, s logbook.Store, opts ...Option) Model {
 	return m
 }
 
-// focusOn presses tab until field f has focus.
+// focusOn moves to the tab with field f, pressing ctrl+pgdn, then presses
+// tab until f has focus.
 func focusOn(t *testing.T, m Model, f qsoentry.Field) Model {
 	t.Helper()
+	for range entryTabCount {
+		if slices.Contains(m.entry.fields(m.entry.tab), f) {
+			break
+		}
+		m = press(t, m, nextTabKey)
+	}
 	for range qsoentry.FieldCount {
 		if m.entry.focus == f {
 			return m
@@ -123,7 +130,7 @@ func fill(t *testing.T, m Model, values map[qsoentry.Field]string) Model {
 	return m
 }
 
-// entryValue returns the text of field f, or the picked mode or submode.
+// entryValue returns the text of field f, or the option picked in it.
 func entryValue(m Model, f qsoentry.Field) string {
 	return m.entry.form()[f]
 }
@@ -175,20 +182,23 @@ func TestEntryTabs(t *testing.T) {
 
 	m = press(t, m, altKey('3'))
 	assert.Equal(t, entryTabGeneral, m.entry.tab)
-	assert.Contains(t, bodyText(m), "not available yet")
+	assert.NotContains(t, bodyText(m), "not available yet")
+	assert.Contains(t, bodyText(m), "DXCC")
 	m = press(t, m, nextTabKey)
-	assert.Equal(t, entryTabNotes, m.entry.tab)
+	assert.Equal(t, entryTabNotes, m.entry.tab, "the satellite tab is hidden")
 	m = press(t, m, nextTabKey, nextTabKey)
 	assert.Equal(t, entryTabQSO, m.entry.tab, "ctrl+pgdn wraps")
 	m = press(t, m, prevTabKey)
 	assert.Equal(t, entryTabQSL, m.entry.tab, "ctrl+pgup wraps")
 	m = press(t, m, altKey('9'))
 	assert.Equal(t, entryTabQSL, m.entry.tab, "there is no ninth tab")
+	assert.Equal(t, qsoentry.QSLSent, m.entry.focus, "a tab opens on its first field")
 
 	m = press(t, m, tab())
-	assert.Equal(t, qsoentry.Date, m.entry.focus, "fields move only on the QSO tab")
+	assert.Equal(t, qsoentry.QSLSentVia, m.entry.focus, "fields move on every tab")
 	m = press(t, m, altKey('1'))
 	assert.Equal(t, entryTabQSO, m.entry.tab)
+	assert.Equal(t, qsoentry.Date, m.entry.focus)
 }
 
 func TestEntryTypingIsNotAGlobalKey(t *testing.T) {
@@ -278,15 +288,21 @@ func TestEntryFreqFillsBand(t *testing.T) {
 
 func TestEntryShowsBearingAndDistance(t *testing.T) {
 	st := qsoentry.Station{Callsign: "W1AW", Grid: "FN42"}
-	m := newEntryModel(t, newEntryStore(t, nil), WithStation(st))
+	m := newEntryModel(t, newEntryStore(t, nil), WithStations([]qsoentry.Station{st}))
 
 	assert.NotContains(t, bodyText(m), "°")
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Gridsquare: "IO91"})
 	assert.Contains(t, bodyText(m), "53° · 3227 mi")
 
-	m = newEntryModel(t, newEntryStore(t, nil), WithStation(st), WithIndexFormat(defaultIndexFormat, "km"))
+	m = newEntryModel(t, newEntryStore(t, nil), WithStations([]qsoentry.Station{st}), WithIndexFormat(defaultIndexFormat, "km"))
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Gridsquare: "IO91"})
 	assert.Contains(t, bodyText(m), "53° · 5194 km")
+
+	// The path is from the grid on the Station tab, as edited.
+	m = focusOn(t, m, qsoentry.MyGridsquare)
+	m = press(t, m, special(tea.KeyBackspace), special(tea.KeyBackspace), special(tea.KeyBackspace), special(tea.KeyBackspace))
+	m = focusOn(t, m, qsoentry.Gridsquare)
+	assert.NotContains(t, bodyText(m), "°", "no grid of ours, no path")
 }
 
 func TestEntrySaveShowsErrorsInline(t *testing.T) {
@@ -325,7 +341,7 @@ func TestEntrySave(t *testing.T) {
 	s := newEntryStore(t, nil, testQSOs(2)...)
 	s.expectAdd()
 	st := qsoentry.Station{Name: "home", Callsign: "W1AW", Operator: "K1XX", Grid: "FN31"}
-	m := newEntryModel(t, s, WithStation(st))
+	m := newEntryModel(t, s, WithStations([]qsoentry.Station{st}))
 	m = fill(t, m, paperQSO)
 
 	m = press(t, m, saveKey)
@@ -509,7 +525,7 @@ func TestEntryFitsNarrowWindows(t *testing.T) {
 	for _, width := range []int{12, 20, 40, 60} {
 		t.Run(strconv.Itoa(width), func(t *testing.T) {
 			st := qsoentry.Station{Grid: "FN31"}
-			m := newEntryModel(t, newEntryStore(t, nil), WithStation(st))
+			m := newEntryModel(t, newEntryStore(t, nil), WithStations([]qsoentry.Station{st}))
 			m = fill(t, m, map[qsoentry.Field]string{
 				qsoentry.Mode: "digitalvoice", qsoentry.Submode: "c", qsoentry.Gridsquare: "io91",
 			})
