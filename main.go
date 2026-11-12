@@ -54,6 +54,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		}),
 		tui.WithURLOpener(browser.Open),
 		tui.WithStation(qsoentry.Station{
+			Name:     session.Station.Name,
 			Callsign: session.Station.Callsign,
 			Operator: session.Operator,
 			Grid:     session.Station.Gridsquare,

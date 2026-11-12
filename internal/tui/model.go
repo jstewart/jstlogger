@@ -219,6 +219,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			m.lotwErr = msg.err
 		}
 
+	case entryLoTWMsg:
+		m.applyEntryLoTW(msg)
+
 	case lotwUsersMsg:
 		if err := m.idx.lotw.apply(msg); err != nil {
 			m.lotwErr = err
@@ -357,7 +360,8 @@ func (m Model) bodyWidth() int {
 // layout fits the index to the space between the header and footer, which
 // change height with the prompt and help, or to the strip above the open
 // pager, and returns a command loading any rows that come into view and
-// the whole QSO the pager shows, and its LoTW use and eQSL AG membership.
+// the whole QSO the pager shows, and its LoTW use and eQSL AG membership,
+// and the LoTW use of the call typed into the New QSO screen.
 func (m *Model) layout() tea.Cmd {
 	// A reload or bulk delete may have left no QSO for the pager to show.
 	if m.idx.total == 0 && m.pager.open {
@@ -376,7 +380,7 @@ func (m *Model) layout() tea.Cmd {
 	for _, b := range m.idx.missing() {
 		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
 	}
-	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL())...)
+	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL(), m.fetchEntryLoTW())...)
 }
 
 // updateIndex handles a key press on the QSO index.

@@ -15,7 +15,7 @@ import (
 // testNow is the current time in the tests.
 var testNow = time.Date(2026, 11, 10, 18, 30, 0, 0, time.UTC)
 
-var testStation = Station{Callsign: "W1AW", Operator: "K1XX", Grid: "FN31pr"}
+var testStation = Station{Name: "home", Callsign: "W1AW", Operator: "K1XX", Grid: "FN31pr"}
 
 // validForm returns a form that builds without errors.
 func validForm() Form {
@@ -73,6 +73,17 @@ func TestBuild(t *testing.T) {
 	assert.Equal(t, "W1AW", q.StationCallsign)
 	assert.Equal(t, "K1XX", q.Operator)
 	assert.Equal(t, "FN31PR", q.MyGridsquare)
+	assert.Equal(t, "home", q.Fields[logbook.StationField], "the station name is stored")
+}
+
+func TestBuildStationNameTrimmed(t *testing.T) {
+	q, err := Build(validForm(), Station{Name: "  portable  "}, testNow)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{logbook.StationField: "portable"}, q.Fields)
+
+	q, err = Build(validForm(), Station{Name: "   "}, testNow)
+	require.NoError(t, err)
+	assert.Empty(t, q.Fields, "a blank station name is not stored")
 }
 
 func TestBuildMinimal(t *testing.T) {

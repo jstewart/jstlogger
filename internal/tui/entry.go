@@ -104,6 +104,8 @@ type entry struct {
 	errs qsoentry.Errors
 	// tags are the logbook's tags, which complete the tags field.
 	tags []string
+	// lotw is the LoTW lookup for the base callsign of the call.
+	lotw lotwCache
 	// saving reports whether a save is under way.
 	saving bool
 	// msg is shown on the status line until the next key press, and err,
@@ -604,8 +606,8 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 	return lines, focus, rows
 }
 
-// entryCell renders field f, labeled, in width cells. The grid is followed
-// by the bearing and distance to it.
+// entryCell renders field f, labeled, in width cells. The call is followed
+// by its LoTW status and the grid by the bearing and distance to it.
 func (m Model) entryCell(f qsoentry.Field, width int) string {
 	st, e := m.styles, m.entry
 	focused := f == e.focus
@@ -621,25 +623,38 @@ func (m Model) entryCell(f qsoentry.Field, width int) string {
 	case qsoentry.Submode:
 		value = e.submode.view(st, focused)
 	default:
-		var suffix string
-		if f == qsoentry.Gridsquare {
-			suffix = m.entryPath()
-		}
+		suffix, suffixAt := m.entrySuffix(f)
 		in := e.inputs[f]
 		inWidth := room
 		if suffix != "" {
-			// An 8-character locator and the cursor, so the suffix sits next
-			// to the grid.
-			inWidth = max(min(room-lipgloss.Width(suffix)-2, 9), 1)
+			// The suffix sits next to the value rather than at the far side.
+			inWidth = max(min(room-lipgloss.Width(suffix)-2, suffixAt), 1)
 		}
 		// The input needs a cell for the cursor past the end of its value.
 		in.SetWidth(max(inWidth-1, 1))
 		value = in.View()
 		if suffix != "" {
-			value = pad(value, inWidth) + "  " + st.muted.Render(suffix)
+			value = pad(value, inWidth) + "  " + suffix
 		}
 	}
 	return label + "  " + value
+}
+
+// entrySuffix returns what follows field f's value, styled, and the width
+// of the input before it: the LoTW status after the call and the path after
+// the grid. It returns "" for other fields.
+func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
+	switch f {
+	case qsoentry.Call:
+		// A long portable call, such as VE3/W1ABC/P, and the cursor.
+		return m.entryLoTW(), 14
+	case qsoentry.Gridsquare:
+		// An 8-character locator and the cursor.
+		if path := m.entryPath(); path != "" {
+			return m.styles.muted.Render(path), 9
+		}
+	}
+	return "", 0
 }
 
 // entryPath returns the bearing and distance from our grid to the grid in
