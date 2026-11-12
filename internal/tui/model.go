@@ -249,6 +249,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case rig.StateChanged:
 		m.rigState.state = msg.State
 		m.rigState.haveState = true
+		m.applyRigState(msg.State)
 
 	case rig.ConnectionChanged:
 		m.rigState.conn = msg

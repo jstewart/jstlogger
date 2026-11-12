@@ -81,6 +81,9 @@ const entryLabelWidth = 8
 // entryTimes are the time fields, which the clock fills in live mode.
 var entryTimes = []qsoentry.Field{qsoentry.Date, qsoentry.TimeOn, qsoentry.DateOff, qsoentry.TimeOff}
 
+// entryRigFields are the fields the rig fills in live mode.
+var entryRigFields = []qsoentry.Field{qsoentry.Mode, qsoentry.Submode, qsoentry.Freq, qsoentry.Band}
+
 // The layouts of the dates and times the clock fills in.
 const (
 	entryDateLayout = "2006-01-02"
@@ -98,12 +101,18 @@ type entry struct {
 	gen int
 	tab entryTab
 	// live reports whether the screen is in live mode, where the clock
-	// fills in the times, rather than post mode, where every field is
-	// typed by hand.
+	// fills in the times and the rig the freq, band and mode, rather than
+	// post mode, where every field is typed by hand.
 	live bool
 	// onLocked reports whether the time on has stopped following the
 	// clock in live mode, as it does once the call is typed.
 	onLocked bool
+	// hand marks the rig fields edited by hand, which stop following the
+	// rig until it is synced again.
+	hand [qsoentry.FieldCount]bool
+	// dataMode and dataSubmode are the data mode last in the form, which
+	// a rig in a packet mode is taken to carry.
+	dataMode, dataSubmode string
 	// focus is the QSO tab's field with focus.
 	focus qsoentry.Field
 	// inputs holds a text input for each field but the mode and submode,
@@ -176,6 +185,8 @@ type entryKeyMap struct {
 	Live key.Binding
 	// ResetTime sets the time on to now in live mode.
 	ResetTime key.Binding
+	// SyncRig makes every rig field follow the rig again in live mode.
+	SyncRig key.Binding
 	// Quit replaces the global quit binding, since q is typed into fields.
 	Quit key.Binding
 }
@@ -228,6 +239,10 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("ctrl+t"),
 			key.WithHelp("ctrl+t", "time on now"),
 		),
+		SyncRig: key.NewBinding(
+			key.WithKeys("ctrl+r"),
+			key.WithHelp("ctrl+r", "sync rig"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
@@ -244,7 +259,7 @@ func (k entryKeyMap) FullHelp() [][]key.Binding {
 		{k.Save, k.SaveClose, k.Close, k.Quit},
 		{k.NextField, k.PrevField},
 		{k.NextTab, k.PrevTab, k.GoTab},
-		{k.Live, k.ResetTime},
+		{k.Live, k.ResetTime, k.SyncRig},
 	}
 }
 
@@ -347,13 +362,51 @@ func (e *entry) followCall(before, after qsoentry.Form, now time.Time) {
 	e.setOn(now)
 }
 
+// followsRig reports whether field f follows the rig: a rig field not
+// edited by hand, in live mode.
+func (e entry) followsRig(f qsoentry.Field) bool {
+	return e.live && slices.Contains(entryRigFields, f) && !e.hand[f]
+}
+
+// markHand marks field f, just edited by hand, as no longer following the
+// rig. The mode and submode go together.
+func (e *entry) markHand(f qsoentry.Field) {
+	switch f {
+	case qsoentry.Mode, qsoentry.Submode:
+		e.hand[qsoentry.Mode], e.hand[qsoentry.Submode] = true, true
+	case qsoentry.Freq, qsoentry.Band:
+		e.hand[f] = true
+	}
+}
+
+// syncRig fills in the rig fields that follow the rig from its state s, and
+// what follows from them: the band and the default reports.
+func (e *entry) syncRig(s rig.State) {
+	before := e.form()
+	if e.followsRig(qsoentry.Freq) {
+		e.inputs[qsoentry.Freq].SetValue(logbook.FormatFreqMHz(s.Freq))
+	}
+	if e.followsRig(qsoentry.Mode) {
+		mode, submode := qsoentry.RigMode(s.Mode, e.dataMode, e.dataSubmode)
+		e.mode.set(mode)
+		e.submode.setOptions(append([]string{""}, adif.Submodes(e.mode.value())...))
+		e.submode.set(submode)
+	}
+	band := e.inputs[qsoentry.Band].Value()
+	e.fillIn(before, e.form())
+	if !e.followsRig(qsoentry.Band) {
+		e.inputs[qsoentry.Band].SetValue(band)
+	}
+}
+
 // unsaved reports whether the form holds values typed or picked since it
-// was opened or last saved. The times the clock fills in live mode don't
-// count.
+// was opened or last saved. In live mode, the values the clock and the rig
+// fill in don't count, nor do the default reports.
 func (e entry) unsaved() bool {
 	f, b := e.form(), e.base
 	for k := range qsoentry.FieldCount {
-		if e.readOnly(k) {
+		isRST := k == qsoentry.RSTSent || k == qsoentry.RSTRcvd
+		if e.readOnly(k) || e.followsRig(k) || e.live && isRST && f[k] == e.rst {
 			f[k], b[k] = "", ""
 		}
 	}
@@ -379,11 +432,15 @@ func (m Model) openEntry() (Model, tea.Cmd) {
 	e.open = true
 	e.gen = m.entry.gen + 1
 	e.tags = m.entry.tags
+	e.dataMode, e.dataSubmode = m.entry.dataMode, m.entry.dataSubmode
 	e.live = m.rig != nil && m.rigState.conn.Status == rig.Connected
 	focus := qsoentry.Date
 	if e.live {
 		focus = qsoentry.Call
 		e.tickClock(m.now())
+		if m.rigState.haveState {
+			e.syncRig(m.rigState.state)
+		}
 	}
 	cmd := e.focusField(focus)
 	m.entry = e
@@ -391,12 +448,24 @@ func (m Model) openEntry() (Model, tea.Cmd) {
 }
 
 // closeEntry closes the New QSO screen, discarding the form. The tags are
-// kept to complete the tags field when it opens again.
+// kept to complete the tags field when it opens again, and the last data
+// mode for a rig in a packet mode.
 func (m Model) closeEntry() Model {
 	old := m.entry
 	m.entry = newEntry()
 	m.entry.gen, m.entry.tags = old.gen, old.tags
+	m.entry.dataMode, m.entry.dataSubmode = old.dataMode, old.dataSubmode
 	return m
+}
+
+// applyRigState fills in the New QSO screen's rig fields from the rig's
+// state s, when the screen is open in live mode.
+func (m *Model) applyRigState(s rig.State) {
+	if !m.entry.open || !m.entry.live {
+		return
+	}
+	m.entry.syncRig(s)
+	m.revalidateEntry()
 }
 
 // entryTickCmd returns a command that ticks the New QSO screen's clock at
@@ -420,8 +489,9 @@ func (m Model) tickEntry(msg entryTickMsg) (Model, tea.Cmd) {
 }
 
 // toggleLive switches the New QSO screen between live and post mode. Post
-// mode keeps the times for editing. Live mode starts the clock again, or
-// with a call typed, locks the time on, filling it in if empty.
+// mode keeps the times and the rig's values for editing. Live mode starts
+// the clock again, or with a call typed, locks the time on, filling it in
+// if empty, and fills in the rig fields from the rig's last state.
 func (m Model) toggleLive() (Model, tea.Cmd) {
 	e := &m.entry
 	e.live = !e.live
@@ -431,6 +501,9 @@ func (m Model) toggleLive() (Model, tea.Cmd) {
 	e.onLocked = strings.TrimSpace(e.inputs[qsoentry.Call].Value()) != ""
 	if !e.onLocked || e.inputs[qsoentry.Date].Value() == "" || e.inputs[qsoentry.TimeOn].Value() == "" {
 		e.setOn(m.now())
+	}
+	if m.rigState.haveState {
+		e.syncRig(m.rigState.state)
 	}
 	m.revalidateEntry()
 	if e.readOnly(e.focus) {
@@ -522,6 +595,13 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			e.setOn(m.now())
 			m.revalidateEntry()
 		}
+	case key.Matches(msg, k.SyncRig):
+		if e.live {
+			e.hand = [qsoentry.FieldCount]bool{}
+			if m.rigState.haveState {
+				m.applyRigState(m.rigState.state)
+			}
+		}
 	case e.tab != entryTabQSO:
 		// The other tabs have no fields yet.
 	case key.Matches(msg, k.NextField):
@@ -564,6 +644,7 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 		e.inputs[e.focus], cmd = e.inputs[e.focus].Update(msg)
 	}
 	if after := e.form(); after != before {
+		e.markHand(e.focus)
 		e.fillIn(before, after)
 		e.followCall(before, after, m.now())
 		m.revalidateEntry()
@@ -573,7 +654,8 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 
 // fillIn fills in what follows from a change to the form from before to
 // after: the submodes and default reports from the mode, the bands from the
-// freqs and the tag completions from the tags.
+// freqs and the tag completions from the tags. A data mode is kept for a
+// rig in a packet mode.
 func (e *entry) fillIn(before, after qsoentry.Form) {
 	changed := func(f qsoentry.Field) bool { return after[f] != before[f] }
 	if changed(qsoentry.Mode) {
@@ -581,6 +663,9 @@ func (e *entry) fillIn(before, after qsoentry.Form) {
 	}
 	if changed(qsoentry.Mode) || changed(qsoentry.Submode) {
 		e.fillRST()
+		if qsoentry.IsDataMode(e.mode.value()) {
+			e.dataMode, e.dataSubmode = e.mode.value(), e.submode.value()
+		}
 	}
 	if changed(qsoentry.Freq) {
 		e.band = e.fillBand(qsoentry.Freq, qsoentry.Band, e.band)
@@ -796,6 +881,9 @@ func (m Model) entryCell(f qsoentry.Field, width int) string {
 	switch f {
 	case qsoentry.Mode:
 		value = e.mode.view(st, focused)
+		if mark := m.entryHandMark(f); mark != "" {
+			value += "  " + mark
+		}
 	case qsoentry.Submode:
 		value = e.submode.view(st, focused)
 	default:
@@ -820,10 +908,20 @@ func (m Model) entryCell(f qsoentry.Field, width int) string {
 }
 
 // entrySuffix returns what follows field f's value, styled, and the width
-// of the input before it: the LoTW status after the call and the path after
-// the grid. It returns "" for other fields.
+// of the input before it: the LoTW status after the call, the path after
+// the grid and the hand mark after the freq and band. It returns "" for
+// other fields.
 func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 	switch f {
+	case qsoentry.Freq, qsoentry.Band:
+		// A freq to the hertz in MHz, or the longest band, and the cursor.
+		width := 11
+		if f == qsoentry.Band {
+			width = 6
+		}
+		if mark := m.entryHandMark(f); mark != "" {
+			return mark, width
+		}
 	case qsoentry.Call:
 		// A long portable call, such as VE3/W1ABC/P, and the cursor.
 		return m.entryLoTW(), 14
@@ -834,6 +932,16 @@ func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 		}
 	}
 	return "", 0
+}
+
+// entryHandMark returns the mark, styled, of a rig field edited by hand
+// that no longer follows the rig, or "" for any other field.
+func (m Model) entryHandMark(f qsoentry.Field) string {
+	e := m.entry
+	if m.rig == nil || !e.live || !slices.Contains(entryRigFields, f) || !e.hand[f] {
+		return ""
+	}
+	return m.styles.muted.Render("manual")
 }
 
 // entryPath returns the bearing and distance from our grid to the grid in
