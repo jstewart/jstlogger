@@ -327,9 +327,11 @@ func (e entry) readOnly(f qsoentry.Field) bool {
 // stepFocus returns the field step fields on from the one with focus,
 // wrapping around and skipping read-only fields.
 func (e entry) stepFocus(step int) qsoentry.Field {
+	// The QSO tab's fields come before the station's.
+	n := qsoentry.StationName
 	f := e.focus
-	for range qsoentry.FieldCount {
-		f = (f + qsoentry.Field(step) + qsoentry.FieldCount) % qsoentry.FieldCount
+	for range n {
+		f = (f + qsoentry.Field(step) + n) % n
 		if !e.readOnly(f) {
 			return f
 		}
@@ -724,7 +726,9 @@ func (e *entry) fillBand(freq, band qsoentry.Field, last string) string {
 
 // validateEntry checks the form, keeping its errors for the view.
 func (m *Model) validateEntry() {
-	_, err := qsoentry.Build(m.entry.form(), m.station, m.now())
+	f := m.entry.form()
+	m.station.Fill(&f)
+	_, err := qsoentry.Build(f, m.now())
 	m.entry.errs, _ = errors.AsType[qsoentry.Errors](err)
 }
 
@@ -753,7 +757,8 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 		f[qsoentry.DateOff] = now.UTC().Format(entryDateLayout)
 		f[qsoentry.TimeOff] = now.UTC().Format(entryTimeLayout)
 	}
-	q, err := qsoentry.Build(f, m.station, now)
+	m.station.Fill(&f)
+	q, err := qsoentry.Build(f, now)
 	if errs, ok := errors.AsType[qsoentry.Errors](err); ok {
 		e.errs = errs
 		e.tab = entryTabQSO
