@@ -745,13 +745,15 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 		return m, nil
 	}
 	now := m.now()
+	e.tickClock(now)
+	f := e.form()
 	if e.live {
-		// The QSO ends as it is saved.
-		e.tickClock(now)
-		e.inputs[qsoentry.DateOff].SetValue(now.UTC().Format(entryDateLayout))
-		e.inputs[qsoentry.TimeOff].SetValue(now.UTC().Format(entryTimeLayout))
+		// The QSO ends as it is saved. The form keeps no time off, so a
+		// save that fails leaves none behind.
+		f[qsoentry.DateOff] = now.UTC().Format(entryDateLayout)
+		f[qsoentry.TimeOff] = now.UTC().Format(entryTimeLayout)
 	}
-	q, err := qsoentry.Build(e.form(), m.station, now)
+	q, err := qsoentry.Build(f, m.station, now)
 	if errs, ok := errors.AsType[qsoentry.Errors](err); ok {
 		e.errs = errs
 		e.tab = entryTabQSO

@@ -207,3 +207,13 @@ func TestEntryLiveClockIsNotAnUnsavedChange(t *testing.T) {
 	assert.False(t, m.entry.open)
 	assert.Equal(t, promptNone, m.prompt)
 }
+
+func TestEntryLiveFailedSaveLeavesNoTimeOff(t *testing.T) {
+	m := newLiveEntryModel(t, newEntryStore(t, nil))
+
+	m = press(t, m, saveKey, liveKey)
+
+	assert.Contains(t, bodyText(m), "call is required")
+	assert.Empty(t, entryValue(m, qsoentry.DateOff), "post mode doesn't take over a time off nobody set")
+	assert.Empty(t, entryValue(m, qsoentry.TimeOff))
+}
