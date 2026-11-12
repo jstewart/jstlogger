@@ -394,9 +394,13 @@ func (e *entry) syncRig(s rig.State) {
 	}
 	band := e.inputs[qsoentry.Band].Value()
 	e.fillIn(before, e.form())
-	if !e.followsRig(qsoentry.Band) {
-		e.inputs[qsoentry.Band].SetValue(band)
+	if e.followsRig(qsoentry.Band) {
+		// A band typed before a sync gives way even when the freq is
+		// unchanged.
+		band = freqBand(e.inputs[qsoentry.Freq].Value())
+		e.band = band
 	}
+	e.inputs[qsoentry.Band].SetValue(band)
 }
 
 // unsaved reports whether the form holds values typed or picked since it

@@ -97,6 +97,12 @@ func TestEntryLiveHandEditedBandAndMode(t *testing.T) {
 	assertRigFields(t, m, "7.03", "17m", "FT8", "")
 	assert.Contains(t, entryLine(m, "Mode"), "manual")
 	assert.Contains(t, entryLine(m, "Band"), "manual")
+
+	m = press(t, m, syncRigKey)
+
+	assertRigFields(t, m, "7.03", "40m", "CW", "")
+	assert.NotContains(t, entryLine(m, "Mode"), "manual")
+	assert.NotContains(t, entryLine(m, "Band"), "manual")
 }
 
 func TestEntryLivePacketModeKeepsLastDataMode(t *testing.T) {
