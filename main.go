@@ -106,7 +106,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 // configured stations in key order. A guest --operator operates every
 // profile; otherwise each is operated by its own callsign.
 func stationProfiles(session config.Session) []qsoentry.Station {
-	guest := session.Operator != session.Station.Callsign
+	guest := !strings.EqualFold(session.Operator, session.Station.Callsign)
 	profile := func(st config.Station) qsoentry.Station {
 		operator := st.Callsign
 		if guest {

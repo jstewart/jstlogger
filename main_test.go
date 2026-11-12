@@ -642,6 +642,16 @@ func TestStationProfiles(t *testing.T) {
 		}
 	})
 
+	t.Run("own callsign in another case", func(t *testing.T) {
+		session := config.Session{
+			StationName: "park", Station: selected, Operator: "w1aw/p",
+			Config: config.Config{Stations: stations},
+		}
+		got := stationProfiles(session)
+		require.Len(t, got, 3)
+		assert.Equal(t, "K1ABC", got[1].Operator, "--operator with our own callsign is no guest")
+	})
+
 	t.Run("one station", func(t *testing.T) {
 		session := config.Session{
 			StationName: "home", Station: home, Operator: "W1AW",
