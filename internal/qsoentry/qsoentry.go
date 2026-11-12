@@ -379,12 +379,13 @@ var qslServices = []struct {
 // never fields.
 func (b *builder) qsl() []logbook.Confirmation {
 	var confs []logbook.Confirmation
+	statuses := adif.QSLSentStatuses()
 	for _, s := range qslServices {
 		sent := b.upper(s.field)
 		if sent == "" {
 			continue
 		}
-		if !slices.Contains(adif.QSLSentStatuses(), sent) {
+		if !slices.Contains(statuses, sent) {
 			b.fail(s.field, "%q is not a QSL sent status", sent)
 			continue
 		}
