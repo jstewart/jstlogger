@@ -59,6 +59,9 @@ type Model struct {
 
 	// now returns the current time.
 	now func() time.Time
+	// tick is tea.Tick, which the tests replace to send the ticks
+	// themselves.
+	tick func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
 
 	// logbook is nil when no logbook is open.
 	logbook logbook.Store
@@ -102,6 +105,7 @@ func New(opts ...Option) Model {
 		pager:      pager{indexLines: defaultPagerIndexLines},
 		entry:      newEntry(),
 		now:        time.Now,
+		tick:       tea.Tick,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -209,6 +213,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case entrySavedMsg:
 		return m.applySaved(msg)
 
+	case entryTickMsg:
+		return m.tickEntry(msg)
+
 	case pagerQSOMsg:
 		q, _ := m.idx.current()
 		m.pager.applyQSO(msg, q.ID)
@@ -242,6 +249,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case rig.StateChanged:
 		m.rigState.state = msg.State
 		m.rigState.haveState = true
+		m.applyRigState(msg.State)
 
 	case rig.ConnectionChanged:
 		m.rigState.conn = msg

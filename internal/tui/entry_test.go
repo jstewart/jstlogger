@@ -87,6 +87,7 @@ func newEntryModel(t *testing.T, s logbook.Store, opts ...Option) Model {
 	t.Helper()
 	m := New(append([]Option{WithLogbook(s)}, opts...)...)
 	m.now = func() time.Time { return entryNow }
+	m.tick = noTick
 	m = runIndex(t, m, m.Init())
 	m, cmd := update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = runIndex(t, m, cmd)
