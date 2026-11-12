@@ -3,6 +3,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -327,7 +328,11 @@ func (m Model) footerView() string {
 		keys = joinedKeyMap{m.globalKeys(), m.pagerKeys}
 	}
 	if m.entry.open {
-		keys = m.entryKeys
+		ek := m.entryKeys
+		// The keys number the tabs shown, which the Satellite tab is not
+		// always among.
+		ek.GoTab.SetHelp(fmt.Sprintf("alt+1-%d", len(m.entry.tabs())), ek.GoTab.Help().Desc)
+		keys = ek
 	}
 	switch {
 	case m.promptOpen():

@@ -244,6 +244,16 @@ func TestEntrySatelliteTabFollowsPropMode(t *testing.T) {
 	assert.Equal(t, entryTabNotes, m.entry.tab, "alt+4 is notes again")
 }
 
+func TestEntryHelpCountsTabsShown(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m.help.ShowAll = true
+	assert.Regexp(t, `alt\+1-5\s+go to tab`, plain(m.footerView()), "no satellite tab, so five tabs")
+
+	m = fill(t, m, map[qsoentry.Field]string{qsoentry.PropMode: "sat"})
+	m.help.ShowAll = true
+	assert.Regexp(t, `alt\+1-6\s+go to tab`, plain(m.footerView()), "the satellite tab makes six")
+}
+
 func TestEntryLeavesHiddenSatelliteTab(t *testing.T) {
 	m := newEntryModel(t, newEntryStore(t, nil))
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.PropMode: "sat"})
