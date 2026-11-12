@@ -17,6 +17,7 @@ import (
 
 	"jstlogger/internal/config"
 	"jstlogger/internal/logbook"
+	"jstlogger/internal/qsoentry"
 	"jstlogger/internal/rig"
 )
 
@@ -598,4 +599,66 @@ func TestParseFlagsSyncEQSL(t *testing.T) {
 	require.True(t, ok, stderr.String())
 	assert.True(t, opts.syncEQSL)
 	assert.False(t, opts.syncLoTW)
+}
+
+func TestStationProfiles(t *testing.T) {
+	home := config.Station{
+		Name: "Home", Callsign: "W1AW", Gridsquare: "FN31", State: "CT", City: "Newington",
+		POTAReferences: []string{"US-0001"}, SOTAReference: "W1/HA-001", IOTAReference: "NA-001",
+		WWFFReference: "KFF-0001",
+	}
+	park := config.Station{Name: "Park", Callsign: "W1AW/P", Gridsquare: "FN32"}
+	club := config.Station{Name: "Club", Callsign: "K1ABC", Gridsquare: "FN42"}
+	stations := map[string]config.Station{"park": park, "home": home, "club": club}
+	// The selected station has the overrides applied, here --grid.
+	selected := park
+	selected.Gridsquare = "FN33"
+
+	t.Run("selected first, then by key", func(t *testing.T) {
+		session := config.Session{
+			StationName: "park", Station: selected, Operator: "W1AW/P",
+			Config: config.Config{Stations: stations},
+		}
+		got := stationProfiles(session)
+		assert.Equal(t, []qsoentry.Station{
+			{Name: "Park", Callsign: "W1AW/P", Operator: "W1AW/P", Grid: "FN33"},
+			{Name: "Club", Callsign: "K1ABC", Operator: "K1ABC", Grid: "FN42"},
+			{
+				Name: "Home", Callsign: "W1AW", Operator: "W1AW", Grid: "FN31", State: "CT", City: "Newington",
+				POTA: []string{"US-0001"}, SOTA: "W1/HA-001", IOTA: "NA-001", WWFF: "KFF-0001",
+			},
+		}, got, "each profile is operated by its own callsign")
+	})
+
+	t.Run("guest operator", func(t *testing.T) {
+		session := config.Session{
+			StationName: "park", Station: selected, Operator: "N0OP",
+			Config: config.Config{Stations: stations},
+		}
+		got := stationProfiles(session)
+		require.Len(t, got, 3)
+		for _, st := range got {
+			assert.Equal(t, "N0OP", st.Operator, "--operator operates every profile")
+		}
+	})
+
+	t.Run("own callsign in another case", func(t *testing.T) {
+		session := config.Session{
+			StationName: "park", Station: selected, Operator: "w1aw/p",
+			Config: config.Config{Stations: stations},
+		}
+		got := stationProfiles(session)
+		require.Len(t, got, 3)
+		assert.Equal(t, "K1ABC", got[1].Operator, "--operator with our own callsign is no guest")
+	})
+
+	t.Run("one station", func(t *testing.T) {
+		session := config.Session{
+			StationName: "home", Station: home, Operator: "W1AW",
+			Config: config.Config{Stations: map[string]config.Station{"home": home}},
+		}
+		got := stationProfiles(session)
+		require.Len(t, got, 1)
+		assert.Equal(t, "Home", got[0].Name)
+	})
 }

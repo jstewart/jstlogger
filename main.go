@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,12 +55,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 			return config.StationName(session.Config.Stations, callsign, grid)
 		}),
 		tui.WithURLOpener(browser.Open),
-		tui.WithStation(qsoentry.Station{
-			Name:     session.Station.Name,
-			Callsign: session.Station.Callsign,
-			Operator: session.Operator,
-			Grid:     session.Station.Gridsquare,
-		}),
+		tui.WithStations(stationProfiles(session)),
 	}
 
 	var syncer *lotw.Syncer
@@ -102,6 +99,39 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	cancel()
 	wg.Wait()
 	return err
+}
+
+// stationProfiles returns the station profiles the New QSO screen picks
+// from: the session's station, with its overrides, then the other
+// configured stations in key order. A guest --operator operates every
+// profile; otherwise each is operated by its own callsign.
+func stationProfiles(session config.Session) []qsoentry.Station {
+	guest := !strings.EqualFold(session.Operator, session.Station.Callsign)
+	profile := func(st config.Station) qsoentry.Station {
+		operator := st.Callsign
+		if guest {
+			operator = session.Operator
+		}
+		return qsoentry.Station{
+			Name:     st.Name,
+			Callsign: st.Callsign,
+			Operator: operator,
+			Grid:     st.Gridsquare,
+			State:    st.State,
+			City:     st.City,
+			POTA:     slices.Clone(st.POTAReferences),
+			SOTA:     st.SOTAReference,
+			IOTA:     st.IOTAReference,
+			WWFF:     st.WWFFReference,
+		}
+	}
+	profiles := []qsoentry.Station{profile(session.Station)}
+	for _, key := range slices.Sorted(maps.Keys(session.Config.Stations)) {
+		if key != session.StationName {
+			profiles = append(profiles, profile(session.Config.Stations[key]))
+		}
+	}
+	return profiles
 }
 
 // rigOptions returns the rig options for session, and false when the

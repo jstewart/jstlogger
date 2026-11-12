@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -21,62 +22,6 @@ import (
 	"jstlogger/internal/qsoentry"
 	"jstlogger/internal/rig"
 )
-
-// entryTab is one of the New QSO screen's tabs.
-type entryTab int
-
-// The New QSO screen's tabs, in tab bar order. A Satellite tab will follow
-// QSL when the form gains PROP_MODE and it is SAT.
-const (
-	entryTabQSO entryTab = iota
-	entryTabStation
-	entryTabGeneral
-	entryTabNotes
-	entryTabQSL
-	// entryTabCount is the number of tabs.
-	entryTabCount
-)
-
-// entryTabNames are the tab bar names of the New QSO screen's tabs.
-var entryTabNames = [entryTabCount]string{"QSO", "Station", "General", "Notes", "QSL"}
-
-// entryLabels are the labels of the form's fields.
-var entryLabels = [qsoentry.FieldCount]string{
-	"Date", "Time on", "Date off", "Time off", "Call", "Mode", "Submode",
-	"Freq", "Band", "Freq RX", "Band RX", "RST sent", "RST rcvd", "Name",
-	"QTH", "Grid", "Comment", "Tags",
-}
-
-// entryPlaceholders are shown in empty fields that need a hint.
-var entryPlaceholders = map[qsoentry.Field]string{
-	qsoentry.Date:    "YYYY-MM-DD",
-	qsoentry.TimeOn:  "HH:MM",
-	qsoentry.DateOff: "YYYY-MM-DD",
-	qsoentry.TimeOff: "HH:MM",
-	qsoentry.Freq:    "MHz or kHz",
-	qsoentry.FreqRX:  "MHz or kHz",
-	qsoentry.Tags:    "comma-separated",
-}
-
-// entryRows lays out the QSO tab: each row holds one field or two side by
-// side. Tab moves through them in order.
-var entryRows = [][]qsoentry.Field{
-	{qsoentry.Date, qsoentry.TimeOn},
-	{qsoentry.DateOff, qsoentry.TimeOff},
-	{qsoentry.Call},
-	{qsoentry.Mode, qsoentry.Submode},
-	{qsoentry.Freq, qsoentry.Band},
-	{qsoentry.FreqRX, qsoentry.BandRX},
-	{qsoentry.RSTSent, qsoentry.RSTRcvd},
-	{qsoentry.Name},
-	{qsoentry.QTH},
-	{qsoentry.Gridsquare},
-	{qsoentry.Comment},
-	{qsoentry.Tags},
-}
-
-// entryLabelWidth is the width of the field labels.
-const entryLabelWidth = 8
 
 // entryTimes are the time fields, which the clock fills in live mode.
 var entryTimes = []qsoentry.Field{qsoentry.Date, qsoentry.TimeOn, qsoentry.DateOff, qsoentry.TimeOff}
@@ -113,12 +58,17 @@ type entry struct {
 	// dataMode and dataSubmode are the data mode last in the form, which
 	// a rig in a packet mode is taken to carry.
 	dataMode, dataSubmode string
-	// focus is the QSO tab's field with focus.
+	// focus is the field with focus, on the open tab.
 	focus qsoentry.Field
-	// inputs holds a text input for each field but the mode and submode,
-	// which are picked.
-	inputs        [qsoentry.FieldCount]textinput.Model
-	mode, submode picker
+	// inputs holds a text input for each field typed on one line: every
+	// field but the notes and those picked.
+	inputs [qsoentry.FieldCount]textinput.Model
+	// pickers holds a picker for each field in entryPicked.
+	pickers [qsoentry.FieldCount]picker
+	// notes is the notes field, which takes many lines.
+	notes textarea.Model
+	// stations are the station profiles the station picker picks from.
+	stations []qsoentry.Station
 	// base is the form as opened or last saved. The form has unsaved
 	// changes when it differs.
 	base qsoentry.Form
@@ -160,13 +110,6 @@ type entrySavedMsg struct {
 	qso   logbook.QSO
 	close bool
 	err   error
-}
-
-// WithStation sets our side of every QSO the New QSO screen logs.
-func WithStation(st qsoentry.Station) Option {
-	return func(m *Model) {
-		m.station = st
-	}
 }
 
 // entryKeyMap holds the keybindings handled while the New QSO screen is
@@ -265,10 +208,20 @@ func (k entryKeyMap) FullHelp() [][]key.Binding {
 
 // newEntry returns the New QSO screen, closed, with an empty form.
 func newEntry() entry {
-	e := entry{
-		mode:    newPicker(append([]string{""}, adif.Modes()...)),
-		submode: newPicker([]string{""}),
+	var e entry
+	// The options picked from start with none.
+	none := func(options []string) []string { return append([]string{""}, options...) }
+	e.pickers[qsoentry.Mode] = newPicker(none(adif.Modes()))
+	e.pickers[qsoentry.Submode] = newPicker(none(nil))
+	e.pickers[qsoentry.PropMode] = newPicker(none(adif.PropModes()))
+	e.pickers[qsoentry.AntPath] = newPicker(none(adif.AntPaths()))
+	e.pickers[qsoentry.QSLSentVia] = newPicker(none(adif.QSLSentVias()))
+	for _, f := range []qsoentry.Field{qsoentry.QSLSent, qsoentry.LoTWSent, qsoentry.EQSLSent, qsoentry.ClubLogSent} {
+		p := newPicker(none(adif.QSLSentStatuses()))
+		p.show = logbook.QSLSentText
+		e.pickers[f] = p
 	}
+	e.notes = newNotes()
 	for f := range qsoentry.FieldCount {
 		in := newInput()
 		in.Prompt = ""
@@ -282,14 +235,64 @@ func newEntry() entry {
 	return e
 }
 
+// newNotes returns the notes field: lines of text with no prompt or line
+// numbers.
+func newNotes() textarea.Model {
+	ta := textarea.New()
+	ta.Prompt = ""
+	ta.ShowLineNumbers = false
+	s := textarea.DefaultDarkStyles()
+	// A static cursor schedules no blink ticks, and the line with the
+	// cursor looks like the others.
+	s.Cursor.Blink = false
+	s.Focused.CursorLine = s.Focused.Text
+	ta.SetStyles(s)
+	return ta
+}
+
+// value returns the value of field f: its text, or the option picked.
+func (e entry) value(f qsoentry.Field) string {
+	switch {
+	case f == qsoentry.Notes:
+		return e.notes.Value()
+	case isPicked(f):
+		return e.pickers[f].value()
+	}
+	return e.inputs[f].Value()
+}
+
+// setValue sets the value of field f to v. A picked field already showing v
+// keeps its option, which matters when two share a name, as station
+// profiles may; one with no option v picks none, or failing that keeps its
+// option.
+func (e *entry) setValue(f qsoentry.Field, v string) {
+	switch {
+	case f == qsoentry.Notes:
+		e.notes.SetValue(v)
+	case isPicked(f):
+		if strings.EqualFold(e.pickers[f].value(), v) {
+			return
+		}
+		if !e.pickers[f].set(v) {
+			e.pickers[f].set("")
+		}
+	default:
+		e.inputs[f].SetValue(v)
+	}
+}
+
+// submodes returns the submodes offered for the mode picked, with none
+// first.
+func (e entry) submodes() []string {
+	return append([]string{""}, adif.Submodes(e.pickers[qsoentry.Mode].value())...)
+}
+
 // form returns the values in the form.
 func (e entry) form() qsoentry.Form {
 	var f qsoentry.Form
 	for k := range qsoentry.FieldCount {
-		f[k] = e.inputs[k].Value()
+		f[k] = e.value(k)
 	}
-	f[qsoentry.Mode] = e.mode.value()
-	f[qsoentry.Submode] = e.submode.value()
 	return f
 }
 
@@ -297,12 +300,13 @@ func (e entry) form() qsoentry.Form {
 // the mode and freqs would fill in are replaced as if filled in.
 func (e *entry) setForm(f qsoentry.Form) {
 	for k := range qsoentry.FieldCount {
-		e.inputs[k].SetValue(f[k])
+		if k == qsoentry.Submode {
+			// The submodes offered follow the mode, set before.
+			e.pickers[k].setOptions(e.submodes())
+		}
+		e.setValue(k, f[k])
 	}
-	e.mode.set(f[qsoentry.Mode])
-	e.submode.setOptions(append([]string{""}, adif.Submodes(e.mode.value())...))
-	e.submode.set(f[qsoentry.Submode])
-	e.rst = qsoentry.DefaultRST(e.mode.value(), e.submode.value())
+	e.rst = qsoentry.DefaultRST(e.value(qsoentry.Mode), e.value(qsoentry.Submode))
 	e.band = freqBand(f[qsoentry.Freq])
 	e.bandRX = freqBand(f[qsoentry.FreqRX])
 	e.setTagSuggestions()
@@ -322,19 +326,6 @@ func freqBand(s string) string {
 // readOnly reports whether field f can't be edited: the times in live mode.
 func (e entry) readOnly(f qsoentry.Field) bool {
 	return e.live && slices.Contains(entryTimes, f)
-}
-
-// stepFocus returns the field step fields on from the one with focus,
-// wrapping around and skipping read-only fields.
-func (e entry) stepFocus(step int) qsoentry.Field {
-	f := e.focus
-	for range qsoentry.FieldCount {
-		f = (f + qsoentry.Field(step) + qsoentry.FieldCount) % qsoentry.FieldCount
-		if !e.readOnly(f) {
-			return f
-		}
-	}
-	return e.focus
 }
 
 // setOn sets the date and time on to t.
@@ -388,9 +379,9 @@ func (e *entry) syncRig(s rig.State) {
 	}
 	if e.followsRig(qsoentry.Mode) {
 		mode, submode := qsoentry.RigMode(s.Mode, e.dataMode, e.dataSubmode)
-		e.mode.set(mode)
-		e.submode.setOptions(append([]string{""}, adif.Submodes(e.mode.value())...))
-		e.submode.set(submode)
+		e.pickers[qsoentry.Mode].set(mode)
+		e.pickers[qsoentry.Submode].setOptions(e.submodes())
+		e.pickers[qsoentry.Submode].set(submode)
 	}
 	band := e.inputs[qsoentry.Band].Value()
 	e.fillIn(before, e.form())
@@ -427,19 +418,27 @@ func (e entry) filledIn(f qsoentry.Field, v string) bool {
 // focusField gives field f focus, with the cursor at the end of its value.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
 	e.inputs[e.focus].Blur()
+	e.notes.Blur()
 	e.focus = f
-	if f == qsoentry.Mode || f == qsoentry.Submode {
+	switch {
+	case isPicked(f):
 		return nil
+	case f == qsoentry.Notes:
+		return e.notes.Focus()
 	}
 	e.inputs[f].CursorEnd()
 	return e.inputs[f].Focus()
 }
 
-// openEntry opens the New QSO screen on an empty form, starts its clock and
-// loads the logbook's tags. The screen opens in live mode when the rig is
+// openEntry opens the New QSO screen on a form empty but for the Station
+// tab, filled in from the first station profile, starts its clock and loads
+// the logbook's tags. The screen opens in live mode when the rig is
 // connected, and in post mode otherwise.
 func (m Model) openEntry() (Model, tea.Cmd) {
 	e := newEntry()
+	e.setStations(m.stations)
+	// The profile's values are the form's own, not unsaved changes.
+	e.base = e.form()
 	e.open = true
 	e.gen = m.entry.gen + 1
 	e.tags = m.entry.tags
@@ -602,13 +601,15 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			return m.closeEntry(), nil
 		}), nil
 	case key.Matches(msg, k.NextTab):
-		e.tab = (e.tab + 1) % entryTabCount
+		return m, e.stepTab(1)
 	case key.Matches(msg, k.PrevTab):
-		e.tab = (e.tab + entryTabCount - 1) % entryTabCount
+		return m, e.stepTab(-1)
 	case key.Matches(msg, k.GoTab):
-		// The keys are alt+1 onward.
+		// The keys are alt+1 onward, numbering the tabs shown.
 		n, _ := strconv.Atoi(strings.TrimPrefix(msg.String(), "alt+"))
-		e.tab = entryTab(n - 1)
+		if ts := e.tabs(); n >= 1 && n <= len(ts) {
+			return m, e.goTab(ts[n-1])
+		}
 	case key.Matches(msg, k.Live):
 		return m.toggleLive()
 	case key.Matches(msg, k.ResetTime):
@@ -623,8 +624,9 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 				m.applyRigState(m.rigState.state)
 			}
 		}
-	case e.tab != entryTabQSO:
-		// The other tabs have no fields yet.
+	case e.focus == qsoentry.Notes && key.Matches(msg, e.notes.KeyMap.InsertNewline):
+		// Enter starts a new line of the notes rather than moving on.
+		return m.editEntry(msg)
 	case key.Matches(msg, k.NextField):
 		return m, e.focusField(e.stepFocus(1))
 	case key.Matches(msg, k.PrevField):
@@ -639,20 +641,19 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // field with focus, then fills in what follows from the change.
 func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 	e := &m.entry
-	if e.tab != entryTabQSO || e.saving || e.readOnly(e.focus) {
+	if e.saving || e.readOnly(e.focus) {
 		return m, nil
 	}
 	before := e.form()
 	var cmd tea.Cmd
-	switch e.focus {
-	case qsoentry.Mode, qsoentry.Submode:
-		p := &e.mode
-		if e.focus == qsoentry.Submode {
-			p = &e.submode
+	switch {
+	case isPicked(e.focus):
+		k, ok := msg.(tea.KeyPressMsg)
+		if ok && e.pickers[e.focus].update(k) && e.focus == qsoentry.StationName {
+			e.fillStation()
 		}
-		if k, ok := msg.(tea.KeyPressMsg); ok {
-			p.update(k)
-		}
+	case e.focus == qsoentry.Notes:
+		e.notes, cmd = e.notes.Update(msg)
 	default:
 		in := &e.inputs[e.focus]
 		if k, ok := msg.(tea.KeyPressMsg); ok && key.Matches(k, in.KeyMap.AcceptSuggestion) && in.CurrentSuggestion() != "" {
@@ -668,6 +669,7 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 		e.markHand(e.focus)
 		e.fillIn(before, after)
 		e.followCall(before, after, m.now())
+		cmd = tea.Batch(cmd, e.keepTab())
 		m.revalidateEntry()
 	}
 	return m, cmd
@@ -680,12 +682,12 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 func (e *entry) fillIn(before, after qsoentry.Form) {
 	changed := func(f qsoentry.Field) bool { return after[f] != before[f] }
 	if changed(qsoentry.Mode) {
-		e.submode.setOptions(append([]string{""}, adif.Submodes(after[qsoentry.Mode])...))
+		e.pickers[qsoentry.Submode].setOptions(e.submodes())
 	}
 	if changed(qsoentry.Mode) || changed(qsoentry.Submode) {
 		e.fillRST()
-		if qsoentry.IsDataMode(e.mode.value()) {
-			e.dataMode, e.dataSubmode = e.mode.value(), e.submode.value()
+		if mode := e.value(qsoentry.Mode); qsoentry.IsDataMode(mode) {
+			e.dataMode, e.dataSubmode = mode, e.value(qsoentry.Submode)
 		}
 	}
 	if changed(qsoentry.Freq) {
@@ -702,7 +704,7 @@ func (e *entry) fillIn(before, after qsoentry.Form) {
 // fillRST fills in the default report for the mode and submode, in each
 // report field that is empty or holds the last default.
 func (e *entry) fillRST() {
-	rst := qsoentry.DefaultRST(e.mode.value(), e.submode.value())
+	rst := qsoentry.DefaultRST(e.value(qsoentry.Mode), e.value(qsoentry.Submode))
 	for _, f := range []qsoentry.Field{qsoentry.RSTSent, qsoentry.RSTRcvd} {
 		if v := e.inputs[f].Value(); v == "" || v == e.rst {
 			e.inputs[f].SetValue(rst)
@@ -724,7 +726,7 @@ func (e *entry) fillBand(freq, band qsoentry.Field, last string) string {
 
 // validateEntry checks the form, keeping its errors for the view.
 func (m *Model) validateEntry() {
-	_, err := qsoentry.Build(m.entry.form(), m.station, m.now())
+	_, err := qsoentry.Build(m.entry.form(), m.now())
 	m.entry.errs, _ = errors.AsType[qsoentry.Errors](err)
 }
 
@@ -738,7 +740,8 @@ func (m *Model) revalidateEntry() {
 
 // saveEntry saves the form as a new QSO, then clears it for the next QSO or,
 // when close is true, closes the screen. A form that fails validation shows
-// its errors, with focus on the first field in error, and is not saved.
+// its errors, with focus on the first field in error, on its tab, and is
+// not saved.
 func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 	e := &m.entry
 	if e.saving {
@@ -753,15 +756,16 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 		f[qsoentry.DateOff] = now.UTC().Format(entryDateLayout)
 		f[qsoentry.TimeOff] = now.UTC().Format(entryTimeLayout)
 	}
-	q, err := qsoentry.Build(f, m.station, now)
+	q, err := qsoentry.Build(f, now)
 	if errs, ok := errors.AsType[qsoentry.Errors](err); ok {
 		e.errs = errs
-		e.tab = entryTabQSO
-		focus := e.focus
-		if i := slices.IndexFunc(errs.Fields(), func(f qsoentry.Field) bool { return !e.readOnly(f) }); i >= 0 {
-			focus = errs.Fields()[i]
+		fs := errs.Fields()
+		i := slices.IndexFunc(fs, e.focusable)
+		if i < 0 {
+			return m, nil
 		}
-		return m, e.focusField(focus)
+		e.tab = entryTabOf(fs[i])
+		return m, e.focusField(fs[i])
 	}
 	if err != nil {
 		e.err = err
@@ -811,6 +815,7 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 	e.setForm(next)
 	e.base = next
 	e.msg = saved
+	e.tab = entryTabQSO
 	focus := qsoentry.TimeOn
 	if e.live {
 		// The next QSO's clock starts now.
@@ -824,18 +829,17 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 // bar, the open tab and a status line.
 func (m Model) entryView(width, height int) string {
 	st, e := m.styles, m.entry
-	lines := []string{tabBar(st, entryTabNames[:], int(e.tab), width)}
-	// end is the line after the focused row and its errors.
-	var end int
-	if e.tab == entryTabQSO {
-		fields, row, rows := m.entryFields(width)
-		// Scroll a window too short for every row to show the focused
-		// row and its errors, keeping the tab bar.
-		end = 1 + row + rows
-		lines = append(lines, fields...)
-	} else {
-		lines = append(lines, st.muted.Render(truncate("The "+entryTabNames[e.tab]+" tab is not available yet.", width, "…")))
+	tabs := e.tabs()
+	names := make([]string, len(tabs))
+	for i, t := range tabs {
+		names[i] = entryTabNames[t]
 	}
+	lines := []string{tabBar(st, names, slices.Index(tabs, e.tab), width)}
+	fields, row, rows := m.entryFields(width)
+	// Scroll a window too short for every row to show the focused row and
+	// its errors, keeping the tab bar. end is the line after them.
+	end := 1 + row + rows
+	lines = append(lines, fields...)
 	if skip := end - (height - 1); skip > 0 {
 		lines = append(lines[:1], lines[1+skip:]...)
 	}
@@ -858,28 +862,30 @@ func (m Model) entryView(width, height int) string {
 	return strings.Join(append(lines, truncate(status, width, "…")), "\n")
 }
 
-// entryFields renders the QSO tab's rows, each fitted to width cells and
+// entryFields renders the open tab's rows, each fitted to width cells and
 // followed by a line with the errors of its fields, if any. It also returns
 // the line of the focused field's row and the number of lines that row
 // takes.
 func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 	e := m.entry
-	for _, row := range entryRows {
+	lw := entryLayouts[e.tab].labelWidth
+	for _, row := range e.rows(e.tab) {
 		colWidth := width
 		if len(row) > 1 {
 			colWidth = max(width-2, 0) / 2
 		}
-		var cells, errs []string
-		for _, f := range row {
-			cells = append(cells, fit(m.entryCell(f, colWidth), colWidth))
+		cells := make([]string, len(row))
+		var errs []string
+		for i, f := range row {
+			cells[i] = m.entryCell(f, colWidth, lw)
 			var msg string
 			if err := e.errs[f]; err != nil {
-				msg = m.styles.err.Render(truncate("✗ "+err.Error(), max(colWidth-entryLabelWidth-2, 0), "…"))
+				msg = m.styles.err.Render(truncate("✗ "+err.Error(), max(colWidth-lw-2, 0), "…"))
 			}
-			errs = append(errs, fit(strings.Repeat(" ", entryLabelWidth+2)+msg, colWidth))
+			errs = append(errs, fit(strings.Repeat(" ", lw+2)+msg, colWidth))
 		}
 		start := len(lines)
-		lines = append(lines, strings.TrimRight(strings.Join(cells, "  "), " "))
+		lines = append(lines, joinCells(cells, colWidth)...)
 		if slices.ContainsFunc(row, func(f qsoentry.Field) bool { return e.errs[f] != nil }) {
 			lines = append(lines, strings.TrimRight(strings.Join(errs, "  "), " "))
 		}
@@ -890,25 +896,53 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 	return lines, focus, rows
 }
 
-// entryCell renders field f, labeled, in width cells. The call is followed
-// by its LoTW status and the grid by the bearing and distance to it.
-func (m Model) entryCell(f qsoentry.Field, width int) string {
+// joinCells lays out cells side by side, each fitted to width cells, two
+// apart. A cell such as the notes takes more than one line, and the cells
+// beside it are blank below their own lines.
+func joinCells(cells []string, width int) []string {
+	split := make([][]string, len(cells))
+	height := 1
+	for i, c := range cells {
+		split[i] = strings.Split(c, "\n")
+		height = max(height, len(split[i]))
+	}
+	lines := make([]string, height)
+	for l := range lines {
+		parts := make([]string, len(split))
+		for i, cell := range split {
+			var part string
+			if l < len(cell) {
+				part = cell[l]
+			}
+			parts[i] = fit(part, width)
+		}
+		lines[l] = strings.TrimRight(strings.Join(parts, "  "), " ")
+	}
+	return lines
+}
+
+// entryCell renders field f, labeled with a label lw cells wide, in width
+// cells. The call is followed by its LoTW status and the grid by the
+// bearing and distance to it. The notes take a line for each line of the
+// field.
+func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 	st, e := m.styles, m.entry
 	focused := f == e.focus
-	label := st.label.Render(pad(entryLabels[f], entryLabelWidth))
+	label := st.label.Render(pad(entryLabels[f], lw))
 	if focused {
-		label = st.title.Render(pad(entryLabels[f], entryLabelWidth))
+		label = st.title.Render(pad(entryLabels[f], lw))
 	}
-	room := max(width-entryLabelWidth-2, 1)
+	room := max(width-lw-2, 1)
 	var value string
-	switch f {
-	case qsoentry.Mode:
-		value = e.mode.view(st, focused)
+	switch {
+	case f == qsoentry.Notes:
+		// The lines after the first line up under it.
+		value = strings.ReplaceAll(e.notes.View(), "\n", "\n"+strings.Repeat(" ", lw+2))
+	case isPicked(f):
+		value = e.pickers[f].view(st, focused)
 		if mark := m.entryHandMark(f); mark != "" {
 			value += "  " + mark
 		}
-	case qsoentry.Submode:
-		value = e.submode.view(st, focused)
 	default:
 		suffix, suffixAt := m.entrySuffix(f)
 		in := e.inputs[f]
@@ -967,12 +1001,13 @@ func (m Model) entryHandMark(f qsoentry.Field) string {
 	return m.styles.muted.Render("manual")
 }
 
-// entryPath returns the bearing and distance from our grid to the grid in
-// the form, in the index's distance unit, or "" when either grid is
-// missing or invalid.
+// entryPath returns the bearing and distance from our grid, on the Station
+// tab, to the grid in the form, in the index's distance unit, or "" when
+// either grid is missing or invalid.
 func (m Model) entryPath() string {
-	grid := strings.TrimSpace(m.entry.inputs[qsoentry.Gridsquare].Value())
-	km, bearing, err := qsoentry.Path(m.station.Grid, grid)
+	myGrid := strings.TrimSpace(m.entry.value(qsoentry.MyGridsquare))
+	grid := strings.TrimSpace(m.entry.value(qsoentry.Gridsquare))
+	km, bearing, err := qsoentry.Path(myGrid, grid)
 	if err != nil {
 		return ""
 	}
@@ -991,4 +1026,12 @@ func fit(s string, width int) string {
 		return ""
 	}
 	return pad(lipgloss.NewStyle().MaxWidth(width).Render(s), width)
+}
+
+// sizeEntryNotes fits the notes field to the Notes tab of a body height
+// lines tall, below the tab bar and above the status line.
+func (m *Model) sizeEntryNotes(height int) {
+	lw := entryLayouts[entryTabNotes].labelWidth
+	m.entry.notes.SetWidth(max(m.bodyWidth()-lw-2, 1))
+	m.entry.notes.SetHeight(max(height-2, 1))
 }

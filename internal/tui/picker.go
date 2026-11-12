@@ -36,6 +36,9 @@ type picker struct {
 	i       int
 	// typed is what has been typed since the last step.
 	typed string
+	// show returns the text shown for an option, such as the word for a
+	// QSL status; nil shows the option as it is.
+	show func(string) string
 }
 
 func newPicker(options []string) picker {
@@ -119,12 +122,15 @@ func (p *picker) jump(prefix string) bool {
 	return true
 }
 
-// view renders the chosen value, or pagerEmpty for none, between arrows
-// while the picker has focus.
+// view renders the chosen value, as show shows it, or pagerEmpty for none,
+// between arrows while the picker has focus.
 func (p picker) view(st styles, focused bool) string {
 	v := p.value()
-	if v == "" {
+	switch {
+	case v == "":
 		v = st.muted.Render(pagerEmpty)
+	case p.show != nil:
+		v = p.show(v)
 	}
 	if !focused {
 		return v

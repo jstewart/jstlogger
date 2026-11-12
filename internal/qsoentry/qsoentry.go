@@ -42,18 +42,93 @@ const (
 	Gridsquare
 	Comment
 	Tags
+
+	// The Station tab, our side of the QSO, which Station.Fill fills in
+	// from a station profile.
+
+	StationName
+	StationCallsign
+	Operator
+	MyRig
+	TxPwr
+	MyGridsquare
+	MyPOTARef
+	MySOTARef
+	MyIOTA
+	MyWWFFRef
+	MyState
+	MyCity
+
+	// The General tab, more about the contacted station.
+
+	DXCC
+	Cont
+	Region
+	CQZ
+	ITUZ
+	State
+	Cnty
+	IOTA
+	SOTARef
+	WWFFRef
+	POTARef
+	Sig
+	SigInfo
+	DarcDok
+	Email
+	PropMode
+	AntPath
+
+	// The Satellite tab.
+
+	SatName
+	SatMode
+
+	// The Notes tab.
+
+	Notes
+
+	// The QSL tab.
+
+	QSLSent
+	QSLSentVia
+	QSLVia
+	QSLMsg
+	LoTWSent
+	EQSLSent
+	ClubLogSent
+
 	// FieldCount is the number of fields.
 	FieldCount
 )
 
-// fieldNames are the ADIF names of the fields. Tags are not an ADIF field.
+// fieldNames are the ADIF names of the fields. Tags and the Club Log sent
+// status are not ADIF fields, and the station name is jstlogger's own
+// application-defined field.
 var fieldNames = [FieldCount]string{
 	"QSO_DATE", "TIME_ON", "QSO_DATE_OFF", "TIME_OFF", "CALL", "MODE",
 	"SUBMODE", "FREQ", "BAND", "FREQ_RX", "BAND_RX", "RST_SENT", "RST_RCVD",
 	"NAME", "QTH", "GRIDSQUARE", "COMMENT", "TAGS",
+	// Station.
+	logbook.StationField, "STATION_CALLSIGN", "OPERATOR", "MY_RIG", "TX_PWR",
+	"MY_GRIDSQUARE", "MY_POTA_REF", "MY_SOTA_REF", "MY_IOTA", "MY_WWFF_REF",
+	"MY_STATE", "MY_CITY",
+	// General.
+	"DXCC", "CONT", "REGION", "CQZ", "ITUZ", "STATE", "CNTY", "IOTA",
+	"SOTA_REF", "WWFF_REF", "POTA_REF", "SIG", "SIG_INFO", "DARC_DOK",
+	"EMAIL", "PROP_MODE", "ANT_PATH",
+	// Satellite.
+	"SAT_NAME", "SAT_MODE",
+	// Notes.
+	"NOTES",
+	// QSL.
+	"QSL_SENT", "QSL_SENT_VIA", "QSL_VIA", "QSLMSG", "LOTW_QSL_SENT",
+	"EQSL_QSL_SENT", "CLUBLOG_QSL_SENT",
 }
 
-// String returns the field's upper-case ADIF name, or TAGS for the tags.
+// String returns the field's upper-case ADIF name, or the name it goes by
+// when it is not an ADIF field: TAGS, CLUBLOG_QSL_SENT or
+// logbook.StationField.
 func (f Field) String() string {
 	if f < 0 || f >= FieldCount {
 		return "Field(" + strconv.Itoa(int(f)) + ")"
@@ -68,18 +143,32 @@ func (f Field) String() string {
 // separated by commas.
 type Form [FieldCount]string
 
+// carried are the fields whose values stay in the form after a QSO is
+// saved.
+var carried = []Field{
+	Date, Mode, Submode, Freq, Band, RSTSent, RSTRcvd,
+	StationName, StationCallsign, Operator, MyRig, TxPwr, MyGridsquare,
+	MyPOTARef, MySOTARef, MyIOTA, MyWWFFRef, MyState, MyCity,
+	PropMode, AntPath, SatName, SatMode,
+	QSLSent, QSLSentVia, QSLVia, QSLMsg, LoTWSent, EQSLSent, ClubLogSent,
+}
+
 // Carry returns the values that stay in the form after a QSO is saved, so
 // that a batch of QSOs from a paper log is quick to enter: the date, band,
-// mode, submode, freq and signal reports.
+// mode, submode, freq and signal reports, the whole Station tab, the
+// propagation mode, antenna path and satellite, and the whole QSL tab. What
+// is particular to the contacted station, such as its zones, references
+// and email, and the notes, does not carry.
 func (f Form) Carry() Form {
 	var c Form
-	for _, k := range []Field{Date, Mode, Submode, Freq, Band, RSTSent, RSTRcvd} {
+	for _, k := range carried {
 		c[k] = f[k]
 	}
 	return c
 }
 
-// Station is our side of the QSO, which the form does not ask for.
+// Station is a station profile: our side of the QSO as configured, which
+// Fill copies into the form's Station tab.
 type Station struct {
 	// Name is the configured station's name, stored on each QSO in
 	// logbook.StationField since ADIF has no field for it.
@@ -90,6 +179,34 @@ type Station struct {
 	Operator string
 	// Grid is our Maidenhead locator (ADIF MY_GRIDSQUARE).
 	Grid string
+	// State is our state or province (ADIF MY_STATE).
+	State string
+	// City is our city (ADIF MY_CITY).
+	City string
+	// POTA are the parks we operate from (ADIF MY_POTA_REF).
+	POTA []string
+	// SOTA is the summit we operate from (ADIF MY_SOTA_REF).
+	SOTA string
+	// IOTA is the island we operate from (ADIF MY_IOTA).
+	IOTA string
+	// WWFF is the WWFF area we operate from (ADIF MY_WWFF_REF).
+	WWFF string
+}
+
+// Fill writes the profile into f's Station tab, replacing what is there, so
+// switching profiles leaves nothing of the old one behind. The rig and
+// power are not part of a profile and are left as they are.
+func (s Station) Fill(f *Form) {
+	f[StationName] = s.Name
+	f[StationCallsign] = s.Callsign
+	f[Operator] = s.Operator
+	f[MyGridsquare] = s.Grid
+	f[MyPOTARef] = strings.Join(s.POTA, ",")
+	f[MySOTARef] = s.SOTA
+	f[MyIOTA] = s.IOTA
+	f[MyWWFFRef] = s.WWFF
+	f[MyState] = s.State
+	f[MyCity] = s.City
 }
 
 // Errors holds the validation error of each field that has one. Build
@@ -116,52 +233,52 @@ func (e Errors) Error() string {
 	return "qsoentry: " + strings.Join(msgs, "; ")
 }
 
-// Build validates f and returns the QSO it describes, logged from station.
-// now is the current time; a QSO can't start after it. When any field is
-// invalid, Build returns an Errors holding every field's error.
-func Build(f Form, station Station, now time.Time) (logbook.QSO, error) {
-	b := builder{f: f, errs: Errors{}}
+// Build validates f and returns the QSO it describes. now is the current
+// time; a QSO can't start after it. Our side of the QSO comes from the
+// Station tab, which Station.Fill fills in. When any field is invalid, Build
+// returns an Errors holding every field's error.
+func Build(f Form, now time.Time) (logbook.QSO, error) {
+	b := builder{f: f, errs: Errors{}, fields: map[string]string{}}
 	q := logbook.QSO{
-		Call:            b.call(),
-		Mode:            strings.ToUpper(strings.TrimSpace(f[Mode])),
-		Submode:         strings.ToUpper(strings.TrimSpace(f[Submode])),
-		RSTSent:         strings.TrimSpace(f[RSTSent]),
-		RSTRcvd:         strings.TrimSpace(f[RSTRcvd]),
-		Name:            strings.TrimSpace(f[Name]),
-		QTH:             strings.TrimSpace(f[QTH]),
-		Gridsquare:      b.grid(),
-		Comment:         strings.TrimSpace(f[Comment]),
-		Tags:            splitTags(f[Tags]),
-		StationCallsign: station.Callsign,
-		Operator:        station.Operator,
-		MyGridsquare:    strings.ToUpper(station.Grid),
+		Call:       b.callsign(Call, "call", true),
+		Mode:       b.upper(Mode),
+		Submode:    b.upper(Submode),
+		RSTSent:    b.text(RSTSent),
+		RSTRcvd:    b.text(RSTRcvd),
+		Name:       b.text(Name),
+		QTH:        b.text(QTH),
+		Gridsquare: b.grid(Gridsquare),
+		Comment:    b.text(Comment),
+		Tags:       splitTags(f[Tags]),
 	}
 	q.StartUTC, q.EndUTC = b.times(now)
 	b.mode(q.Mode, q.Submode)
 	q.FreqHz, q.Band = b.freqBand(Freq, Band, "freq", "band")
 	var bandRX string
 	q.FreqRxHz, bandRX = b.freqBand(FreqRX, BandRX, "freq RX", "band RX")
-	// Fields holds what has no column of its own.
-	fields := map[string]string{}
-	if bandRX != "" {
-		fields[BandRX.String()] = bandRX
-	}
-	if name := strings.TrimSpace(station.Name); name != "" {
-		fields[logbook.StationField] = name
-	}
-	if len(fields) > 0 {
-		q.Fields = fields
-	}
+	b.put(BandRX, bandRX)
+	b.station(&q)
+	b.general(&q)
+	b.satellite()
+	b.put(Notes, b.text(Notes))
+	q.Confirmations = b.qsl()
+
 	if len(b.errs) > 0 {
 		return logbook.QSO{}, b.errs
+	}
+	if len(b.fields) > 0 {
+		q.Fields = b.fields
 	}
 	return q, nil
 }
 
-// builder parses a Form's fields, collecting their errors.
+// builder parses a Form's fields, collecting their errors and the fields
+// with no column of their own.
 type builder struct {
 	f    Form
 	errs Errors
+	// fields holds what has no column of its own, for QSO.Fields.
+	fields map[string]string
 }
 
 // fail records err as the error of field k.
@@ -169,24 +286,180 @@ func (b *builder) fail(k Field, format string, args ...any) {
 	b.errs[k] = fmt.Errorf(format, args...)
 }
 
-func (b *builder) call() string {
-	call := strings.ToUpper(strings.TrimSpace(b.f[Call]))
+// text returns field k, trimmed.
+func (b *builder) text(k Field) string {
+	return strings.TrimSpace(b.f[k])
+}
+
+// upper returns field k, trimmed and upper-cased.
+func (b *builder) upper(k Field) string {
+	return strings.ToUpper(b.text(k))
+}
+
+// put stores v in the QSO's fields under field k's name, unless it is
+// empty.
+func (b *builder) put(k Field, v string) {
+	if v != "" {
+		b.fields[k.String()] = v
+	}
+}
+
+// station reads the Station tab into q.
+func (b *builder) station(q *logbook.QSO) {
+	b.put(StationName, b.text(StationName))
+	q.StationCallsign = b.callsign(StationCallsign, "station callsign", false)
+	q.Operator = b.callsign(Operator, "operator", false)
+	q.MyGridsquare = b.grid(MyGridsquare)
+	b.put(MyRig, b.text(MyRig))
+	if s := b.text(TxPwr); s != "" {
+		if w, ok := parsePower(s); ok {
+			q.TxPwr = sql.Null[float64]{V: w, Valid: true}
+		} else {
+			b.fail(TxPwr, "%q is not a power in watts", s)
+		}
+	}
+	b.pota(MyPOTARef)
+	b.put(MySOTARef, b.ref(MySOTARef, isSOTA, "a SOTA reference"))
+	b.put(MyIOTA, b.ref(MyIOTA, isIOTA, "an IOTA reference"))
+	b.put(MyWWFFRef, b.ref(MyWWFFRef, isWWFF, "a WWFF reference"))
+	b.put(MyState, b.upper(MyState))
+	b.put(MyCity, b.text(MyCity))
+}
+
+// general reads the General tab into q.
+func (b *builder) general(q *logbook.QSO) {
+	q.DXCC = b.number(DXCC, parseDXCC, "a DXCC entity code")
+	q.Cont = b.ref(Cont, isContinent, "a continent")
+	b.put(Region, b.upper(Region))
+	q.CQZ = b.number(CQZ, parseCQZone, "a CQ zone")
+	q.ITUZ = b.number(ITUZ, parseITUZone, "an ITU zone")
+	q.State = b.upper(State)
+	q.Cnty = b.text(Cnty)
+	b.put(IOTA, b.ref(IOTA, isIOTA, "an IOTA reference"))
+	b.put(SOTARef, b.ref(SOTARef, isSOTA, "a SOTA reference"))
+	b.put(WWFFRef, b.ref(WWFFRef, isWWFF, "a WWFF reference"))
+	b.pota(POTARef)
+	b.put(Sig, b.text(Sig))
+	b.put(SigInfo, b.text(SigInfo))
+	b.put(DarcDok, b.upper(DarcDok))
+	if email := b.text(Email); email != "" {
+		if !isEmail(email) {
+			b.fail(Email, "%q is not an email address", email)
+		}
+		b.put(Email, email)
+	}
+	b.put(PropMode, b.enum(PropMode, adif.PropModes(), "an ADIF propagation mode"))
+	b.put(AntPath, b.enum(AntPath, adif.AntPaths(), "an ADIF antenna path"))
+}
+
+// satellite reads the Satellite tab, which only means something when the
+// QSO went via a satellite; otherwise it is dropped.
+func (b *builder) satellite() {
+	if b.upper(PropMode) != "SAT" {
+		return
+	}
+	b.put(SatName, b.upper(SatName))
+	b.put(SatMode, b.upper(SatMode))
+}
+
+// qslServices are the confirmation services of the QSL tab's sent statuses,
+// in the order their confirmations are built.
+var qslServices = []struct {
+	field   Field
+	service string
+}{
+	{QSLSent, logbook.ServiceCard},
+	{LoTWSent, logbook.ServiceLoTW},
+	{EQSLSent, logbook.ServiceEQSL},
+	{ClubLogSent, logbook.ServiceClubLog},
+}
+
+// qsl reads the QSL tab, returning a confirmation for each service with a
+// sent status, or nil when there is none. The statuses are confirmations,
+// never fields.
+func (b *builder) qsl() []logbook.Confirmation {
+	var confs []logbook.Confirmation
+	statuses := adif.QSLSentStatuses()
+	for _, s := range qslServices {
+		sent := b.upper(s.field)
+		if sent == "" {
+			continue
+		}
+		if !slices.Contains(statuses, sent) {
+			b.fail(s.field, "%q is not a QSL sent status", sent)
+			continue
+		}
+		confs = append(confs, logbook.Confirmation{Service: s.service, Sent: sent})
+	}
+	b.put(QSLSentVia, b.enum(QSLSentVia, adif.QSLSentVias(), "a QSL sent via"))
+	b.put(QSLVia, b.text(QSLVia))
+	b.put(QSLMsg, b.text(QSLMsg))
+	return confs
+}
+
+// ref returns field k upper-cased, checking it with valid when it is not
+// empty and failing with "is not what".
+func (b *builder) ref(k Field, valid func(string) bool, what string) string {
+	v := b.upper(k)
+	if v != "" && !valid(v) {
+		b.fail(k, "%q is not %s", v, what)
+	}
+	return v
+}
+
+// enum returns field k upper-cased, checking that it is one of values when
+// it is not empty and failing with "is not what".
+func (b *builder) enum(k Field, values []string, what string) string {
+	return b.ref(k, func(v string) bool { return slices.Contains(values, v) }, what)
+}
+
+// pota normalizes the comma-separated POTA references in field k and stores
+// them in the QSO's fields.
+func (b *builder) pota(k Field) {
+	refs, bad := normalizePOTA(b.f[k])
+	if bad != "" {
+		b.fail(k, "%q is not a POTA reference", bad)
+		return
+	}
+	b.put(k, refs)
+}
+
+// number parses field k with parse when it is not empty, failing with "is
+// not what".
+func (b *builder) number(k Field, parse func(string) (int, bool), what string) sql.Null[int] {
+	s := b.text(k)
+	if s == "" {
+		return sql.Null[int]{}
+	}
+	n, ok := parse(s)
+	if !ok {
+		b.fail(k, "%q is not %s", s, what)
+		return sql.Null[int]{}
+	}
+	return sql.Null[int]{V: n, Valid: true}
+}
+
+// callsign returns the callsign in field k, named name in errors,
+// upper-cased. It can't contain spaces, and is required if required is set.
+func (b *builder) callsign(k Field, name string, required bool) string {
+	call := b.upper(k)
 	switch {
-	case call == "":
-		b.fail(Call, "call is required")
+	case call == "" && required:
+		b.fail(k, "%s is required", name)
 	case strings.ContainsFunc(call, unicode.IsSpace):
-		b.fail(Call, "call can't contain spaces")
+		b.fail(k, "%s can't contain spaces", name)
 	}
 	return call
 }
 
-func (b *builder) grid() string {
-	grid := strings.ToUpper(strings.TrimSpace(b.f[Gridsquare]))
+// grid returns the Maidenhead locator in field k, upper-cased.
+func (b *builder) grid(k Field) string {
+	grid := b.upper(k)
 	if grid == "" {
 		return ""
 	}
 	if _, _, err := logbook.GridCenter(grid); err != nil {
-		b.fail(Gridsquare, "%q is not a Maidenhead locator", grid)
+		b.fail(k, "%q is not a Maidenhead locator", grid)
 	}
 	return grid
 }

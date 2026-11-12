@@ -133,18 +133,20 @@ func stationTab(st styles, q logbook.QSO, stationName string, width int) string 
 
 // qslServiceOrder ranks the well-known confirmation services; any other
 // service comes after them.
-var qslServiceOrder = []string{logbook.ServiceCard, logbook.ServiceLoTW, logbook.ServiceEQSL}
+var qslServiceOrder = []string{logbook.ServiceCard, logbook.ServiceLoTW, logbook.ServiceEQSL, logbook.ServiceClubLog}
 
 // qslServiceNames are the display names of the well-known confirmation
 // services. Any other service is shown as it is stored.
 var qslServiceNames = map[string]string{
-	logbook.ServiceCard: "Card",
-	logbook.ServiceLoTW: "LoTW",
-	logbook.ServiceEQSL: "eQSL",
+	logbook.ServiceCard:    "Card",
+	logbook.ServiceLoTW:    "LoTW",
+	logbook.ServiceEQSL:    "eQSL",
+	logbook.ServiceClubLog: "Club Log",
 }
 
 // qslTab renders the QSL tab: a sent and a received row for each
-// confirmation service, card, LoTW and eQSL first, then the others by name.
+// confirmation service, card, LoTW, eQSL and Club Log first, then the others
+// by name.
 func qslTab(st styles, q logbook.QSO, width int) string {
 	if len(q.Confirmations) == 0 {
 		return st.muted.Render(truncate("No confirmations", width, "…"))

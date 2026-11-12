@@ -3,6 +3,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -71,8 +72,9 @@ type Model struct {
 	// entry is the New QSO screen, shown in the body in place of the index
 	// while open.
 	entry entry
-	// station is our side of the QSOs the New QSO screen logs.
-	station qsoentry.Station
+	// stations are the station profiles the New QSO screen picks our side
+	// of each QSO from, the first by default.
+	stations []qsoentry.Station
 
 	// markedFuncs are the index functions that accept the mark-prefix. The
 	// bulk operations register here.
@@ -326,7 +328,11 @@ func (m Model) footerView() string {
 		keys = joinedKeyMap{m.globalKeys(), m.pagerKeys}
 	}
 	if m.entry.open {
-		keys = m.entryKeys
+		ek := m.entryKeys
+		// The keys number the tabs shown, which the Satellite tab is not
+		// always among.
+		ek.GoTab.SetHelp(fmt.Sprintf("alt+1-%d", len(m.entry.tabs())), ek.GoTab.Help().Desc)
+		keys = ek
 	}
 	switch {
 	case m.promptOpen():
@@ -381,6 +387,7 @@ func (m *Model) layout() tea.Cmd {
 	} else {
 		m.idx.setHeight(bodyHeight - indexChrome)
 	}
+	m.sizeEntryNotes(bodyHeight)
 	if m.logbook == nil {
 		return nil
 	}
