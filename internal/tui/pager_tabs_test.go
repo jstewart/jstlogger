@@ -223,27 +223,28 @@ func TestQSLTab(t *testing.T) {
 		{Service: logbook.ServiceEQSL, Sent: "Y", SentDate: day(3)},
 		{Service: "qrz", Sent: "Q"},
 		{Service: logbook.ServiceLoTW, Sent: "Y", SentDate: day(2), Rcvd: "V", RcvdDate: day(5)},
-		{Service: "clublog", Rcvd: "R"},
+		{Service: logbook.ServiceClubLog, Rcvd: "R"},
 		{Service: logbook.ServiceCard, Sent: "R"},
 	}}
 	tab := plain(qslTab(defaultStyles(), q, 80))
 	lines := strings.Split(tab, "\n")
 
-	assert.Contains(t, lines, "LoTW sent         Yes 2024-01-02")
-	assert.Contains(t, lines, "LoTW received     Verified 2024-01-05")
-	assert.Contains(t, lines, "eQSL sent         Yes 2024-01-03")
-	assert.Contains(t, lines, "eQSL received     "+pagerEmpty)
-	assert.Contains(t, lines, "Card sent         Requested")
-	assert.Contains(t, lines, "qrz sent          Queued")
-	assert.Contains(t, lines, "clublog received  Requested")
+	assert.Contains(t, lines, "LoTW sent          Yes 2024-01-02")
+	assert.Contains(t, lines, "LoTW received      Verified 2024-01-05")
+	assert.Contains(t, lines, "eQSL sent          Yes 2024-01-03")
+	assert.Contains(t, lines, "eQSL received      "+pagerEmpty)
+	assert.Contains(t, lines, "Card sent          Requested")
+	assert.Contains(t, lines, "qrz sent           Queued")
+	assert.Contains(t, lines, "Club Log received  Requested")
 
 	var order []string
 	for _, l := range lines {
-		if f := strings.Fields(l); len(f) > 1 && f[1] == "sent" {
-			order = append(order, f[0])
+		label, _, _ := strings.Cut(l, "  ")
+		if name, ok := strings.CutSuffix(label, " sent"); ok {
+			order = append(order, name)
 		}
 	}
-	assert.Equal(t, []string{"Card", "LoTW", "eQSL", "clublog", "qrz"}, order)
+	assert.Equal(t, []string{"Card", "LoTW", "eQSL", "Club Log", "qrz"}, order)
 
 	none := plain(qslTab(defaultStyles(), logbook.QSO{}, 80))
 	assert.Equal(t, "No confirmations", none)
