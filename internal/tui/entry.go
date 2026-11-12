@@ -874,13 +874,10 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 		if len(row) > 1 {
 			colWidth = max(width-2, 0) / 2
 		}
-		// A cell such as the notes takes more than one line.
-		cells := make([][]string, len(row))
-		height := 1
+		cells := make([]string, len(row))
 		var errs []string
 		for i, f := range row {
-			cells[i] = strings.Split(m.entryCell(f, colWidth, lw), "\n")
-			height = max(height, len(cells[i]))
+			cells[i] = m.entryCell(f, colWidth, lw)
 			var msg string
 			if err := e.errs[f]; err != nil {
 				msg = m.styles.err.Render(truncate("✗ "+err.Error(), max(colWidth-lw-2, 0), "…"))
@@ -888,17 +885,7 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 			errs = append(errs, fit(strings.Repeat(" ", lw+2)+msg, colWidth))
 		}
 		start := len(lines)
-		for l := range height {
-			parts := make([]string, len(row))
-			for i, cell := range cells {
-				var part string
-				if l < len(cell) {
-					part = cell[l]
-				}
-				parts[i] = fit(part, colWidth)
-			}
-			lines = append(lines, strings.TrimRight(strings.Join(parts, "  "), " "))
-		}
+		lines = append(lines, joinCells(cells, colWidth)...)
 		if slices.ContainsFunc(row, func(f qsoentry.Field) bool { return e.errs[f] != nil }) {
 			lines = append(lines, strings.TrimRight(strings.Join(errs, "  "), " "))
 		}
@@ -907,6 +894,31 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 		}
 	}
 	return lines, focus, rows
+}
+
+// joinCells lays out cells side by side, each fitted to width cells, two
+// apart. A cell such as the notes takes more than one line, and the cells
+// beside it are blank below their own lines.
+func joinCells(cells []string, width int) []string {
+	split := make([][]string, len(cells))
+	height := 1
+	for i, c := range cells {
+		split[i] = strings.Split(c, "\n")
+		height = max(height, len(split[i]))
+	}
+	lines := make([]string, height)
+	for l := range lines {
+		parts := make([]string, len(split))
+		for i, cell := range split {
+			var part string
+			if l < len(cell) {
+				part = cell[l]
+			}
+			parts[i] = fit(part, width)
+		}
+		lines[l] = strings.TrimRight(strings.Join(parts, "  "), " ")
+	}
+	return lines
 }
 
 // entryCell renders field f, labeled with a label lw cells wide, in width
