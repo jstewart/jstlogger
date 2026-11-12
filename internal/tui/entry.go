@@ -261,13 +261,18 @@ func (e entry) value(f qsoentry.Field) string {
 	return e.inputs[f].Value()
 }
 
-// setValue sets the value of field f to v. A picked field with no option v
-// picks none, or failing that keeps its option.
+// setValue sets the value of field f to v. A picked field already showing v
+// keeps its option, which matters when two share a name, as station
+// profiles may; one with no option v picks none, or failing that keeps its
+// option.
 func (e *entry) setValue(f qsoentry.Field, v string) {
 	switch {
 	case f == qsoentry.Notes:
 		e.notes.SetValue(v)
 	case isPicked(f):
+		if strings.EqualFold(e.pickers[f].value(), v) {
+			return
+		}
 		if !e.pickers[f].set(v) {
 			e.pickers[f].set("")
 		}

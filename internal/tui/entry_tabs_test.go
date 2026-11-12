@@ -148,6 +148,27 @@ func TestEntryStationPickerSwitchesProfiles(t *testing.T) {
 	assert.Equal(t, "IC-705", entryValue(m, qsoentry.MyRig), "the rig is not part of a profile")
 }
 
+func TestEntryStationPickerKeepsProfileAfterSave(t *testing.T) {
+	s := newEntryStore(t, nil)
+	s.expectAdd()
+	// Two profiles may share a name; the one picked stays picked.
+	other := parkStation
+	other.Name = homeStation.Name
+	m := newEntryModel(t, s, WithStations([]qsoentry.Station{homeStation, other}))
+	m = press(t, m, altKey('2'), special(tea.KeyRight))
+	require.Equal(t, "W1AW/P", entryValue(m, qsoentry.StationCallsign))
+
+	m = fill(t, m, map[qsoentry.Field]string{
+		qsoentry.Date: "2026-11-09", qsoentry.TimeOn: "1405", qsoentry.Call: "k1abc", qsoentry.Mode: "fm",
+		qsoentry.Freq: "145.900",
+	})
+	m = press(t, m, saveKey)
+	require.Len(t, s.added, 1)
+
+	assert.Equal(t, 1, m.entry.pickers[qsoentry.StationName].i, "the second profile is still picked")
+	assert.Equal(t, "W1AW/P", entryValue(m, qsoentry.StationCallsign))
+}
+
 // everyTabQSO is a QSO with a value on every tab.
 var everyTabQSO = map[qsoentry.Field]string{
 	qsoentry.Date: "2026-11-09", qsoentry.TimeOn: "1405", qsoentry.Call: "k1abc", qsoentry.Mode: "fm",
