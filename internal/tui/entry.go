@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -18,6 +19,7 @@ import (
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/qsoentry"
+	"jstlogger/internal/rig"
 )
 
 // entryTab is one of the New QSO screen's tabs.
@@ -76,14 +78,32 @@ var entryRows = [][]qsoentry.Field{
 // entryLabelWidth is the width of the field labels.
 const entryLabelWidth = 8
 
+// entryTimes are the time fields, which the clock fills in live mode.
+var entryTimes = []qsoentry.Field{qsoentry.Date, qsoentry.TimeOn, qsoentry.DateOff, qsoentry.TimeOff}
+
+// The layouts of the dates and times the clock fills in.
+const (
+	entryDateLayout = "2006-01-02"
+	entryTimeLayout = "15:04:05"
+)
+
 // msgDiscardEntry asks before closing the New QSO screen on unsaved changes.
 const msgDiscardEntry = "Discard the unsaved QSO? (y/N)"
 
-// entry is the New QSO screen, shown in the body in place of the index. It
-// is in post mode: every field is typed by hand.
+// entry is the New QSO screen, shown in the body in place of the index.
 type entry struct {
 	open bool
-	tab  entryTab
+	// gen numbers the openings of the screen, so a clock tick from an
+	// earlier one is dropped.
+	gen int
+	tab entryTab
+	// live reports whether the screen is in live mode, where the clock
+	// fills in the times, rather than post mode, where every field is
+	// typed by hand.
+	live bool
+	// onLocked reports whether the time on has stopped following the
+	// clock in live mode, as it does once the call is typed.
+	onLocked bool
 	// focus is the QSO tab's field with focus.
 	focus qsoentry.Field
 	// inputs holds a text input for each field but the mode and submode,
@@ -120,6 +140,11 @@ type entryTagsMsg struct {
 	err  error
 }
 
+// entryTickMsg ticks the clock of the New QSO screen's opening gen.
+type entryTickMsg struct {
+	gen int
+}
+
 // entrySavedMsg reports a QSO saved, or the error saving it, and whether
 // the screen closes.
 type entrySavedMsg struct {
@@ -147,6 +172,10 @@ type entryKeyMap struct {
 	Save      key.Binding
 	SaveClose key.Binding
 	Close     key.Binding
+	// Live switches between live and post mode.
+	Live key.Binding
+	// ResetTime sets the time on to now in live mode.
+	ResetTime key.Binding
 	// Quit replaces the global quit binding, since q is typed into fields.
 	Quit key.Binding
 }
@@ -191,6 +220,14 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "close"),
 		),
+		Live: key.NewBinding(
+			key.WithKeys("ctrl+l"),
+			key.WithHelp("ctrl+l", "live/post"),
+		),
+		ResetTime: key.NewBinding(
+			key.WithKeys("ctrl+t"),
+			key.WithHelp("ctrl+t", "time on now"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
@@ -199,7 +236,7 @@ func defaultEntryKeys() entryKeyMap {
 }
 
 func (k entryKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.SaveClose, k.NextField, k.NextTab, k.Close}
+	return []key.Binding{k.Save, k.SaveClose, k.NextField, k.NextTab, k.Live, k.Close}
 }
 
 func (k entryKeyMap) FullHelp() [][]key.Binding {
@@ -207,6 +244,7 @@ func (k entryKeyMap) FullHelp() [][]key.Binding {
 		{k.Save, k.SaveClose, k.Close, k.Quit},
 		{k.NextField, k.PrevField},
 		{k.NextTab, k.PrevTab, k.GoTab},
+		{k.Live, k.ResetTime},
 	}
 }
 
@@ -266,6 +304,62 @@ func freqBand(s string) string {
 	return band
 }
 
+// readOnly reports whether field f can't be edited: the times in live mode.
+func (e entry) readOnly(f qsoentry.Field) bool {
+	return e.live && slices.Contains(entryTimes, f)
+}
+
+// stepFocus returns the field step fields on from the one with focus,
+// wrapping around and skipping read-only fields.
+func (e entry) stepFocus(step int) qsoentry.Field {
+	f := e.focus
+	for range qsoentry.FieldCount {
+		f = (f + qsoentry.Field(step) + qsoentry.FieldCount) % qsoentry.FieldCount
+		if !e.readOnly(f) {
+			return f
+		}
+	}
+	return e.focus
+}
+
+// setOn sets the date and time on to t.
+func (e *entry) setOn(t time.Time) {
+	t = t.UTC()
+	e.inputs[qsoentry.Date].SetValue(t.Format(entryDateLayout))
+	e.inputs[qsoentry.TimeOn].SetValue(t.Format(entryTimeLayout))
+}
+
+// tickClock sets the date and time on to now while they follow the clock.
+func (e *entry) tickClock(now time.Time) {
+	if e.live && !e.onLocked {
+		e.setOn(now)
+	}
+}
+
+// followCall locks the time on at now once a call is typed in live mode,
+// and starts the timing over when the call is cleared.
+func (e *entry) followCall(before, after qsoentry.Form, now time.Time) {
+	had, has := strings.TrimSpace(before[qsoentry.Call]) != "", strings.TrimSpace(after[qsoentry.Call]) != ""
+	if !e.live || had == has {
+		return
+	}
+	e.onLocked = has
+	e.setOn(now)
+}
+
+// unsaved reports whether the form holds values typed or picked since it
+// was opened or last saved. The times the clock fills in live mode don't
+// count.
+func (e entry) unsaved() bool {
+	f, b := e.form(), e.base
+	for k := range qsoentry.FieldCount {
+		if e.readOnly(k) {
+			f[k], b[k] = "", ""
+		}
+	}
+	return f != b
+}
+
 // focusField gives field f focus, with the cursor at the end of its value.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
 	e.inputs[e.focus].Blur()
@@ -277,24 +371,72 @@ func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
 	return e.inputs[f].Focus()
 }
 
-// openEntry opens the New QSO screen on an empty form and loads the
-// logbook's tags.
+// openEntry opens the New QSO screen on an empty form, starts its clock and
+// loads the logbook's tags. The screen opens in live mode when the rig is
+// connected, and in post mode otherwise.
 func (m Model) openEntry() (Model, tea.Cmd) {
 	e := newEntry()
 	e.open = true
+	e.gen = m.entry.gen + 1
 	e.tags = m.entry.tags
-	cmd := e.focusField(qsoentry.Date)
+	e.live = m.rig != nil && m.rigState.conn.Status == rig.Connected
+	focus := qsoentry.Date
+	if e.live {
+		focus = qsoentry.Call
+		e.tickClock(m.now())
+	}
+	cmd := e.focusField(focus)
 	m.entry = e
-	return m, tea.Batch(cmd, loadTagsCmd(m.logbook))
+	return m, tea.Batch(cmd, loadTagsCmd(m.logbook), m.entryTickCmd())
 }
 
 // closeEntry closes the New QSO screen, discarding the form. The tags are
 // kept to complete the tags field when it opens again.
 func (m Model) closeEntry() Model {
-	tags := m.entry.tags
+	old := m.entry
 	m.entry = newEntry()
-	m.entry.tags = tags
+	m.entry.gen, m.entry.tags = old.gen, old.tags
 	return m
+}
+
+// entryTickCmd returns a command that ticks the New QSO screen's clock at
+// the start of the next second.
+func (m Model) entryTickCmd() tea.Cmd {
+	gen, now := m.entry.gen, m.now()
+	return m.tick(now.Truncate(time.Second).Add(time.Second).Sub(now), func(time.Time) tea.Msg {
+		return entryTickMsg{gen: gen}
+	})
+}
+
+// tickEntry moves the New QSO screen's clock on and schedules the next
+// tick. A tick for a closed screen, or an earlier opening, stops.
+func (m Model) tickEntry(msg entryTickMsg) (Model, tea.Cmd) {
+	if !m.entry.open || msg.gen != m.entry.gen {
+		return m, nil
+	}
+	m.entry.tickClock(m.now())
+	m.revalidateEntry()
+	return m, m.entryTickCmd()
+}
+
+// toggleLive switches the New QSO screen between live and post mode. Post
+// mode keeps the times for editing. Live mode starts the clock again, or
+// with a call typed, locks the time on, filling it in if empty.
+func (m Model) toggleLive() (Model, tea.Cmd) {
+	e := &m.entry
+	e.live = !e.live
+	if !e.live {
+		return m, nil
+	}
+	e.onLocked = strings.TrimSpace(e.inputs[qsoentry.Call].Value()) != ""
+	if !e.onLocked || e.inputs[qsoentry.Date].Value() == "" || e.inputs[qsoentry.TimeOn].Value() == "" {
+		e.setOn(m.now())
+	}
+	m.revalidateEntry()
+	if e.readOnly(e.focus) {
+		return m, e.focusField(qsoentry.Call)
+	}
+	return m, nil
 }
 
 // loadTagsCmd returns a command that loads the logbook's tag names.
@@ -359,7 +501,7 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	case key.Matches(msg, k.SaveClose):
 		return m.saveEntry(true)
 	case key.Matches(msg, k.Close):
-		if e.form() == e.base {
+		if !e.unsaved() {
 			return m.closeEntry(), nil
 		}
 		return m.askConfirm(msgDiscardEntry, func(m Model) (Model, tea.Cmd) {
@@ -373,12 +515,19 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		// The keys are alt+1 onward.
 		n, _ := strconv.Atoi(strings.TrimPrefix(msg.String(), "alt+"))
 		e.tab = entryTab(n - 1)
+	case key.Matches(msg, k.Live):
+		return m.toggleLive()
+	case key.Matches(msg, k.ResetTime):
+		if e.live {
+			e.setOn(m.now())
+			m.revalidateEntry()
+		}
 	case e.tab != entryTabQSO:
 		// The other tabs have no fields yet.
 	case key.Matches(msg, k.NextField):
-		return m, e.focusField((e.focus + 1) % qsoentry.FieldCount)
+		return m, e.focusField(e.stepFocus(1))
 	case key.Matches(msg, k.PrevField):
-		return m, e.focusField((e.focus + qsoentry.FieldCount - 1) % qsoentry.FieldCount)
+		return m, e.focusField(e.stepFocus(-1))
 	default:
 		return m.editEntry(msg)
 	}
@@ -389,7 +538,7 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // field with focus, then fills in what follows from the change.
 func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 	e := &m.entry
-	if e.tab != entryTabQSO || e.saving {
+	if e.tab != entryTabQSO || e.saving || e.readOnly(e.focus) {
 		return m, nil
 	}
 	before := e.form()
@@ -416,9 +565,8 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 	}
 	if after := e.form(); after != before {
 		e.fillIn(before, after)
-		if e.errs != nil {
-			m.validateEntry()
-		}
+		e.followCall(before, after, m.now())
+		m.revalidateEntry()
 	}
 	return m, cmd
 }
@@ -474,6 +622,14 @@ func (m *Model) validateEntry() {
 	m.entry.errs, _ = errors.AsType[qsoentry.Errors](err)
 }
 
+// revalidateEntry checks the form again after it changes, if the last save
+// failed validation, so the errors shown stay up to date.
+func (m *Model) revalidateEntry() {
+	if m.entry.errs != nil {
+		m.validateEntry()
+	}
+}
+
 // saveEntry saves the form as a new QSO, then clears it for the next QSO or,
 // when close is true, closes the screen. A form that fails validation shows
 // its errors, with focus on the first field in error, and is not saved.
@@ -482,11 +638,22 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 	if e.saving {
 		return m, nil
 	}
-	q, err := qsoentry.Build(e.form(), m.station, m.now())
+	now := m.now()
+	if e.live {
+		// The QSO ends as it is saved.
+		e.tickClock(now)
+		e.inputs[qsoentry.DateOff].SetValue(now.UTC().Format(entryDateLayout))
+		e.inputs[qsoentry.TimeOff].SetValue(now.UTC().Format(entryTimeLayout))
+	}
+	q, err := qsoentry.Build(e.form(), m.station, now)
 	if errs, ok := errors.AsType[qsoentry.Errors](err); ok {
 		e.errs = errs
 		e.tab = entryTabQSO
-		return m, e.focusField(errs.Fields()[0])
+		focus := e.focus
+		if i := slices.IndexFunc(errs.Fields(), func(f qsoentry.Field) bool { return !e.readOnly(f) }); i >= 0 {
+			focus = errs.Fields()[i]
+		}
+		return m, e.focusField(focus)
 	}
 	if err != nil {
 		e.err = err
@@ -536,7 +703,13 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 	e.setForm(next)
 	e.base = next
 	e.msg = saved
-	return m, tea.Batch(e.focusField(qsoentry.TimeOn), reload)
+	focus := qsoentry.TimeOn
+	if e.live {
+		// The next QSO's clock starts now.
+		focus, e.onLocked = qsoentry.Call, false
+		e.tickClock(m.now())
+	}
+	return m, tea.Batch(e.focusField(focus), reload)
 }
 
 // entryView renders the New QSO screen in width by height cells: the tab
@@ -563,6 +736,9 @@ func (m Model) entryView(width, height int) string {
 		lines = append(lines, "")
 	}
 	status := "New QSO · post"
+	if e.live {
+		status = "New QSO · live"
+	}
 	switch {
 	case e.saving:
 		status += " · Saving…"
@@ -633,6 +809,9 @@ func (m Model) entryCell(f qsoentry.Field, width int) string {
 		// The input needs a cell for the cursor past the end of its value.
 		in.SetWidth(max(inWidth-1, 1))
 		value = in.View()
+		if e.readOnly(f) {
+			value = st.muted.Render(in.Value())
+		}
 		if suffix != "" {
 			value = pad(value, inWidth) + "  " + suffix
 		}
