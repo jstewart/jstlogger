@@ -18,6 +18,9 @@ const (
 	ServiceEQSL = "eqsl"
 	// ServiceCard is a paper QSL card (the ADIF QSL_* fields).
 	ServiceCard = "card"
+	// ServiceClubLog is Club Log. ADIF has no QSL fields for it, so its
+	// status is not exported to ADIF.
+	ServiceClubLog = "clublog"
 )
 
 // QSO is one logged contact.

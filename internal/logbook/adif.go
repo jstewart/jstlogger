@@ -32,8 +32,8 @@ const uuidField = "APP_JSTLOGGER_UUID"
 // StationField is jstlogger's application-defined ADIF field holding the
 // name of the configured station a QSO was logged from. It rides in
 // QSO.Fields, so it round-trips through ADIF import and export with no
-// schema change. Nothing sets it yet: QSO entry is to fill it in, and until
-// then it comes only from imported ADIF.
+// schema change. New QSO entry stores the selected station profile's name
+// in it; imported ADIF may carry it too.
 const StationField = "APP_JSTLOGGER_STATION"
 
 // confSpec names the ADIF fields that hold one confirmation service.
