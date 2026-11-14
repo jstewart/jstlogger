@@ -117,12 +117,53 @@ func TestSQLiteStoreCallContainsLiteral(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreCallBaseIs(t *testing.T) {
+	s := newTestStore(t)
+	added := seed(t, s,
+		QSO{StartUTC: queryT0, Call: "W1AW"},
+		QSO{StartUTC: queryT0.Add(time.Hour), Call: "VE3/W1AW"},
+		QSO{StartUTC: queryT0.Add(2 * time.Hour), Call: "W1AW/P"},
+		QSO{StartUTC: queryT0.Add(3 * time.Hour), Call: "W1AWX"},
+		QSO{StartUTC: queryT0.Add(4 * time.Hour), Call: "KW1AW"},
+		QSO{StartUTC: queryT0.Add(5 * time.Hour), Call: "W1AW/VE3ABCD"},
+		QSO{StartUTC: queryT0.Add(6 * time.Hour), Call: "K1_C"},
+	)
+	id := func(i ...int) []int64 {
+		out := make([]int64, 0, len(i))
+		for _, n := range i {
+			out = append(out, added[n].ID)
+		}
+		return out
+	}
+
+	tests := []struct {
+		name string
+		call string
+		want []int64 // newest first
+	}{
+		{"base", "W1AW", id(2, 1, 0)},
+		{"portable call matches its base", "w1aw/7", id(2, 1, 0)},
+		{"other base is not matched", "VE3ABCD", id(5)},
+		{"wildcards are literal", "K1%C", nil},
+		{"underscore is literal", "K1_C", id(6)},
+		{"no match", "ZZ9ZZ", nil},
+		{"empty matches every QSO", " ", id(6, 5, 4, 3, 2, 1, 0)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := s.IDs(t.Context(), CallBaseIs{tt.call})
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestExprKeepsValuesInArgs(t *testing.T) {
 	const hostile = "x' OR 1=1 --"
-	clause, args, err := exprSQL(Or{CallContains{hostile}, Not{X: ModeIs{hostile}}})
+	clause, args, err := exprSQL(Or{CallContains{hostile}, Not{X: ModeIs{hostile}}, CallBaseIs{hostile}})
 	require.NoError(t, err)
 	assert.NotContains(t, clause, "OR 1=1")
-	assert.Len(t, args, 3)
+	assert.Len(t, args, 5)
 }
 
 func TestSQLiteStoreExprInvalidFilter(t *testing.T) {
