@@ -140,7 +140,7 @@ func (m *Model) fetchEntryLoTW() tea.Cmd {
 	if !m.entry.open || m.lotw == nil {
 		return nil
 	}
-	base, c := callsign.Base(m.entry.inputs[qsoentry.Call].Value()), &m.entry.lotw
+	base, c := callsign.Base(m.entry.value(qsoentry.Call)), &m.entry.lotw
 	if base == "" || base == c.call || base == c.pending {
 		return nil
 	}
@@ -151,7 +151,7 @@ func (m *Model) fetchEntryLoTW() tea.Cmd {
 // applyEntryLoTW keeps a LoTW lookup for the New QSO screen. A lookup for a
 // call since changed, or one landing after the screen closed, is dropped.
 func (m *Model) applyEntryLoTW(msg entryLoTWMsg) {
-	current := callsign.Base(m.entry.inputs[qsoentry.Call].Value())
+	current := callsign.Base(m.entry.value(qsoentry.Call))
 	if m.entry.lotw.apply(lotwLookupMsg(msg), m.entry.open, current) && msg.err != nil {
 		m.lotwErr = msg.err
 	}
@@ -162,7 +162,7 @@ func (m *Model) applyEntryLoTW(msg entryLoTWMsg) {
 // It is "" while the call is not looked up, or is not a LoTW user.
 func (m Model) entryLoTW() string {
 	st := m.styles
-	s := m.lotwStatusOf(m.entry.lotw, m.entry.inputs[qsoentry.Call].Value())
+	s := m.lotwStatusOf(m.entry.lotw, m.entry.value(qsoentry.Call))
 	if s.failed {
 		return st.err.Render("LoTW lookup failed")
 	}

@@ -165,7 +165,7 @@ func TestEntryStationPickerKeepsProfileAfterSave(t *testing.T) {
 	m = press(t, m, saveKey)
 	require.Len(t, s.added, 1)
 
-	assert.Equal(t, 1, m.entry.pickers[qsoentry.StationName].i, "the second profile is still picked")
+	assert.Equal(t, 1, m.entry.picker(qsoentry.StationName).i, "the second profile is still picked")
 	assert.Equal(t, "W1AW/P", entryValue(m, qsoentry.StationCallsign))
 }
 

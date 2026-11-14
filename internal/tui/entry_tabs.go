@@ -157,7 +157,7 @@ func entryTabOf(f qsoentry.Field) entryTab {
 // tabs returns the tabs shown, in tab bar order: every tab but Satellite,
 // which only shows while the propagation mode is SAT.
 func (e *entry) tabs() []entryTab {
-	sat := strings.EqualFold(e.pickers[qsoentry.PropMode].value(), "SAT")
+	sat := strings.EqualFold(e.picker(qsoentry.PropMode).value(), "SAT")
 	var ts []entryTab
 	for t := range entryTabCount {
 		if t != entryTabSatellite || sat {

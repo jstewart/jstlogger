@@ -22,7 +22,7 @@ func (e *entry) setStations(stations []qsoentry.Station) {
 	for i, st := range stations {
 		names[i] = st.Name
 	}
-	e.pickers[qsoentry.StationName] = newPicker(names)
+	*e.picker(qsoentry.StationName) = newPicker(names)
 	e.fillStation()
 }
 
@@ -30,7 +30,7 @@ func (e *entry) setStations(stations []qsoentry.Station) {
 // what the last profile filled in or was typed. The rig and power are not
 // part of a profile and are left as they are.
 func (e *entry) fillStation() {
-	i := e.pickers[qsoentry.StationName].i
+	i := e.picker(qsoentry.StationName).i
 	if i >= len(e.stations) {
 		return
 	}
