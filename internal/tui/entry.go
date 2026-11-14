@@ -86,6 +86,8 @@ type entry struct {
 	tags []string
 	// lotw is the LoTW lookup for the base callsign of the call.
 	lotw lotwCache
+	// worked is the worked-before panel for the call.
+	worked workedBefore
 	// saving reports whether a save is under way.
 	saving bool
 	// msg is shown on the status line until the next key press, and err,
@@ -920,6 +922,8 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 			e.tags = append(e.tags, t)
 		}
 	}
+	// The saved QSO is now an earlier QSO with its call.
+	e.worked = workedBefore{}
 	m.idx.restart()
 	reload := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, msg.qso.ID, m.idx.cursor)
 	if msg.close {
@@ -942,7 +946,8 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 }
 
 // entryView renders the New QSO screen in width by height cells: the tab
-// bar, the open tab and a status line.
+// bar, the open tab, below the QSO tab the worked-before panel, and a
+// status line.
 func (m Model) entryView(width, height int) string {
 	st, e := m.styles, m.entry
 	tabs := e.tabs()
@@ -953,9 +958,13 @@ func (m Model) entryView(width, height int) string {
 	lines := []string{tabBar(st, names, slices.Index(tabs, e.tab), width)}
 	fields, row, rows := m.entryFields(width)
 	// Scroll a window too short for every row to show the focused row and
-	// its errors, keeping the tab bar. end is the line after them.
+	// its errors, keeping the tab bar. end is the line after them. The
+	// worked-before panel below the QSO tab's rows is cut first.
 	end := 1 + row + rows
 	lines = append(lines, fields...)
+	if e.tab == entryTabQSO {
+		lines = append(lines, m.workedView(width)...)
+	}
 	if skip := end - (height - 1); skip > 0 {
 		lines = append(lines[:1], lines[1+skip:]...)
 	}
