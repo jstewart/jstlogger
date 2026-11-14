@@ -61,13 +61,10 @@ type entry struct {
 	dataMode, dataSubmode string
 	// focus is the field with focus, on the open tab.
 	focus qsoentry.Field
-	// inputs holds a text input for each field typed on one line: every
-	// field but those multi-line and those picked.
-	inputs [qsoentry.FieldCount]textinput.Model
-	// pickers holds a picker for each field in entryPicked.
-	pickers [qsoentry.FieldCount]picker
-	// areas holds a text area for each field in entryMultiLine.
-	areas [qsoentry.FieldCount]textarea.Model
+	// w holds the form's widgets. Copies of the Model share them, which
+	// keeps a copy small; newEntry gives a fresh set, so a form opened
+	// again never shares them with one held from before.
+	w *entryWidgets
 	// stations are the station profiles the station picker picks from.
 	stations []qsoentry.Station
 	// base is the form as opened or last saved. The form has unsaved
@@ -227,35 +224,91 @@ func (k entryKeyMap) FullHelp() [][]key.Binding {
 	}
 }
 
-// newEntry returns the New QSO screen, closed, with an empty form.
+// entryWidgets holds the New QSO form's widgets, one for each field, of the
+// kind the field uses: a text input for each field typed on one line, a
+// text area for each in entryMultiLine and a picker for each in
+// entryPicked. Each is at the field's entrySlots index in its slice.
+type entryWidgets struct {
+	inputs  []textinput.Model
+	areas   []textarea.Model
+	pickers []picker
+}
+
+// entrySlots maps each field to the index of its widget in the slice for
+// its kind.
+var entrySlots = func() (slots [qsoentry.FieldCount]int) {
+	var inputs, areas, pickers int
+	for f := range qsoentry.FieldCount {
+		switch {
+		case isMultiLine(f):
+			slots[f], areas = areas, areas+1
+		case isPicked(f):
+			slots[f], pickers = pickers, pickers+1
+		default:
+			slots[f], inputs = inputs, inputs+1
+		}
+	}
+	return slots
+}()
+
+// input returns the text input of field f, which must be typed on one line.
+func (e *entry) input(f qsoentry.Field) *textinput.Model {
+	if isMultiLine(f) || isPicked(f) {
+		panic(fmt.Sprintf("tui: %s has no text input", entryLabels[f]))
+	}
+	return &e.w.inputs[entrySlots[f]]
+}
+
+// area returns the text area of field f, which must be in entryMultiLine.
+func (e *entry) area(f qsoentry.Field) *textarea.Model {
+	if !isMultiLine(f) {
+		panic(fmt.Sprintf("tui: %s has no text area", entryLabels[f]))
+	}
+	return &e.w.areas[entrySlots[f]]
+}
+
+// picker returns the picker of field f, which must be in entryPicked.
+func (e *entry) picker(f qsoentry.Field) *picker {
+	if !isPicked(f) {
+		panic(fmt.Sprintf("tui: %s has no picker", entryLabels[f]))
+	}
+	return &e.w.pickers[entrySlots[f]]
+}
+
+// newEntry returns the New QSO screen, closed, with an empty form and a
+// fresh set of widgets.
 func newEntry() entry {
-	var e entry
+	e := entry{w: &entryWidgets{
+		inputs:  make([]textinput.Model, int(qsoentry.FieldCount)-len(entryMultiLine)-len(entryPicked)),
+		areas:   make([]textarea.Model, len(entryMultiLine)),
+		pickers: make([]picker, len(entryPicked)),
+	}}
 	// The options picked from start with none.
 	none := func(options []string) []string { return append([]string{""}, options...) }
-	e.pickers[qsoentry.Mode] = newPicker(none(adif.Modes()))
-	e.pickers[qsoentry.Submode] = newPicker(none(nil))
-	e.pickers[qsoentry.PropMode] = newPicker(none(adif.PropModes()))
-	e.pickers[qsoentry.AntPath] = newPicker(none(adif.AntPaths()))
-	e.pickers[qsoentry.QSLSentVia] = newPicker(none(adif.QSLSentVias()))
+	*e.picker(qsoentry.Mode) = newPicker(none(adif.Modes()))
+	*e.picker(qsoentry.Submode) = newPicker(none(nil))
+	*e.picker(qsoentry.PropMode) = newPicker(none(adif.PropModes()))
+	*e.picker(qsoentry.AntPath) = newPicker(none(adif.AntPaths()))
+	*e.picker(qsoentry.QSLSentVia) = newPicker(none(adif.QSLSentVias()))
 	for _, f := range []qsoentry.Field{qsoentry.QSLSent, qsoentry.LoTWSent, qsoentry.EQSLSent, qsoentry.ClubLogSent} {
 		p := newPicker(none(adif.QSLSentStatuses()))
 		p.show = logbook.QSLSentText
-		e.pickers[f] = p
+		*e.picker(f) = p
 	}
 	for _, f := range entryMultiLine {
-		e.areas[f] = newArea()
+		*e.area(f) = newArea()
 	}
-	e.areas[qsoentry.QSLMsg].SetHeight(entryQSLMsgHeight)
+	e.area(qsoentry.QSLMsg).SetHeight(entryQSLMsgHeight)
 	for f := range qsoentry.FieldCount {
-		if isMultiLine(f) {
+		if isMultiLine(f) || isPicked(f) {
 			continue
 		}
 		in := newInput()
 		in.Prompt = ""
 		in.Placeholder = entryPlaceholders[f]
-		e.inputs[f] = in
+		*e.input(f) = in
 	}
-	tags := &e.inputs[qsoentry.Tags]
+	tags := e.input(qsoentry.Tags)
 	tags.ShowSuggestions = true
 	// Tab moves to the next field, so right accepts a suggestion.
 	tags.KeyMap.AcceptSuggestion = key.NewBinding(key.WithKeys("right"))
@@ -297,11 +350,11 @@ func newArea() textarea.Model {
 func (e *entry) value(f qsoentry.Field) string {
 	switch {
 	case isMultiLine(f):
-		return e.areas[f].Value()
+		return e.area(f).Value()
 	case isPicked(f):
-		return e.pickers[f].value()
+		return e.picker(f).value()
 	}
-	return e.inputs[f].Value()
+	return e.input(f).Value()
 }
 
 // setValue sets the value of field f to v. A picked field already showing v
@@ -311,23 +364,23 @@ func (e *entry) value(f qsoentry.Field) string {
 func (e *entry) setValue(f qsoentry.Field, v string) {
 	switch {
 	case isMultiLine(f):
-		e.areas[f].SetValue(v)
+		e.area(f).SetValue(v)
 	case isPicked(f):
-		if strings.EqualFold(e.pickers[f].value(), v) {
+		if strings.EqualFold(e.picker(f).value(), v) {
 			return
 		}
-		if !e.pickers[f].set(v) {
-			e.pickers[f].set("")
+		if !e.picker(f).set(v) {
+			e.picker(f).set("")
 		}
 	default:
-		e.inputs[f].SetValue(v)
+		e.input(f).SetValue(v)
 	}
 }
 
 // submodes returns the submodes offered for the mode picked, with none
 // first.
 func (e *entry) submodes() []string {
-	return append([]string{""}, adif.Submodes(e.pickers[qsoentry.Mode].value())...)
+	return append([]string{""}, adif.Submodes(e.picker(qsoentry.Mode).value())...)
 }
 
 // form returns the values in the form.
@@ -345,7 +398,7 @@ func (e *entry) setForm(f qsoentry.Form) {
 	for k := range qsoentry.FieldCount {
 		if k == qsoentry.Submode {
 			// The submodes offered follow the mode, set before.
-			e.pickers[k].setOptions(e.submodes())
+			e.picker(k).setOptions(e.submodes())
 		}
 		e.setValue(k, f[k])
 	}
@@ -374,8 +427,8 @@ func (e *entry) readOnly(f qsoentry.Field) bool {
 // setOn sets the date and time on to t.
 func (e *entry) setOn(t time.Time) {
 	t = t.UTC()
-	e.inputs[qsoentry.Date].SetValue(t.Format(entryDateLayout))
-	e.inputs[qsoentry.TimeOn].SetValue(t.Format(entryTimeLayout))
+	e.input(qsoentry.Date).SetValue(t.Format(entryDateLayout))
+	e.input(qsoentry.TimeOn).SetValue(t.Format(entryTimeLayout))
 }
 
 // tickClock sets the date and time on to now while they follow the clock.
@@ -418,23 +471,23 @@ func (e *entry) markHand(f qsoentry.Field) {
 func (e *entry) syncRig(s rig.State) {
 	before := e.form()
 	if e.followsRig(qsoentry.Freq) {
-		e.inputs[qsoentry.Freq].SetValue(logbook.FormatFreqMHz(s.Freq))
+		e.input(qsoentry.Freq).SetValue(logbook.FormatFreqMHz(s.Freq))
 	}
 	if e.followsRig(qsoentry.Mode) {
 		mode, submode := qsoentry.RigMode(s.Mode, e.dataMode, e.dataSubmode)
-		e.pickers[qsoentry.Mode].set(mode)
-		e.pickers[qsoentry.Submode].setOptions(e.submodes())
-		e.pickers[qsoentry.Submode].set(submode)
+		e.picker(qsoentry.Mode).set(mode)
+		e.picker(qsoentry.Submode).setOptions(e.submodes())
+		e.picker(qsoentry.Submode).set(submode)
 	}
-	band := e.inputs[qsoentry.Band].Value()
+	band := e.input(qsoentry.Band).Value()
 	e.fillIn(before, e.form())
 	if e.followsRig(qsoentry.Band) {
 		// A band typed before a sync gives way even when the freq is
 		// unchanged.
-		band = freqBand(e.inputs[qsoentry.Freq].Value())
+		band = freqBand(e.input(qsoentry.Freq).Value())
 		e.band = band
 	}
-	e.inputs[qsoentry.Band].SetValue(band)
+	e.input(qsoentry.Band).SetValue(band)
 }
 
 // unsaved reports whether the form holds values typed or picked since it
@@ -460,20 +513,21 @@ func (e *entry) filledIn(f qsoentry.Field, v string) bool {
 
 // focusField gives field f focus, with the cursor at the end of its value.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
-	if isMultiLine(e.focus) {
-		e.areas[e.focus].Blur()
-	} else {
-		e.inputs[e.focus].Blur()
+	switch {
+	case isMultiLine(e.focus):
+		e.area(e.focus).Blur()
+	case !isPicked(e.focus):
+		e.input(e.focus).Blur()
 	}
 	e.focus = f
 	switch {
 	case isPicked(f):
 		return nil
 	case isMultiLine(f):
-		return e.areas[f].Focus()
+		return e.area(f).Focus()
 	}
-	e.inputs[f].CursorEnd()
-	return e.inputs[f].Focus()
+	e.input(f).CursorEnd()
+	return e.input(f).Focus()
 }
 
 // openEntry opens the New QSO screen on a form empty but for the Station
@@ -564,8 +618,8 @@ func (m Model) toggleLive() (Model, tea.Cmd) {
 	if !e.live {
 		return m, nil
 	}
-	e.onLocked = strings.TrimSpace(e.inputs[qsoentry.Call].Value()) != ""
-	if !e.onLocked || e.inputs[qsoentry.Date].Value() == "" || e.inputs[qsoentry.TimeOn].Value() == "" {
+	e.onLocked = strings.TrimSpace(e.input(qsoentry.Call).Value()) != ""
+	if !e.onLocked || e.input(qsoentry.Date).Value() == "" || e.input(qsoentry.TimeOn).Value() == "" {
 		e.setOn(m.now())
 	}
 	if m.rigState.haveState {
@@ -608,7 +662,7 @@ func (e *entry) applyTags(msg entryTagsMsg) {
 // setTagSuggestions offers each tag not yet in the tags field to complete
 // the tag being typed after the last comma.
 func (e *entry) setTagSuggestions() {
-	in := &e.inputs[qsoentry.Tags]
+	in := e.input(qsoentry.Tags)
 	v := in.Value()
 	head := v[:strings.LastIndex(v, ",")+1]
 	tail := v[len(head):]
@@ -672,7 +726,7 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 	case key.Matches(msg, k.Editor) && slices.Contains(entryEditorFields, e.focus):
 		return m.openEditor()
-	case isMultiLine(e.focus) && key.Matches(msg, e.areas[e.focus].KeyMap.InsertNewline):
+	case isMultiLine(e.focus) && key.Matches(msg, e.area(e.focus).KeyMap.InsertNewline):
 		// Enter starts a new line of a multi-line field rather than moving
 		// on.
 		return m.editEntry(msg)
@@ -698,13 +752,13 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 	switch {
 	case isPicked(e.focus):
 		k, ok := msg.(tea.KeyPressMsg)
-		if ok && e.pickers[e.focus].update(k) && e.focus == qsoentry.StationName {
+		if ok && e.picker(e.focus).update(k) && e.focus == qsoentry.StationName {
 			e.fillStation()
 		}
 	case isMultiLine(e.focus):
-		e.areas[e.focus], cmd = e.areas[e.focus].Update(msg)
+		*e.area(e.focus), cmd = e.area(e.focus).Update(msg)
 	default:
-		in := &e.inputs[e.focus]
+		in := e.input(e.focus)
 		if k, ok := msg.(tea.KeyPressMsg); ok && key.Matches(k, in.KeyMap.AcceptSuggestion) && in.CurrentSuggestion() != "" {
 			// The suggestion replaces what was typed, so a tag keeps the
 			// logbook's spelling.
@@ -712,7 +766,7 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 			in.CursorEnd()
 			break
 		}
-		e.inputs[e.focus], cmd = e.inputs[e.focus].Update(msg)
+		*in, cmd = in.Update(msg)
 	}
 	return m, tea.Batch(cmd, m.followEdit(e.focus, before))
 }
@@ -788,7 +842,7 @@ func (m Model) applyEdited(msg entryEditedMsg) (Model, tea.Cmd) {
 	before := e.form()
 	e.setValue(msg.field, text)
 	if !isMultiLine(msg.field) {
-		e.inputs[msg.field].CursorEnd()
+		e.input(msg.field).CursorEnd()
 	}
 	return m, m.followEdit(msg.field, before)
 }
@@ -800,7 +854,7 @@ func (m Model) applyEdited(msg entryEditedMsg) (Model, tea.Cmd) {
 func (e *entry) fillIn(before, after qsoentry.Form) {
 	changed := func(f qsoentry.Field) bool { return after[f] != before[f] }
 	if changed(qsoentry.Mode) {
-		e.pickers[qsoentry.Submode].setOptions(e.submodes())
+		e.picker(qsoentry.Submode).setOptions(e.submodes())
 	}
 	if changed(qsoentry.Mode) || changed(qsoentry.Submode) {
 		e.fillRST()
@@ -824,8 +878,8 @@ func (e *entry) fillIn(before, after qsoentry.Form) {
 func (e *entry) fillRST() {
 	rst := qsoentry.DefaultRST(e.value(qsoentry.Mode), e.value(qsoentry.Submode))
 	for _, f := range []qsoentry.Field{qsoentry.RSTSent, qsoentry.RSTRcvd} {
-		if v := e.inputs[f].Value(); v == "" || v == e.rst {
-			e.inputs[f].SetValue(rst)
+		if v := e.input(f).Value(); v == "" || v == e.rst {
+			e.input(f).SetValue(rst)
 		}
 	}
 	e.rst = rst
@@ -835,9 +889,9 @@ func (e *entry) fillRST() {
 // is empty or holds last, the band last filled in. It returns the band
 // filled in.
 func (e *entry) fillBand(freq, band qsoentry.Field, last string) string {
-	derived := freqBand(e.inputs[freq].Value())
-	if v := e.inputs[band].Value(); v == "" || v == last {
-		e.inputs[band].SetValue(derived)
+	derived := freqBand(e.input(freq).Value())
+	if v := e.input(band).Value(); v == "" || v == last {
+		e.input(band).SetValue(derived)
 	}
 	return derived
 }
@@ -1062,15 +1116,17 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 	switch {
 	case isMultiLine(f):
 		// The lines after the first line up under it.
-		value = strings.ReplaceAll(e.areas[f].View(), "\n", "\n"+strings.Repeat(" ", lw+2))
+		value = strings.ReplaceAll(e.area(f).View(), "\n", "\n"+strings.Repeat(" ", lw+2))
 	case isPicked(f):
-		value = e.pickers[f].view(st, focused)
+		value = e.picker(f).view(st, focused)
 		if mark := m.entryHandMark(f); mark != "" {
 			value += "  " + mark
 		}
 	default:
 		suffix, suffixAt := m.entrySuffix(f)
-		in := e.inputs[f]
+		// A copy, since the view must not resize the widget the copies of
+		// the Model share.
+		in := *e.input(f)
 		inWidth := room
 		if suffix != "" {
 			// The suffix sits next to the value rather than at the far side.
@@ -1159,7 +1215,7 @@ func fit(s string, width int) string {
 func (m *Model) sizeEntryAreas(height int) {
 	for _, f := range entryMultiLine {
 		lw := entryLayouts[entryTabOf(f)].labelWidth
-		m.entry.areas[f].SetWidth(max(m.bodyWidth()-lw-2, 1))
+		m.entry.area(f).SetWidth(max(m.bodyWidth()-lw-2, 1))
 	}
-	m.entry.areas[qsoentry.Notes].SetHeight(max(height-2, 1))
+	m.entry.area(qsoentry.Notes).SetHeight(max(height-2, 1))
 }
