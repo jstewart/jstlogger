@@ -86,6 +86,8 @@ type entry struct {
 	tags []string
 	// lotw is the LoTW lookup for the base callsign of the call.
 	lotw lotwCache
+	// worked is the worked-before panel for the call.
+	worked workedBefore
 	// saving reports whether a save is under way.
 	saving bool
 	// msg is shown on the status line until the next key press, and err,
@@ -292,7 +294,7 @@ func newArea() textarea.Model {
 }
 
 // value returns the value of field f: its text, or the option picked.
-func (e entry) value(f qsoentry.Field) string {
+func (e *entry) value(f qsoentry.Field) string {
 	switch {
 	case isMultiLine(f):
 		return e.areas[f].Value()
@@ -324,12 +326,12 @@ func (e *entry) setValue(f qsoentry.Field, v string) {
 
 // submodes returns the submodes offered for the mode picked, with none
 // first.
-func (e entry) submodes() []string {
+func (e *entry) submodes() []string {
 	return append([]string{""}, adif.Submodes(e.pickers[qsoentry.Mode].value())...)
 }
 
 // form returns the values in the form.
-func (e entry) form() qsoentry.Form {
+func (e *entry) form() qsoentry.Form {
 	var f qsoentry.Form
 	for k := range qsoentry.FieldCount {
 		f[k] = e.value(k)
@@ -365,7 +367,7 @@ func freqBand(s string) string {
 }
 
 // readOnly reports whether field f can't be edited: the times in live mode.
-func (e entry) readOnly(f qsoentry.Field) bool {
+func (e *entry) readOnly(f qsoentry.Field) bool {
 	return e.live && slices.Contains(entryTimes, f)
 }
 
@@ -396,7 +398,7 @@ func (e *entry) followCall(before, after qsoentry.Form, now time.Time) {
 
 // followsRig reports whether field f follows the rig: a rig field not
 // edited by hand, in live mode.
-func (e entry) followsRig(f qsoentry.Field) bool {
+func (e *entry) followsRig(f qsoentry.Field) bool {
 	return e.live && slices.Contains(entryRigFields, f) && !e.hand[f]
 }
 
@@ -438,7 +440,7 @@ func (e *entry) syncRig(s rig.State) {
 // unsaved reports whether the form holds values typed or picked since it
 // was opened or last saved. In live mode, the values the clock and the rig
 // fill in don't count, nor do the default reports.
-func (e entry) unsaved() bool {
+func (e *entry) unsaved() bool {
 	f, b := e.form(), e.base
 	for k := range qsoentry.FieldCount {
 		if e.filledIn(k, f[k]) {
@@ -451,7 +453,7 @@ func (e entry) unsaved() bool {
 // filledIn reports whether v, the value of field f, was filled in rather
 // than typed in live mode: by the clock, by the rig or as the default
 // report.
-func (e entry) filledIn(f qsoentry.Field, v string) bool {
+func (e *entry) filledIn(f qsoentry.Field, v string) bool {
 	isRST := f == qsoentry.RSTSent || f == qsoentry.RSTRcvd
 	return e.readOnly(f) || e.followsRig(f) || e.live && isRST && v == e.rst
 }
@@ -920,6 +922,8 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 			e.tags = append(e.tags, t)
 		}
 	}
+	// The saved QSO is now an earlier QSO with its call.
+	e.worked = workedBefore{}
 	m.idx.restart()
 	reload := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, msg.qso.ID, m.idx.cursor)
 	if msg.close {
@@ -942,9 +946,10 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 }
 
 // entryView renders the New QSO screen in width by height cells: the tab
-// bar, the open tab and a status line.
+// bar, the open tab, below the QSO tab the worked-before panel, and a
+// status line.
 func (m Model) entryView(width, height int) string {
-	st, e := m.styles, m.entry
+	st, e := m.styles, &m.entry
 	tabs := e.tabs()
 	names := make([]string, len(tabs))
 	for i, t := range tabs {
@@ -953,9 +958,13 @@ func (m Model) entryView(width, height int) string {
 	lines := []string{tabBar(st, names, slices.Index(tabs, e.tab), width)}
 	fields, row, rows := m.entryFields(width)
 	// Scroll a window too short for every row to show the focused row and
-	// its errors, keeping the tab bar. end is the line after them.
+	// its errors, keeping the tab bar. end is the line after them. The
+	// worked-before panel below the QSO tab's rows is cut first.
 	end := 1 + row + rows
 	lines = append(lines, fields...)
+	if e.tab == entryTabQSO {
+		lines = append(lines, m.workedView(width)...)
+	}
 	if skip := end - (height - 1); skip > 0 {
 		lines = append(lines[:1], lines[1+skip:]...)
 	}
@@ -983,7 +992,7 @@ func (m Model) entryView(width, height int) string {
 // the line of the focused field's row and the number of lines that row
 // takes.
 func (m Model) entryFields(width int) (lines []string, focus, rows int) {
-	e := m.entry
+	e := &m.entry
 	lw := entryLayouts[e.tab].labelWidth
 	for _, row := range e.rows(e.tab) {
 		colWidth := width
@@ -1042,7 +1051,7 @@ func joinCells(cells []string, width int) []string {
 // bearing and distance to it. A multi-line field takes a line for each line
 // of its text area.
 func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
-	st, e := m.styles, m.entry
+	st, e := m.styles, &m.entry
 	focused := f == e.focus
 	label := st.label.Render(pad(entryLabels[f], lw))
 	if focused {
@@ -1110,7 +1119,7 @@ func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 // entryHandMark returns the mark, styled, of a rig field edited by hand
 // that no longer follows the rig, or "" for any other field.
 func (m Model) entryHandMark(f qsoentry.Field) string {
-	e := m.entry
+	e := &m.entry
 	if m.rig == nil || !e.live || !slices.Contains(entryRigFields, f) || !e.hand[f] {
 		return ""
 	}

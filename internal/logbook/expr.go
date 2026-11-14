@@ -20,6 +20,7 @@ var (
 	_ Expr = Not{}
 	_ Expr = CallContains{}
 	_ Expr = ModeIs{}
+	_ Expr = CallBaseIs{}
 	_ Expr = Filter{}
 )
 
