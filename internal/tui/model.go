@@ -387,7 +387,7 @@ func (m *Model) layout() tea.Cmd {
 	} else {
 		m.idx.setHeight(bodyHeight - indexChrome)
 	}
-	m.sizeEntryNotes(bodyHeight)
+	m.sizeEntryAreas(bodyHeight)
 	if m.logbook == nil {
 		return nil
 	}

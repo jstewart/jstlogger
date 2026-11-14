@@ -318,6 +318,39 @@ func TestEntryNotesAreMultiLine(t *testing.T) {
 	assert.Contains(t, bodyText(m), "New QSO · post", "the status line stays")
 }
 
+func TestEntryQSLMsgIsMultiLine(t *testing.T) {
+	s := newEntryStore(t, nil)
+	s.expectAdd()
+	m := newEntryModel(t, s)
+	m = fill(t, m, paperQSO)
+	m = focusOn(t, m, qsoentry.QSLMsg)
+
+	m = typeText(t, m, "Tnx QSO")
+	m = press(t, m, enter())
+	m = typeText(t, m, "73")
+	assert.Equal(t, "Tnx QSO\n73", entryValue(m, qsoentry.QSLMsg), "enter inserts a newline")
+	assert.Equal(t, qsoentry.QSLMsg, m.entry.focus, "enter doesn't move on")
+	body := bodyText(m)
+	assert.Contains(t, body, "Tnx QSO")
+	assert.Contains(t, body, "73")
+
+	m = press(t, m, tab())
+	assert.Equal(t, "Tnx QSO\n73", entryValue(m, qsoentry.QSLMsg), "tab doesn't go into the message")
+	assert.Equal(t, qsoentry.LoTWSent, m.entry.focus, "tab moves on")
+
+	m = press(t, m, saveKey)
+	require.Len(t, s.added, 1)
+	assert.Equal(t, "Tnx QSO\n73", s.added[0].Fields["QSLMSG"])
+}
+
+func TestEntrySetValueKeepsNewlines(t *testing.T) {
+	e := newEntry()
+	for _, f := range []qsoentry.Field{qsoentry.Notes, qsoentry.QSLMsg} {
+		e.setValue(f, "one\ntwo\nthree")
+		assert.Equal(t, "one\ntwo\nthree", e.value(f), "%s keeps its newlines", entryLabels[f])
+	}
+}
+
 func TestEntrySaveJumpsToTheTabInError(t *testing.T) {
 	s := newEntryStore(t, nil)
 	m := newEntryModel(t, s)

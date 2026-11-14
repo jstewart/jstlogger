@@ -61,12 +61,12 @@ type entry struct {
 	// focus is the field with focus, on the open tab.
 	focus qsoentry.Field
 	// inputs holds a text input for each field typed on one line: every
-	// field but the notes and those picked.
+	// field but those multi-line and those picked.
 	inputs [qsoentry.FieldCount]textinput.Model
 	// pickers holds a picker for each field in entryPicked.
 	pickers [qsoentry.FieldCount]picker
-	// notes is the notes field, which takes many lines.
-	notes textarea.Model
+	// areas holds a text area for each field in entryMultiLine.
+	areas [qsoentry.FieldCount]textarea.Model
 	// stations are the station profiles the station picker picks from.
 	stations []qsoentry.Station
 	// base is the form as opened or last saved. The form has unsaved
@@ -221,8 +221,14 @@ func newEntry() entry {
 		p.show = logbook.QSLSentText
 		e.pickers[f] = p
 	}
-	e.notes = newNotes()
+	for _, f := range entryMultiLine {
+		e.areas[f] = newArea()
+	}
+	e.areas[qsoentry.QSLMsg].SetHeight(entryQSLMsgHeight)
 	for f := range qsoentry.FieldCount {
+		if isMultiLine(f) {
+			continue
+		}
 		in := newInput()
 		in.Prompt = ""
 		in.Placeholder = entryPlaceholders[f]
@@ -235,9 +241,21 @@ func newEntry() entry {
 	return e
 }
 
-// newNotes returns the notes field: lines of text with no prompt or line
+// entryMultiLine are the fields typed on many lines rather than one.
+var entryMultiLine = []qsoentry.Field{qsoentry.Notes, qsoentry.QSLMsg}
+
+// entryQSLMsgHeight is the height of the QSL message field, in lines. The
+// notes take the height of the Notes tab instead.
+const entryQSLMsgHeight = 3
+
+// isMultiLine reports whether field f is typed on many lines.
+func isMultiLine(f qsoentry.Field) bool {
+	return slices.Contains(entryMultiLine, f)
+}
+
+// newArea returns a multi-line field: lines of text with no prompt or line
 // numbers.
-func newNotes() textarea.Model {
+func newArea() textarea.Model {
 	ta := textarea.New()
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
@@ -253,8 +271,8 @@ func newNotes() textarea.Model {
 // value returns the value of field f: its text, or the option picked.
 func (e entry) value(f qsoentry.Field) string {
 	switch {
-	case f == qsoentry.Notes:
-		return e.notes.Value()
+	case isMultiLine(f):
+		return e.areas[f].Value()
 	case isPicked(f):
 		return e.pickers[f].value()
 	}
@@ -267,8 +285,8 @@ func (e entry) value(f qsoentry.Field) string {
 // option.
 func (e *entry) setValue(f qsoentry.Field, v string) {
 	switch {
-	case f == qsoentry.Notes:
-		e.notes.SetValue(v)
+	case isMultiLine(f):
+		e.areas[f].SetValue(v)
 	case isPicked(f):
 		if strings.EqualFold(e.pickers[f].value(), v) {
 			return
@@ -417,14 +435,17 @@ func (e entry) filledIn(f qsoentry.Field, v string) bool {
 
 // focusField gives field f focus, with the cursor at the end of its value.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
-	e.inputs[e.focus].Blur()
-	e.notes.Blur()
+	if isMultiLine(e.focus) {
+		e.areas[e.focus].Blur()
+	} else {
+		e.inputs[e.focus].Blur()
+	}
 	e.focus = f
 	switch {
 	case isPicked(f):
 		return nil
-	case f == qsoentry.Notes:
-		return e.notes.Focus()
+	case isMultiLine(f):
+		return e.areas[f].Focus()
 	}
 	e.inputs[f].CursorEnd()
 	return e.inputs[f].Focus()
@@ -624,8 +645,9 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 				m.applyRigState(m.rigState.state)
 			}
 		}
-	case e.focus == qsoentry.Notes && key.Matches(msg, e.notes.KeyMap.InsertNewline):
-		// Enter starts a new line of the notes rather than moving on.
+	case isMultiLine(e.focus) && key.Matches(msg, e.areas[e.focus].KeyMap.InsertNewline):
+		// Enter starts a new line of a multi-line field rather than moving
+		// on.
 		return m.editEntry(msg)
 	case key.Matches(msg, k.NextField):
 		return m, e.focusField(e.stepFocus(1))
@@ -652,8 +674,8 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 		if ok && e.pickers[e.focus].update(k) && e.focus == qsoentry.StationName {
 			e.fillStation()
 		}
-	case e.focus == qsoentry.Notes:
-		e.notes, cmd = e.notes.Update(msg)
+	case isMultiLine(e.focus):
+		e.areas[e.focus], cmd = e.areas[e.focus].Update(msg)
 	default:
 		in := &e.inputs[e.focus]
 		if k, ok := msg.(tea.KeyPressMsg); ok && key.Matches(k, in.KeyMap.AcceptSuggestion) && in.CurrentSuggestion() != "" {
@@ -923,8 +945,8 @@ func joinCells(cells []string, width int) []string {
 
 // entryCell renders field f, labeled with a label lw cells wide, in width
 // cells. The call is followed by its LoTW status and the grid by the
-// bearing and distance to it. The notes take a line for each line of the
-// field.
+// bearing and distance to it. A multi-line field takes a line for each line
+// of its text area.
 func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 	st, e := m.styles, m.entry
 	focused := f == e.focus
@@ -935,9 +957,9 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 	room := max(width-lw-2, 1)
 	var value string
 	switch {
-	case f == qsoentry.Notes:
+	case isMultiLine(f):
 		// The lines after the first line up under it.
-		value = strings.ReplaceAll(e.notes.View(), "\n", "\n"+strings.Repeat(" ", lw+2))
+		value = strings.ReplaceAll(e.areas[f].View(), "\n", "\n"+strings.Repeat(" ", lw+2))
 	case isPicked(f):
 		value = e.pickers[f].view(st, focused)
 		if mark := m.entryHandMark(f); mark != "" {
@@ -1028,10 +1050,13 @@ func fit(s string, width int) string {
 	return pad(lipgloss.NewStyle().MaxWidth(width).Render(s), width)
 }
 
-// sizeEntryNotes fits the notes field to the Notes tab of a body height
-// lines tall, below the tab bar and above the status line.
-func (m *Model) sizeEntryNotes(height int) {
-	lw := entryLayouts[entryTabNotes].labelWidth
-	m.entry.notes.SetWidth(max(m.bodyWidth()-lw-2, 1))
-	m.entry.notes.SetHeight(max(height-2, 1))
+// sizeEntryAreas fits the multi-line fields to the body width beside their
+// labels, and the notes field to the Notes tab of a body height lines tall,
+// below the tab bar and above the status line.
+func (m *Model) sizeEntryAreas(height int) {
+	for _, f := range entryMultiLine {
+		lw := entryLayouts[entryTabOf(f)].labelWidth
+		m.entry.areas[f].SetWidth(max(m.bodyWidth()-lw-2, 1))
+	}
+	m.entry.areas[qsoentry.Notes].SetHeight(max(height-2, 1))
 }
