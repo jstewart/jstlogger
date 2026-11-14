@@ -475,3 +475,8 @@ involvement will be rejected.
 - **Be there for the review.** Answer questions and make changes yourself.
   Pull requests that are opened and left alone, or that get only automated
   replies, will be closed.
+
+## License
+
+jstlogger is released under the MIT License. See [LICENSE](LICENSE) for
+the full text.
