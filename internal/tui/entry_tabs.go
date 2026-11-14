@@ -156,7 +156,7 @@ func entryTabOf(f qsoentry.Field) entryTab {
 
 // tabs returns the tabs shown, in tab bar order: every tab but Satellite,
 // which only shows while the propagation mode is SAT.
-func (e entry) tabs() []entryTab {
+func (e *entry) tabs() []entryTab {
 	sat := strings.EqualFold(e.pickers[qsoentry.PropMode].value(), "SAT")
 	var ts []entryTab
 	for t := range entryTabCount {
@@ -169,12 +169,12 @@ func (e entry) tabs() []entryTab {
 
 // shown reports whether field f is shown on its tab: every field but the
 // station picker, which only shows with more than one profile to pick.
-func (e entry) shown(f qsoentry.Field) bool {
+func (e *entry) shown(f qsoentry.Field) bool {
 	return f != qsoentry.StationName || len(e.stations) > 1
 }
 
 // rows returns the rows of tab t, holding the fields shown.
-func (e entry) rows(t entryTab) [][]qsoentry.Field {
+func (e *entry) rows(t entryTab) [][]qsoentry.Field {
 	var rows [][]qsoentry.Field
 	for _, row := range entryLayouts[t].rows {
 		var fs []qsoentry.Field
@@ -191,13 +191,13 @@ func (e entry) rows(t entryTab) [][]qsoentry.Field {
 }
 
 // fields returns the fields shown on tab t, in tab order.
-func (e entry) fields(t entryTab) []qsoentry.Field {
+func (e *entry) fields(t entryTab) []qsoentry.Field {
 	return slices.Concat(e.rows(t)...)
 }
 
 // focusable reports whether field f can take focus: it is shown, on a tab
 // shown, and can be edited.
-func (e entry) focusable(f qsoentry.Field) bool {
+func (e *entry) focusable(f qsoentry.Field) bool {
 	return e.shown(f) && slices.Contains(e.tabs(), entryTabOf(f)) && !e.readOnly(f)
 }
 
@@ -232,7 +232,7 @@ func (e *entry) keepTab() tea.Cmd {
 // stepFocus returns the field step fields on from the one with focus,
 // among the open tab's fields, wrapping around and skipping read-only
 // fields.
-func (e entry) stepFocus(step int) qsoentry.Field {
+func (e *entry) stepFocus(step int) qsoentry.Field {
 	fs := e.fields(e.tab)
 	n := len(fs)
 	i := slices.Index(fs, e.focus)

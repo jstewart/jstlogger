@@ -106,7 +106,7 @@ func (m *Model) fetchWorked() tea.Cmd {
 // tickWorked starts the worked-before lookup the tick is for, unless the
 // screen has closed or the form has changed since.
 func (m Model) tickWorked(msg entryWorkedTickMsg) tea.Cmd {
-	e := m.entry
+	e := &m.entry
 	if !e.open || msg.gen != e.gen || msg.key != e.worked.wanted {
 		return nil
 	}
