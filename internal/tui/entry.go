@@ -17,6 +17,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/adif"
+	"jstlogger/internal/editor"
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/qsoentry"
@@ -112,6 +113,16 @@ type entrySavedMsg struct {
 	err   error
 }
 
+// entryEditedMsg reports that the editor opened on field f of the New QSO
+// screen's opening gen has exited, with the error running it, if any. The
+// edited text is in the file at path.
+type entryEditedMsg struct {
+	gen   int
+	field qsoentry.Field
+	path  string
+	err   error
+}
+
 // entryKeyMap holds the keybindings handled while the New QSO screen is
 // open; every other key goes to the field with focus.
 type entryKeyMap struct {
@@ -130,6 +141,9 @@ type entryKeyMap struct {
 	ResetTime key.Binding
 	// SyncRig makes every rig field follow the rig again in live mode.
 	SyncRig key.Binding
+	// Editor opens the field with focus in the user's editor, for the
+	// fields in entryEditorFields.
+	Editor key.Binding
 	// Quit replaces the global quit binding, since q is typed into fields.
 	Quit key.Binding
 }
@@ -186,6 +200,11 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("ctrl+r"),
 			key.WithHelp("ctrl+r", "sync rig"),
 		),
+		// The text areas select all on ctrl+g, which this overrides.
+		Editor: key.NewBinding(
+			key.WithKeys("ctrl+g"),
+			key.WithHelp("ctrl+g", "edit in $EDITOR"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
@@ -194,13 +213,13 @@ func defaultEntryKeys() entryKeyMap {
 }
 
 func (k entryKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.SaveClose, k.NextField, k.NextTab, k.Live, k.Close}
+	return []key.Binding{k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close}
 }
 
 func (k entryKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Save, k.SaveClose, k.Close, k.Quit},
-		{k.NextField, k.PrevField},
+		{k.NextField, k.PrevField, k.Editor},
 		{k.NextTab, k.PrevTab, k.GoTab},
 		{k.Live, k.ResetTime, k.SyncRig},
 	}
@@ -243,6 +262,10 @@ func newEntry() entry {
 
 // entryMultiLine are the fields typed on many lines rather than one.
 var entryMultiLine = []qsoentry.Field{qsoentry.Notes, qsoentry.QSLMsg}
+
+// entryEditorFields are the fields that ctrl+g opens in the user's editor:
+// the long text ones.
+var entryEditorFields = []qsoentry.Field{qsoentry.Comment, qsoentry.Notes, qsoentry.QSLMsg}
 
 // entryQSLMsgHeight is the height of the QSL message field, in lines. The
 // notes take the height of the Notes tab instead.
@@ -645,6 +668,8 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 				m.applyRigState(m.rigState.state)
 			}
 		}
+	case key.Matches(msg, k.Editor) && slices.Contains(entryEditorFields, e.focus):
+		return m.openEditor()
 	case isMultiLine(e.focus) && key.Matches(msg, e.areas[e.focus].KeyMap.InsertNewline):
 		// Enter starts a new line of a multi-line field rather than moving
 		// on.
@@ -687,14 +712,83 @@ func (m Model) editEntry(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		e.inputs[e.focus], cmd = e.inputs[e.focus].Update(msg)
 	}
-	if after := e.form(); after != before {
-		e.markHand(e.focus)
-		e.fillIn(before, after)
-		e.followCall(before, after, m.now())
-		cmd = tea.Batch(cmd, e.keepTab())
-		m.revalidateEntry()
+	return m, tea.Batch(cmd, m.followEdit(e.focus, before))
+}
+
+// followEdit fills in what follows from a change by hand to field f, from
+// the form before, if the form changed, and returns the command that keeps
+// the tab shown.
+func (m *Model) followEdit(f qsoentry.Field, before qsoentry.Form) tea.Cmd {
+	e := &m.entry
+	after := e.form()
+	if after == before {
+		return nil
 	}
-	return m, cmd
+	e.markHand(f)
+	e.fillIn(before, after)
+	e.followCall(before, after, m.now())
+	cmd := e.keepTab()
+	m.revalidateEntry()
+	return cmd
+}
+
+// openEditor opens the field with focus in the user's editor, suspending
+// the screen until it exits. A failure to start it is shown on the status
+// line.
+func (m Model) openEditor() (Model, tea.Cmd) {
+	e := &m.entry
+	argv, err := editor.Command(m.getenv)
+	if err != nil {
+		e.err = fmt.Errorf("open editor: %w", err)
+		return m, nil
+	}
+	f := e.focus
+	cmd, path, err := editor.Prepare(argv, e.value(f))
+	if err != nil {
+		e.err = fmt.Errorf("open editor: %w", err)
+		return m, nil
+	}
+	gen := e.gen
+	return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+		return entryEditedMsg{gen: gen, field: f, path: path, err: err}
+	})
+}
+
+// applyEdited puts the text left by the editor in its field, flattened to
+// one line for the comment, then fills in what follows as for a change by
+// hand. The file is always removed. An editor that failed keeps the old
+// value and shows its error; an edit for a closed screen, or an earlier
+// opening, is dropped, though a failure to read or remove its file still
+// shows on whichever screen is open.
+func (m Model) applyEdited(msg entryEditedMsg) (Model, tea.Cmd) {
+	e := &m.entry
+	text, readErr := editor.ReadBack(msg.path)
+	if !e.open || msg.gen != e.gen {
+		if readErr != nil {
+			err := fmt.Errorf("edit %s: %w", entryLabels[msg.field], readErr)
+			if e.open {
+				e.err = err
+			} else {
+				m.idx.msg = err.Error()
+			}
+		}
+		return m, nil
+	}
+	if err := errors.Join(msg.err, readErr); err != nil {
+		e.err = fmt.Errorf("edit %s: %w", entryLabels[msg.field], err)
+		return m, nil
+	}
+	if isMultiLine(msg.field) {
+		text = editor.MultiLine(text)
+	} else {
+		text = editor.SingleLine(text)
+	}
+	before := e.form()
+	e.setValue(msg.field, text)
+	if !isMultiLine(msg.field) {
+		e.inputs[msg.field].CursorEnd()
+	}
+	return m, m.followEdit(msg.field, before)
 }
 
 // fillIn fills in what follows from a change to the form from before to

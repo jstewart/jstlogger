@@ -4,6 +4,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -63,6 +65,8 @@ type Model struct {
 	// tick is tea.Tick, which the tests replace to send the ticks
 	// themselves.
 	tick func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+	// getenv is os.Getenv, which the tests replace to pick the editor.
+	getenv func(string) string
 
 	// logbook is nil when no logbook is open.
 	logbook logbook.Store
@@ -108,6 +112,7 @@ func New(opts ...Option) Model {
 		entry:      newEntry(),
 		now:        time.Now,
 		tick:       tea.Tick,
+		getenv:     os.Getenv,
 	}
 	for _, opt := range opts {
 		opt(&m)
@@ -217,6 +222,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case entryTickMsg:
 		return m.tickEntry(msg)
+
+	case entryEditedMsg:
+		return m.applyEdited(msg)
 
 	case pagerQSOMsg:
 		q, _ := m.idx.current()
@@ -332,6 +340,7 @@ func (m Model) footerView() string {
 		// The keys number the tabs shown, which the Satellite tab is not
 		// always among.
 		ek.GoTab.SetHelp(fmt.Sprintf("alt+1-%d", len(m.entry.tabs())), ek.GoTab.Help().Desc)
+		ek.Editor.SetEnabled(slices.Contains(entryEditorFields, m.entry.focus))
 		keys = ek
 	}
 	switch {
