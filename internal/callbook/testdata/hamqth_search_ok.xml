@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<HamQTH version="2.8" xmlns="https://www.hamqth.com">
+  <search>
+    <callsign>ok1rr</callsign>
+    <nick> Petr </nick>
+    <qth>Neratovice</qth>
+    <country>Czech Republic</country>
+    <adif>503</adif>
+    <itu>28</itu>
+    <cq>15</cq>
+    <grid>jo70gg</grid>
+    <adr_name>Petr Hlozek</adr_name>
+    <adr_street1>17. listopadu 1065</adr_street1>
+    <adr_city>Neratovice</adr_city>
+    <adr_zip>27711</adr_zip>
+    <adr_country>Czech Republic</adr_country>
+    <us_state></us_state>
+    <us_county></us_county>
+    <email>ok1rr@rajce.net</email>
+    <latitude>50.07</latitude>
+    <longitude>14.42</longitude>
+  </search>
+</HamQTH>

@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<HamQTH version="2.8" xmlns="https://www.hamqth.com">
+  <search>
+    <callsign>k1abc</callsign>
+    <nick>Bob</nick>
+    <qth>Newington</qth>
+    <country>United States</country>
+    <adif>291</adif>
+    <grid>FN31pr</grid>
+    <adr_name>Robert Smith</adr_name>
+    <adr_city>Newington</adr_city>
+    <adr_country>United States</adr_country>
+    <us_state>CT</us_state>
+    <us_county>Hartford</us_county>
+    <email>k1abc@example.com</email>
+  </search>
+</HamQTH>
