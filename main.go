@@ -20,6 +20,7 @@ import (
 
 	"jstlogger/internal/browser"
 	"jstlogger/internal/config"
+	"jstlogger/internal/dxcc"
 	"jstlogger/internal/eqsl"
 	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
@@ -34,9 +35,10 @@ import (
 var version = "dev"
 
 // runTUI starts the terminal UI on store, the rig when the session enables
-// one, and background syncs of the LoTW activity feed and the eQSL AG member
-// list when store is a SQLite logbook, and blocks until the UI exits. Rig
-// events and the syncs' outcomes are logged to logger and sent to the UI.
+// one, and background syncs of the LoTW activity feed, the eQSL AG member
+// list and the DXCC country file when store is a SQLite logbook, and blocks
+// until the UI exits. Rig events and the syncs' outcomes are logged to
+// logger; all but the DXCC sync's are also sent to the UI.
 // Tests replace it so the TUI never starts.
 var runTUI = func(ctx context.Context, session config.Session, store logbook.Store, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -60,11 +62,13 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 
 	var syncer *lotw.Syncer
 	var eqslSyncer *eqsl.Syncer
+	var dxccSyncer *dxcc.Syncer
 	if db, ok := store.(*logbook.SQLiteStore); ok {
 		users := lotw.NewStore(db.DB())
 		syncer = newLoTWSyncer(users)
 		members := eqsl.NewStore(db.DB())
 		eqslSyncer = newEQSLSyncer(members)
+		dxccSyncer = newDXCCSyncer(dxcc.NewStore(db.DB()))
 		tuiOpts = append(tuiOpts, tui.WithLoTW(users), tui.WithEQSL(members))
 	}
 	var r *rig.Rig
@@ -94,6 +98,9 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	}
 	if eqslSyncer != nil {
 		wg.Go(func() { syncEQSLInBackground(ctx, eqslSyncer, logger, p.Send) })
+	}
+	if dxccSyncer != nil {
+		wg.Go(func() { syncDXCCInBackground(ctx, dxccSyncer, logger) })
 	}
 	_, err = p.Run()
 	cancel()
@@ -172,6 +179,7 @@ type options struct {
 	tags               []string
 	syncLoTW           bool
 	syncEQSL           bool
+	syncDXCC           bool
 }
 
 func main() {
@@ -216,6 +224,8 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		return report(stderr, runLoTWSync(ctx, session, stdout))
 	case opts.syncEQSL:
 		return report(stderr, runEQSLSync(ctx, session, stdout))
+	case opts.syncDXCC:
+		return report(stderr, runDXCCSync(ctx, session, stdout))
 	}
 
 	logger, closeLog := slog.New(slog.DiscardHandler), func() error { return nil }
@@ -269,6 +279,8 @@ func newFlagSet(opts *options, stderr io.Writer) *pflag.FlagSet {
 		"(the TUI refreshes it in the background when it is over a week old)")
 	fs.BoolVar(&opts.syncEQSL, "sync-eqsl", false, "download the eQSL Authenticity Guaranteed member list into the logbook now, then exit "+
 		"(the TUI refreshes it in the background when it is over a week old)")
+	fs.BoolVar(&opts.syncDXCC, "sync-dxcc", false, "download AD1C's Big CTY DXCC country file into the logbook now, then exit "+
+		"(the TUI refreshes it in the background when it is over a week old)")
 	fs.BoolVar(&opts.debug, "debug", false, "write a debug log to $XDG_STATE_HOME/jstlogger/debug.log")
 	return fs
 }
@@ -291,7 +303,7 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 	opts.overrides.OperatorSet = fs.Changed("operator")
 
 	var modes []string
-	for _, name := range []string{"check-config", "print-config", "print-default-config", "version", "import-adif", "export-adif", "sync-lotw", "sync-eqsl"} {
+	for _, name := range []string{"check-config", "print-config", "print-default-config", "version", "import-adif", "export-adif", "sync-lotw", "sync-eqsl", "sync-dxcc"} {
 		if fs.Changed(name) {
 			modes = append(modes, "--"+name)
 		}

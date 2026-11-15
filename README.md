@@ -324,7 +324,7 @@ rigctld address (for example `localhost:4532`).
 ### Debug log
 
 Run `jstlogger --debug` to log rig events (state changes, connection
-changes and commands) and the background LoTW and eQSL syncs to `$XDG_STATE_HOME/jstlogger/debug.log`
+changes and commands) and the background LoTW, eQSL and DXCC syncs to `$XDG_STATE_HOME/jstlogger/debug.log`
 (`~/.local/state/jstlogger/debug.log` by default). Watch it with
 `tail -f` in another terminal.
 
@@ -335,6 +335,21 @@ QSOs are stored in a SQLite database at `$XDG_DATA_HOME/jstlogger/logbook.db`
 run and its schema is upgraded automatically at startup. Set
 `[logbook] path` in the config to keep it somewhere else, and
 `distance_unit = "km"` to work in kilometers instead of miles.
+
+The logbook also keeps a copy of AD1C's
+[Big CTY](https://www.country-files.com/big-cty/) country file, which
+maps callsigns to DXCC entities, continents and CQ and ITU zones. The
+program has a copy built in for the first run; when the TUI starts and
+the stored copy is more than a week old, it downloads the latest release
+in the background. AD1C updates it every few weeks for new DXpeditions
+and special-event calls. To refresh it now, run:
+
+```sh
+jstlogger --sync-dxcc   # prints e.g. "DXCC: 6331 prefixes, 21430 exception calls"
+```
+
+The download is conditional, so an unchanged file costs no download and
+prints `DXCC: country file unchanged`.
 
 ### ADIF import and export
 
