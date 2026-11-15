@@ -62,7 +62,9 @@ func (t *Table) Lookup(call string) (Entity, bool) {
 		return Entity{}, false
 	}
 	parts := strings.Split(call, "/")
-	if slices.Contains(parts, "MM") || slices.Contains(parts, "AM") {
+	// Maritime and aeronautical mobile follow the call; before it, MM and
+	// AM are the prefixes of Scotland and Spain.
+	if slices.Contains(parts[1:], "MM") || slices.Contains(parts[1:], "AM") {
 		return Entity{}, false
 	}
 	if e, ok := t.exact[call]; ok {
@@ -75,10 +77,14 @@ func (t *Table) Lookup(call string) (Entity, bool) {
 	}
 	var prefix, area string
 	seenBase := false
-	for _, part := range parts {
+	for i, part := range parts {
 		switch {
 		case len(part) == 1 && part[0] >= '0' && part[0] <= '9':
 			area = part
+		case i == 0 && len(parts) > 1 && part != "" && part != base:
+			// A part before the call is a prefix, even one that reads
+			// as a modifier, such as M for England.
+			prefix = part
 		case callsign.Base(part) == "": // empty or a modifier
 		case part == base && !seenBase:
 			seenBase = true
