@@ -32,6 +32,10 @@ lint:
 vuln:
     govulncheck ./...
 
+# Refresh the embedded DXCC country file from AD1C's country-files.com.
+cty:
+    curl -fsSL -o internal/dxcc/cty.csv https://www.country-files.com/cty/cty.csv
+
 # Install the pinned lint and vulnerability tools into $GOBIN.
 tools:
     go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{golangci_lint_version}}
