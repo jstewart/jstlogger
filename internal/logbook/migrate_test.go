@@ -166,10 +166,10 @@ func TestMigrateRealMigrations(t *testing.T) {
 
 	require.NoError(t, migrate(context.Background(), db, migrations.FS))
 
-	assert.Equal(t, 4, userVersion(t, db))
+	assert.Equal(t, 5, userVersion(t, db))
 	for _, table := range []string{
 		"qso", "qso_adif_field", "qso_confirmation", "tag", "qso_tag", "lotw_user", "lotw_sync",
-		"eqsl_ag", "eqsl_sync",
+		"eqsl_ag", "eqsl_sync", "dxcc_cty",
 	} {
 		assert.True(t, schemaObjectExists(t, db, "table", table), "table %s", table)
 	}
@@ -213,7 +213,7 @@ func TestMigrateAddsLoTWTables(t *testing.T) {
 
 	require.NoError(t, migrate(ctx, db, migrations.FS))
 
-	assert.Equal(t, 4, userVersion(t, db))
+	assert.Equal(t, 5, userVersion(t, db))
 	_, err := db.ExecContext(ctx,
 		"INSERT INTO lotw_user (call, last_upload) VALUES ('W1AW', '2026-11-01T12:00:00Z')")
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestMigrateAddsEQSLTables(t *testing.T) {
 
 	require.NoError(t, migrate(ctx, db, migrations.FS))
 
-	assert.Equal(t, 4, userVersion(t, db))
+	assert.Equal(t, 5, userVersion(t, db))
 	_, err := db.ExecContext(ctx, "INSERT INTO eqsl_ag (call) VALUES ('W1AW')")
 	require.NoError(t, err)
 	_, err = db.ExecContext(ctx, "INSERT INTO eqsl_ag (call) VALUES ('W1AW')")

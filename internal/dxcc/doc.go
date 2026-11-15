@@ -10,6 +10,13 @@
 // snapshot of Big CTY's cty.csv; Default parses it, and Parse reads any
 // other copy. Refresh the snapshot with `just cty`.
 //
+// AD1C releases a new file every few weeks. A Syncer downloads the latest
+// release from DefaultURL, using conditional requests so an unchanged file
+// is not downloaded again, and a Store keeps its cty.csv in the dxcc_cty
+// table of the logbook database, created by the logbook's migrations.
+// Store.Table parses the stored copy, falling back to the snapshot until
+// the first sync.
+//
 // cty.csv lists the current entity for each prefix and exception call, with
 // no dates, so a call resolves to its current entity even when an older
 // QSO with it counted for a different one.

@@ -167,6 +167,7 @@ func TestRunModeFlagsExclusive(t *testing.T) {
 		{"--export-adif", "out.adi"},
 		{"--sync-lotw"},
 		{"--sync-eqsl"},
+		{"--sync-dxcc"},
 	}
 	for i, a := range modes {
 		for _, b := range modes[i+1:] {
