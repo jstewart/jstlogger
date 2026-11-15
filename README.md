@@ -426,7 +426,7 @@ JSTLOGGER_ROUNDTRIP_ADIF=/path/to/log.adi go test -run TestRoundTripExternalFile
 main.go            entry point; parses flags, loads config and starts the app
 internal/adif/     ADIF .adi file reading, writing and comparison
 internal/config/   config file loading, validation and session overrides
-internal/dxcc/     DXCC entity lookup from callsign prefixes (AD1C cty.csv)
+internal/dxcc/     DXCC entity lookup from callsign prefixes (AD1C Big CTY)
 internal/eqsl/     eQSL AG member list download, storage and lookup
 internal/feed/     conditional download and sync metadata shared by the lists
 internal/indexfmt/ QSO index format parsing and column values
@@ -481,3 +481,8 @@ involvement will be rejected.
 
 jstlogger is released under the MIT License. See [LICENSE](LICENSE) for
 the full text.
+
+The DXCC country data is AD1C's
+[Big CTY](https://www.country-files.com/big-cty/) file, distributed under
+the terms in
+[`internal/dxcc/cty-copyright.txt`](internal/dxcc/cty-copyright.txt).

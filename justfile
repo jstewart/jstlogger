@@ -32,9 +32,16 @@ lint:
 vuln:
     govulncheck ./...
 
-# Refresh the embedded DXCC country file from AD1C's country-files.com.
+# Refresh the embedded DXCC country file, and its copyright notice, from
+# AD1C's Big CTY release on country-files.com.
 cty:
-    curl -fsSL -o internal/dxcc/cty.csv https://www.country-files.com/cty/cty.csv
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    curl -fsSL -o "$tmp/bigcty.zip" https://www.country-files.com/bigcty/download/bigcty.zip
+    unzip -p "$tmp/bigcty.zip" cty.csv > internal/dxcc/cty.csv
+    unzip -p "$tmp/bigcty.zip" copyright.txt > internal/dxcc/cty-copyright.txt
 
 # Install the pinned lint and vulnerability tools into $GOBIN.
 tools:

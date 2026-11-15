@@ -154,7 +154,12 @@ func TestDefault(t *testing.T) {
 		cq, itu   int
 	}{
 		{call: "W1AW", dxcc: 291, name: "United States", continent: "NA", cq: 5, itu: 8},
-		{call: "VE3ABC", dxcc: 1, name: "Canada", continent: "NA", cq: 5, itu: 9},
+		{call: "VE3ABC", dxcc: 1, name: "Canada", continent: "NA", cq: 4, itu: 4},
+		{call: "W6ABC", dxcc: 291, name: "United States", continent: "NA", cq: 3, itu: 6},
+		{call: "UA0ABC", dxcc: 15, name: "Asiatic Russia", continent: "AS", cq: 18, itu: 32},
+		// Big CTY's own checks that it, not the contest file, is installed.
+		{call: "OR4TN", dxcc: 13, name: "Antarctica", continent: "SA", cq: 38, itu: 67},
+		{call: "MR6TMS", dxcc: 279, name: "Scotland", continent: "EU", cq: 14, itu: 27},
 		{call: "G4ABC", dxcc: 223, name: "England", continent: "EU", cq: 14, itu: 27},
 		{call: "GM3ZET", dxcc: 279, name: "Scotland", continent: "EU", cq: 14, itu: 27},
 		{call: "JA1ABC", dxcc: 339, name: "Japan", continent: "AS", cq: 25, itu: 45},
