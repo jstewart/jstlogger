@@ -57,16 +57,23 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 	v.SetDefault("logbook.distance_unit", DefaultDistanceUnit)
 	v.SetDefault("index.format", DefaultIndexFormat)
 	v.SetDefault("index.pager_index_lines", DefaultPagerIndexLines)
+	v.SetDefault("callbook.cache_ttl", DefaultCallbookCacheTTL)
 
 	if err := v.ReadInConfig(); err != nil {
 		return Config{}, res, fmt.Errorf("reading config %s: %w", path, err)
 	}
 
-	poll, err := parsePollInterval(v.Get("rig.poll_interval"))
+	poll, err := parseDuration("rig.poll_interval", `"1s"`, v.Get("rig.poll_interval"))
 	if err != nil {
 		return Config{}, res, fmt.Errorf("config %s: %w", path, err)
 	}
 	v.Set("rig.poll_interval", poll)
+
+	ttl, err := parseDuration("callbook.cache_ttl", `"168h"`, v.Get("callbook.cache_ttl"))
+	if err != nil {
+		return Config{}, res, fmt.Errorf("config %s: %w", path, err)
+	}
+	v.Set("callbook.cache_ttl", ttl)
 
 	lines, err := parsePagerIndexLines(v.Get("index.pager_index_lines"))
 	if err != nil {
@@ -123,20 +130,21 @@ func ensureFile(path string, explicit bool) (bool, error) {
 	return true, nil
 }
 
-// parsePollInterval converts the raw rig.poll_interval value to a duration.
-// The file must hold a duration string; the code default is a time.Duration.
-func parsePollInterval(raw any) (time.Duration, error) {
+// parseDuration converts the raw value of the duration option key to a
+// duration. The file must hold a duration string such as example; the code
+// default is a time.Duration.
+func parseDuration(key, example string, raw any) (time.Duration, error) {
 	switch val := raw.(type) {
 	case time.Duration:
 		return val, nil
 	case string:
 		d, err := time.ParseDuration(val)
 		if err != nil {
-			return 0, fmt.Errorf("rig.poll_interval: %w", err)
+			return 0, fmt.Errorf("%s: %w", key, err)
 		}
 		return d, nil
 	default:
-		return 0, fmt.Errorf(`rig.poll_interval: want a duration string such as "1s", got %v`, raw)
+		return 0, fmt.Errorf("%s: want a duration string such as %s, got %v", key, example, raw)
 	}
 }
 
@@ -157,11 +165,14 @@ func parsePagerIndexLines(raw any) (int, error) {
 // applyEntryDefaults fills per-entry defaults that viper cannot express
 // (the table key is dynamic), recovers empty tables that viper drops from
 // Unmarshal, lowercases values that refer to station or profile names, and
-// normalizes logbook.distance_unit.
+// normalizes logbook.distance_unit and callbook.services.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)
 	c.Logbook.DistanceUnit = strings.ToLower(strings.TrimSpace(c.Logbook.DistanceUnit))
+	for i, s := range c.Callbook.Services {
+		c.Callbook.Services[i] = strings.ToLower(strings.TrimSpace(s))
+	}
 
 	for name := range v.GetStringMap("stations") {
 		if _, ok := c.Stations[name]; !ok {

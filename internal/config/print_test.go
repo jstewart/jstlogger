@@ -43,6 +43,16 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 			c.Index.PagerIndexLines = 3
 			return c
 		}},
+		{name: "callbook without passwords", config: func(t *testing.T) Config {
+			c := fullConfig(t)
+			c.Callbook = Callbook{
+				Services: []string{CallbookQRZ},
+				CacheTTL: 0,
+				QRZ:      QRZAccount{Username: "W1AW", FullName: true},
+				HamQTH:   CallbookAccount{Username: "w1aw"},
+			}
+			return c
+		}},
 		{name: "session effective config", config: func(t *testing.T) Config {
 			return resolve(t, Overrides{Station: "portable", Grid: "FN31", POTA: []string{"US-0001"}, NoRig: true}).Config
 		}},
@@ -111,6 +121,51 @@ func TestWriteTOMLLogbook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := fullConfig(t)
 			c.Logbook = tt.logbook
+			out := writeTOML(t, c)
+			for _, w := range tt.want {
+				assert.Contains(t, out, w)
+			}
+			for _, w := range tt.notWant {
+				assert.NotContains(t, out, w)
+			}
+		})
+	}
+}
+
+func TestWriteTOMLCallbook(t *testing.T) {
+	tests := []struct {
+		name     string
+		callbook Callbook
+		want     []string
+		notWant  []string
+	}{
+		{
+			name: "passwords are masked",
+			callbook: Callbook{
+				Services: []string{CallbookQRZ, CallbookHamQTH},
+				CacheTTL: 24 * time.Hour,
+				QRZ:      QRZAccount{Username: "W1AW", Password: "qrz-secret", FullName: true},
+				HamQTH:   CallbookAccount{Username: "w1aw", Password: "hamqth-secret"},
+			},
+			want: []string{
+				"[callbook]", "services = ['qrz', 'hamqth']", "cache_ttl = '24h0m0s'",
+				"[callbook.qrz]", "username = 'W1AW'", "full_name = true",
+				"[callbook.hamqth]", "username = 'w1aw'",
+				"password = '********'",
+			},
+			notWant: []string{"qrz-secret", "hamqth-secret"},
+		},
+		{
+			name:     "empty passwords stay empty",
+			callbook: Callbook{CacheTTL: DefaultCallbookCacheTTL},
+			want:     []string{"cache_ttl = '168h0m0s'", "password = ''"},
+			notWant:  []string{"********"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := fullConfig(t)
+			c.Callbook = tt.callbook
 			out := writeTOML(t, c)
 			for _, w := range tt.want {
 				assert.Contains(t, out, w)

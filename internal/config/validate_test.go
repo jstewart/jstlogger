@@ -254,6 +254,102 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateCallbook(t *testing.T) {
+	both := func(c *Config) {
+		c.Callbook.Services = []string{CallbookQRZ, CallbookHamQTH}
+		c.Callbook.QRZ = QRZAccount{Username: "W1AW", Password: "secret"}
+		c.Callbook.HamQTH = CallbookAccount{Username: "w1aw", Password: "other"}
+	}
+	tests := []struct {
+		name     string
+		mutate   func(c *Config)
+		wantKeys []string
+	}{
+		{
+			name:   "empty services disables lookups",
+			mutate: func(c *Config) { c.Callbook = Callbook{} },
+		},
+		{
+			name:   "both services with credentials",
+			mutate: both,
+		},
+		{
+			name: "credentials for unlisted services are not required",
+			mutate: func(c *Config) {
+				c.Callbook.Services = []string{CallbookHamQTH}
+				c.Callbook.HamQTH = CallbookAccount{Username: "w1aw", Password: "other"}
+			},
+		},
+		{
+			name: "zero cache_ttl is valid",
+			mutate: func(c *Config) {
+				both(c)
+				c.Callbook.CacheTTL = 0
+			},
+		},
+		{
+			name: "unknown service",
+			mutate: func(c *Config) {
+				both(c)
+				c.Callbook.Services = append(c.Callbook.Services, "foo")
+			},
+			wantKeys: []string{"callbook.services"},
+		},
+		{
+			name: "duplicate service",
+			mutate: func(c *Config) {
+				both(c)
+				c.Callbook.Services = append(c.Callbook.Services, CallbookQRZ)
+			},
+			wantKeys: []string{"callbook.services"},
+		},
+		{
+			name: "missing qrz credentials",
+			mutate: func(c *Config) {
+				both(c)
+				c.Callbook.QRZ = QRZAccount{}
+			},
+			wantKeys: []string{"callbook.qrz.username", "callbook.qrz.password"},
+		},
+		{
+			name: "missing hamqth credentials",
+			mutate: func(c *Config) {
+				both(c)
+				c.Callbook.HamQTH = CallbookAccount{}
+			},
+			wantKeys: []string{"callbook.hamqth.username", "callbook.hamqth.password"},
+		},
+		{
+			name: "negative cache_ttl",
+			mutate: func(c *Config) {
+				c.Callbook.CacheTTL = -time.Hour
+			},
+			wantKeys: []string{"callbook.cache_ttl"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := fullConfig(t)
+			tt.mutate(&c)
+			err := c.Validate("")
+			if tt.wantKeys == nil {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, tt.wantKeys, validationKeys(t, err))
+		})
+	}
+}
+
+func TestValidateCallbookUnknownServiceMessage(t *testing.T) {
+	c := fullConfig(t)
+	c.Callbook.Services = []string{"foo"}
+	err := c.Validate("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `callbook.services: unknown service "foo" (want qrz or hamqth)`)
+}
+
 func TestValidateIndexMessage(t *testing.T) {
 	c := fullConfig(t)
 	c.Index.Format = "%Z %q"

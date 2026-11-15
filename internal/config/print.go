@@ -7,14 +7,28 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// tomlConfig mirrors Config for encoding, with rig.poll_interval as a
-// duration string so the output can be loaded again.
+// maskedPassword replaces a non-empty password in WriteTOML's output.
+const maskedPassword = "********"
+
+// tomlConfig mirrors Config for encoding, with rig.poll_interval and
+// callbook.cache_ttl as duration strings so the output can be loaded again.
 type tomlConfig struct {
 	DefaultStation string                 `toml:"default_station"`
 	Stations       map[string]tomlStation `toml:"stations"`
 	Rig            tomlRig                `toml:"rig"`
 	Logbook        tomlLogbook            `toml:"logbook"`
 	Index          Index                  `toml:"index"`
+	Callbook       tomlCallbook           `toml:"callbook"`
+}
+
+// tomlCallbook mirrors Callbook for encoding, with cache_ttl as a duration
+// string. Its accounts carry masked passwords. An unset services list is
+// omitted, as tomlStation omits pota_references.
+type tomlCallbook struct {
+	Services []string        `toml:"services,omitempty"`
+	CacheTTL string          `toml:"cache_ttl"`
+	QRZ      QRZAccount      `toml:"qrz"`
+	HamQTH   CallbookAccount `toml:"hamqth"`
 }
 
 // tomlLogbook mirrors Logbook for encoding, omitting an empty path so the
@@ -51,8 +65,10 @@ type tomlRig struct {
 }
 
 // WriteTOML writes c to w as TOML that Load accepts, with rig.poll_interval
-// as a duration string (e.g. "1s"). Absent [spawn] tables and an empty
-// logbook.path are omitted.
+// and callbook.cache_ttl as duration strings (e.g. "1s"). Absent [spawn]
+// tables and an empty logbook.path are omitted. Non-empty callbook passwords
+// are written as "********", so a config holding passwords does not round
+// trip.
 func WriteTOML(w io.Writer, c Config) error {
 	tc := tomlConfig{
 		DefaultStation: c.DefaultStation,
@@ -64,7 +80,15 @@ func WriteTOML(w io.Writer, c Config) error {
 		},
 		Logbook: tomlLogbook(c.Logbook),
 		Index:   c.Index,
+		Callbook: tomlCallbook{
+			Services: c.Callbook.Services,
+			CacheTTL: c.Callbook.CacheTTL.String(),
+			QRZ:      c.Callbook.QRZ,
+			HamQTH:   c.Callbook.HamQTH,
+		},
 	}
+	tc.Callbook.QRZ.Password = mask(tc.Callbook.QRZ.Password)
+	tc.Callbook.HamQTH.Password = mask(tc.Callbook.HamQTH.Password)
 	for name, s := range c.Stations {
 		tc.Stations[name] = tomlStation(s)
 	}
@@ -72,4 +96,12 @@ func WriteTOML(w io.Writer, c Config) error {
 		return fmt.Errorf("writing config as TOML: %w", err)
 	}
 	return nil
+}
+
+// mask returns maskedPassword for a non-empty password and "" otherwise.
+func mask(password string) string {
+	if password == "" {
+		return ""
+	}
+	return maskedPassword
 }
