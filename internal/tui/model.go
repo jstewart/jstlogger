@@ -190,6 +190,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m.updateIndex(msg)
 		}
 
+	case tea.MouseClickMsg:
+		return m.click(msg.Mouse())
+
 	case indexLoadedMsg:
 		if m.idx.applyLoad(msg) {
 			return m, m.lookupIndexLoTW(msg.rows)
@@ -316,6 +319,7 @@ func (m Model) View() tea.View {
 
 	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, header, body, footer))
 	v.AltScreen = true
+	v.MouseMode = m.mouseMode()
 	return v
 }
 

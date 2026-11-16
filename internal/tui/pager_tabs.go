@@ -78,6 +78,21 @@ func tabLabels(names []string, width int) []string {
 	return labels
 }
 
+// tabAt returns the index of the tab drawn at cell x of a tab bar of the
+// named tabs width cells wide, or -1 when x is on the rule after them or
+// off the bar.
+func tabAt(names []string, width, x int) int {
+	start := 0
+	for i, label := range tabLabels(names, width) {
+		end := start + lipgloss.Width(label)
+		if x >= start && x < end {
+			return i
+		}
+		start = end
+	}
+	return -1
+}
+
 // pagerRow is one labeled row of a pager tab. suffix, already styled,
 // follows a value that leaves room for it, and is dropped otherwise.
 type pagerRow struct{ label, value, suffix string }
