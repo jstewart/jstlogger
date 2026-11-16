@@ -28,6 +28,9 @@ func clickOn(t *testing.T, m Model, y int, text string) tea.MouseClickMsg {
 	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
 }
 
+func wheelDown() tea.MouseWheelMsg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown} }
+func wheelUp() tea.MouseWheelMsg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp} }
+
 // send sends each message to m and runs the commands that follow.
 func send(t *testing.T, m Model, msgs ...tea.Msg) Model {
 	t.Helper()
@@ -138,6 +141,36 @@ func TestPagerTabBarLayoutMatchesClicks(t *testing.T) {
 	assert.Equal(t, -1, tabAt(names, 40, -1))
 }
 
+func TestPagerWheelScrollsTab(t *testing.T) {
+	m, _ := newIndexModel(t, 5, 80, 12)
+	m = pressPager(t, m, enter())
+	bottom := m.pagerBottom()
+	require.Greater(t, bottom, wheelLines, "the QSO tab is taller than the pager")
+	cursor := m.idx.cursor
+
+	m = send(t, m, wheelDown())
+	assert.Equal(t, wheelLines, m.pager.scroll)
+	assert.Equal(t, cursor, m.idx.cursor, "the wheel scrolls the tab, not the index")
+	m = send(t, m, wheelUp())
+	assert.Zero(t, m.pager.scroll)
+	m = send(t, m, wheelUp())
+	assert.Zero(t, m.pager.scroll, "the wheel stops at the top")
+
+	for range bottom {
+		m = send(t, m, wheelDown())
+	}
+	assert.Equal(t, bottom, m.pager.scroll, "the wheel stops at the bottom")
+	m = send(t, m, wheelUp())
+	assert.Equal(t, bottom-wheelLines, m.pager.scroll)
+}
+
+func TestPagerWheelDoesNothingOnShortTab(t *testing.T) {
+	m, _ := newIndexModel(t, 5, 80, 40)
+	m = pressPager(t, m, enter())
+	m = send(t, m, wheelDown())
+	assert.Zero(t, m.pager.scroll)
+}
+
 // entryTabBarY is the screen line of the New QSO screen's tab bar, below
 // the header.
 const entryTabBarY = 1
@@ -209,6 +242,39 @@ func TestMouseIgnoredWhilePromptOpen(t *testing.T) {
 	got := send(t, m, clickOn(t, m, entryTabBarY, " Station "))
 	assert.Equal(t, entryTabQSO, got.entry.tab)
 	assert.True(t, got.promptOpen())
+}
+
+func TestEntryWheelScrollsForm(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m, _ = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 10})
+	require.Equal(t, qsoentry.Date, m.entry.focus)
+	first := func(m Model) string { return m.screenLine(t, entryTabBarY+1) }
+	require.Contains(t, first(m), "Date")
+
+	m = send(t, m, wheelDown())
+	assert.Contains(t, first(m), "Mode", "the wheel scrolls three rows down")
+	assert.Equal(t, qsoentry.Date, m.entry.focus, "focus stays put")
+	m = send(t, m, wheelUp(), wheelUp())
+	assert.Contains(t, first(m), "Date", "the wheel stops at the top")
+
+	for range 50 {
+		m = send(t, m, wheelDown())
+	}
+	body := strings.Split(m.entryView(m.bodyWidth(), m.bodyHeight()), "\n")
+	all, _ := m.entryBody(m.bodyWidth())
+	assert.Equal(t, plain(all[len(all)-1]), plain(body[len(body)-2]), "the wheel stops at the last line")
+
+	m = press(t, m, tab())
+	assert.Equal(t, qsoentry.TimeOn, m.entry.focus)
+	assert.Contains(t, first(m), "Date", "a key press scrolls back to the focused field")
+}
+
+func TestEntryWheelDoesNothingOnShortForm(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m = press(t, m, altKey('2'))
+	before := m.View().Content
+	m = send(t, m, wheelDown())
+	assert.Equal(t, before, m.View().Content)
 }
 
 func TestMouseModeOnlyOnPagerAndEntry(t *testing.T) {

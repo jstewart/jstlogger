@@ -50,6 +50,11 @@ type entry struct {
 	// earlier one is dropped.
 	gen int
 	tab entryTab
+	// wheeled reports whether the wheel has scrolled the form, to show
+	// scroll lines down from its top, since the last key press. Otherwise
+	// the form scrolls to show the focused field.
+	wheeled bool
+	scroll  int
 	// editing reports whether the screen edits orig, a stored QSO, rather
 	// than logging a new one. An edit is always in post mode: the rig is
 	// never applied to it.
@@ -768,6 +773,8 @@ func (e *entry) setTagSuggestions() {
 func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	k, e := m.entryKeys, &m.entry
 	e.msg = ""
+	// A key press scrolls the form back to the focused field.
+	e.wheeled = false
 	switch {
 	case key.Matches(msg, k.Quit):
 		return m, tea.Quit
@@ -1189,12 +1196,25 @@ func (m Model) entryBody(width int) (lines []string, end int) {
 
 // skip returns the number of the n body lines scrolled off the top of a
 // New QSO screen height lines high, below the tab bar and above the status
-// line: just far enough to show the focused row and its errors, which end
-// at line end. The worked-before
+// line: as far as the wheel scrolled them, or else just far enough to show
+// the focused row and its errors, which end at line end. The worked-before
 // panel below the QSO tab's rows is cut first.
 func (e *entry) skip(n, end, height int) int {
 	room := max(height-2, 0)
+	if e.wheeled {
+		return min(max(e.scroll, 0), max(n-room, 0))
+	}
 	return max(end-room, 0)
+}
+
+// wheelEntry scrolls the New QSO screen's body step lines down, or up when
+// step is negative, between its first line and its last.
+func (m *Model) wheelEntry(step int) {
+	e := &m.entry
+	form, end := m.entryBody(m.bodyWidth())
+	e.scroll = e.skip(len(form), end, m.bodyHeight()) + step
+	e.wheeled = true
+	e.scroll = e.skip(len(form), end, m.bodyHeight())
 }
 
 // entryFields renders the open tab's rows, each fitted to width cells and

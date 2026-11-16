@@ -5,9 +5,13 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// mouseMode returns the mouse reporting the screen needs: clicks while the
-// pager or the New QSO screen is open, for their tab bars, and none on the
-// index, which keeps the terminal's own text selection and wheel.
+// wheelLines is the number of lines one step of the mouse wheel scrolls.
+const wheelLines = 3
+
+// mouseMode returns the mouse reporting the screen needs: clicks and the
+// wheel while the pager or the New QSO screen is open, for their tab bars
+// and scrolling, and none on the index, which keeps the terminal's own
+// text selection and wheel.
 func (m Model) mouseMode() tea.MouseMode {
 	if m.logbook != nil && (m.pager.open || m.entry.open) {
 		return tea.MouseModeCellMotion
@@ -43,7 +47,7 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 			return m, nil
 		}
 		if i := tabAt(e.tabNames(), m.bodyWidth(), x); i >= 0 {
-			e.msg = ""
+			e.msg, e.wheeled = "", false
 			return m, e.goTab(e.tabs()[i])
 		}
 	case m.pager.open:
@@ -55,4 +59,29 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// wheel scrolls the open tab of the pager, or the New QSO screen's form,
+// wheelLines lines up or down. It does nothing while a prompt is open.
+func (m Model) wheel(mouse tea.Mouse) Model {
+	if m.logbook == nil || m.promptOpen() {
+		return m
+	}
+	var step int
+	switch mouse.Button {
+	case tea.MouseWheelDown:
+		step = wheelLines
+	case tea.MouseWheelUp:
+		step = -wheelLines
+	default:
+		return m
+	}
+	switch {
+	case m.entry.open:
+		m.wheelEntry(step)
+	case m.pager.open:
+		bottom := m.pagerBottom()
+		m.pager.scroll = min(max(min(m.pager.scroll, bottom)+step, 0), bottom)
+	}
+	return m
 }

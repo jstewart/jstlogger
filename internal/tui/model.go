@@ -193,6 +193,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		return m.click(msg.Mouse())
 
+	case tea.MouseWheelMsg:
+		return m.wheel(msg.Mouse()), nil
+
 	case indexLoadedMsg:
 		if m.idx.applyLoad(msg) {
 			return m, m.lookupIndexLoTW(msg.rows)
