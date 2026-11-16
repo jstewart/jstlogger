@@ -168,9 +168,11 @@ func (e *entry) tabs() []entryTab {
 }
 
 // shown reports whether field f is shown on its tab: every field but the
-// station picker, which only shows with more than one profile to pick.
+// station picker, which only shows with more than one option to pick. The
+// options are the profiles and, for an edited QSO, its stored station when
+// that is none of them.
 func (e *entry) shown(f qsoentry.Field) bool {
-	return f != qsoentry.StationName || len(e.stations) > 1
+	return f != qsoentry.StationName || len(e.picker(qsoentry.StationName).options) > 1
 }
 
 // rows returns the rows of tab t, holding the fields shown.

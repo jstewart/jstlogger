@@ -104,22 +104,27 @@ func (m *Model) fetchWorked() tea.Cmd {
 }
 
 // tickWorked starts the worked-before lookup the tick is for, unless the
-// screen has closed or the form has changed since.
+// screen has closed or the form has changed since. An edited QSO is left
+// out of its own lookup.
 func (m Model) tickWorked(msg entryWorkedTickMsg) tea.Cmd {
 	e := &m.entry
 	if !e.open || msg.gen != e.gen || msg.key != e.worked.wanted {
 		return nil
 	}
-	return workedCmd(m.logbook, msg.gen, msg.key)
+	var exclude int64
+	if e.editing {
+		exclude = e.orig.ID
+	}
+	return workedCmd(m.logbook, msg.gen, msg.key, exclude)
 }
 
 // workedCmd returns a command that looks up k in s for the New QSO
-// screen's opening gen.
-func workedCmd(s logbook.Store, gen int, k workedKey) tea.Cmd {
+// screen's opening gen, leaving out the QSO with ID exclude, if not 0.
+func workedCmd(s logbook.Store, gen int, k workedKey, exclude int64) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
-		res, err := lookupWorked(ctx, s, k)
+		res, err := lookupWorked(ctx, s, k, exclude)
 		if err != nil {
 			err = fmt.Errorf("look up QSOs with %s: %w", k.call, err)
 		}
@@ -129,10 +134,14 @@ func workedCmd(s logbook.Store, gen int, k workedKey) tea.Cmd {
 
 // lookupWorked counts the QSOs in s with the base callsign k.call, in all
 // and on k's band and in its mode, and loads the newest of them. A band or
-// mode that is "" is not counted.
-func lookupWorked(ctx context.Context, s logbook.Store, k workedKey) (workedResult, error) {
+// mode that is "" is not counted. The QSO with ID exclude, the one being
+// edited, is left out when exclude is not 0, as it is not an earlier QSO.
+func lookupWorked(ctx context.Context, s logbook.Store, k workedKey, exclude int64) (workedResult, error) {
 	var res workedResult
-	call := logbook.CallBaseIs{Call: k.call}
+	var call logbook.Expr = logbook.CallBaseIs{Call: k.call}
+	if exclude != 0 {
+		call = logbook.And{call, logbook.Not{X: logbook.Filter{IDs: []int64{exclude}}}}
+	}
 	var err error
 	if res.total, err = s.Count(ctx, call); err != nil || res.total == 0 {
 		return res, err
@@ -165,9 +174,14 @@ func (e *entry) applyWorked(msg entryWorkedMsg) {
 
 // badges returns the worked-before badges of r, the lookup for k: a new
 // call with no earlier QSOs, which is new on every band and mode too, or
-// else a new band or mode with none on k's band or in its mode.
-func (r workedResult) badges(k workedKey) []string {
+// else a new band or mode with none on k's band or in its mode. An edited
+// QSO is never a new call, as it is already in the logbook, so with no
+// earlier QSOs it has no badges.
+func (r workedResult) badges(k workedKey, editing bool) []string {
 	if r.total == 0 {
+		if editing {
+			return nil
+		}
 		return []string{"new call"}
 	}
 	var out []string
@@ -200,7 +214,7 @@ func (m Model) workedView(width int) []string {
 	}
 	heading += "  " + st.muted.Render(plural(w.res.total, "earlier QSO"))
 	if w.key == k {
-		for _, b := range w.res.badges(k) {
+		for _, b := range w.res.badges(k, m.entry.editing) {
 			heading += "  " + st.newBadge.Render(strings.ToUpper(b))
 		}
 	}

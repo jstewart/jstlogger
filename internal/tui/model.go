@@ -220,6 +220,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case entrySavedMsg:
 		return m.applySaved(msg)
 
+	case editLoadedMsg:
+		return m.applyEditLoaded(msg)
+
 	case entryTickMsg:
 		return m.tickEntry(msg)
 
@@ -347,6 +350,10 @@ func (m Model) footerView() string {
 		// always among.
 		ek.GoTab.SetHelp(fmt.Sprintf("alt+1-%d", len(m.entry.tabs())), ek.GoTab.Help().Desc)
 		ek.Editor.SetEnabled(slices.Contains(entryEditorFields, m.entry.focus))
+		// An edited QSO never goes live, so the rig keys do nothing.
+		for _, b := range []*key.Binding{&ek.Live, &ek.ResetTime, &ek.SyncRig} {
+			b.SetEnabled(!m.entry.editing)
+		}
 		keys = ek
 	}
 	switch {
@@ -448,6 +455,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.openPager(), nil
 	case key.Matches(msg, k.NewQSO):
 		return m.openEntry()
+	case key.Matches(msg, k.Edit):
+		return m, m.editCurrent()
 	case key.Matches(msg, k.Mark):
 		x.toggleMark()
 	case key.Matches(msg, k.Jump):
