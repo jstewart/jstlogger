@@ -414,3 +414,34 @@ func TestEditStoreRoundTripWithChanges(t *testing.T) {
 	want.UpdatedAt = after.UpdatedAt
 	assert.Equal(t, want, after, "one edit per tab is stored and nothing else changes")
 }
+
+func TestEditStoreRecalculatesDerivedFields(t *testing.T) {
+	ctx := t.Context()
+	store := openStore(t)
+	q := storedQSO(t, fullForm())
+	q.ID, q.UUID = 0, ""
+	added, err := store.Add(ctx, q)
+	require.NoError(t, err)
+	before, err := store.Get(ctx, added.ID)
+	require.NoError(t, err)
+	require.Equal(t, sql.Null[float64]{V: 123.4, Valid: true}, before.DistanceKm)
+	require.Equal(t, sql.Null[int]{V: 2, Valid: true}, before.ITURegion)
+
+	// A grid in Europe with no ITU zone moves the QSO to region 1, and the
+	// new grid replaces the stored distance with one worked out from it.
+	f := Load(before)
+	f[Gridsquare], f[ITUZ] = "JO62", ""
+	edited, err := Edit(f, before, testNow)
+	require.NoError(t, err)
+	require.NoError(t, store.Update(ctx, edited))
+	after, err := store.Get(ctx, added.ID)
+	require.NoError(t, err)
+
+	fresh, err := Build(f, testNow)
+	require.NoError(t, err)
+	want, err := store.Add(ctx, fresh)
+	require.NoError(t, err)
+	assert.Equal(t, sql.Null[int]{V: 1, Valid: true}, after.ITURegion)
+	require.True(t, want.DistanceKm.Valid)
+	assert.Equal(t, want.DistanceKm, after.DistanceKm, "the distance is worked out from the new grid")
+}
