@@ -299,6 +299,24 @@ redraws the whole screen, which fixes a display the terminal has drawn
 wrong. `f` and `m` are only available when rig control is on. In a prompt,
 press `enter` to submit or `esc` to cancel.
 
+### New QSO tabs
+
+`a` opens the New QSO screen, whose fields are split across the QSO,
+Station, General, Satellite, Notes and QSL tabs. The Satellite tab is
+shown only while the propagation mode is `SAT`.
+
+| Key                   | Action                                      |
+| --------------------- | ------------------------------------------- |
+| `alt+.` / `ctrl+PgDn` | Next tab, wrapping to the first             |
+| `alt+,` / `ctrl+PgUp` | Previous tab, wrapping to the last          |
+| `alt+1`–`alt+6`       | Go to a tab by its position in the tab bar  |
+
+`alt+.` and `alt+,` sit on the `>` and `<` keys and work on keyboards
+without PgUp and PgDn. They work in any field, including Notes, without
+typing a character. On macOS, the `alt` keys need the terminal to send
+Option as Meta (Esc+): in Terminal, tick *Use Option as Meta key*; in
+iTerm2, set the Option key to *Esc+*.
+
 ### Rig control
 
 jstlogger talks to your radio through Hamlib's `rigctld`. It shows the
