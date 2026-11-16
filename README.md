@@ -355,8 +355,10 @@ prints `DXCC: country file unchanged`.
 
 jstlogger can look up a callsign in an online callbook,
 [QRZ.com](https://www.qrz.com/) or [HamQTH](https://www.hamqth.com/), to
-find the operator's name, QTH, grid, state, county and email. Configure
-the services in the `[callbook]` section of the config:
+find the operator's name, QTH, grid, state, county and email. No screen
+uses the lookup yet; the New QSO screen will fill in the station's details
+from it in a later release. Configure the services in the `[callbook]`
+section of the config:
 
 ```toml
 [callbook]
