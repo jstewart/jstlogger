@@ -1140,24 +1140,9 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 // status line.
 func (m Model) entryView(width, height int) string {
 	st, e := m.styles, &m.entry
-	tabs := e.tabs()
-	names := make([]string, len(tabs))
-	for i, t := range tabs {
-		names[i] = entryTabNames[t]
-	}
-	lines := []string{tabBar(st, names, slices.Index(tabs, e.tab), width)}
-	fields, row, rows := m.entryFields(width)
-	// Scroll a window too short for every row to show the focused row and
-	// its errors, keeping the tab bar. end is the line after them. The
-	// worked-before panel below the QSO tab's rows is cut first.
-	end := 1 + row + rows
-	lines = append(lines, fields...)
-	if e.tab == entryTabQSO {
-		lines = append(lines, m.workedView(width)...)
-	}
-	if skip := end - (height - 1); skip > 0 {
-		lines = append(lines[:1], lines[1+skip:]...)
-	}
+	lines := []string{tabBar(st, e.tabNames(), slices.Index(e.tabs(), e.tab), width)}
+	form, end := m.entryBody(width)
+	lines = append(lines, form[e.skip(len(form), end, height):]...)
 	lines = lines[:min(len(lines), max(height-1, 0))]
 	for len(lines) < height-1 {
 		lines = append(lines, "")
@@ -1178,6 +1163,38 @@ func (m Model) entryView(width, height int) string {
 		status += " · " + e.msg
 	}
 	return strings.Join(append(lines, truncate(status, width, "…")), "\n")
+}
+
+// tabNames returns the names in the tab bar of the tabs shown.
+func (e *entry) tabNames() []string {
+	tabs := e.tabs()
+	names := make([]string, len(tabs))
+	for i, t := range tabs {
+		names[i] = entryTabNames[t]
+	}
+	return names
+}
+
+// entryBody returns the lines of the New QSO screen below the tab bar,
+// each fitted to width cells: the open tab's rows and, below the QSO tab's,
+// the worked-before panel. It also returns the line after the focused row
+// and its errors.
+func (m Model) entryBody(width int) (lines []string, end int) {
+	lines, row, rows := m.entryFields(width)
+	if m.entry.tab == entryTabQSO {
+		lines = append(lines, m.workedView(width)...)
+	}
+	return lines, row + rows
+}
+
+// skip returns the number of the n body lines scrolled off the top of a
+// New QSO screen height lines high, below the tab bar and above the status
+// line: just far enough to show the focused row and its errors, which end
+// at line end. The worked-before
+// panel below the QSO tab's rows is cut first.
+func (e *entry) skip(n, end, height int) int {
+	room := max(height-2, 0)
+	return max(end-room, 0)
 }
 
 // entryFields renders the open tab's rows, each fitted to width cells and
