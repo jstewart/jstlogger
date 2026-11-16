@@ -161,13 +161,14 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("shift+tab"),
 			key.WithHelp("shift+tab", "prev field"),
 		),
+		// alt+. and alt+, sit on > and <, for keyboards without PgUp/PgDn.
 		NextTab: key.NewBinding(
-			key.WithKeys("ctrl+pgdown"),
-			key.WithHelp("ctrl+pgdn", "next tab"),
+			key.WithKeys("alt+.", "ctrl+pgdown"),
+			key.WithHelp("alt+./ctrl+pgdn", "next tab"),
 		),
 		PrevTab: key.NewBinding(
-			key.WithKeys("ctrl+pgup"),
-			key.WithHelp("ctrl+pgup", "prev tab"),
+			key.WithKeys("alt+,", "ctrl+pgup"),
+			key.WithHelp("alt+,/ctrl+pgup", "prev tab"),
 		),
 		GoTab: key.NewBinding(
 			key.WithKeys(goTab...),

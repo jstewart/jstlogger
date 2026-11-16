@@ -265,6 +265,50 @@ func TestEntrySatelliteTabFollowsPropMode(t *testing.T) {
 	assert.Equal(t, entryTabNotes, m.entry.tab, "alt+4 is notes again")
 }
 
+func TestEntryAltTabKeys(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+
+	m = press(t, m, altKey(','))
+	assert.Equal(t, entryTabQSL, m.entry.tab, "alt+, wraps")
+	m = press(t, m, altKey('.'))
+	assert.Equal(t, entryTabQSO, m.entry.tab, "alt+. wraps")
+	m = press(t, m, altKey('.'), altKey('.'))
+	assert.Equal(t, entryTabGeneral, m.entry.tab)
+	m = press(t, m, altKey('.'))
+	assert.Equal(t, entryTabNotes, m.entry.tab, "the satellite tab is hidden")
+	m = press(t, m, altKey(','))
+	assert.Equal(t, entryTabGeneral, m.entry.tab, "the satellite tab is hidden going back too")
+	assert.Equal(t, qsoentry.DXCC, m.entry.focus, "a tab opens on its first field")
+}
+
+func TestEntryAltTabKeysDontType(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+
+	m = focusOn(t, m, qsoentry.Call)
+	m = typeText(t, m, "W1AW")
+	m = press(t, m, altKey('.'), altKey(','))
+	assert.Equal(t, entryTabQSO, m.entry.tab)
+	assert.Equal(t, "W1AW", entryValue(m, qsoentry.Call), "nothing is typed in a text input")
+
+	m = press(t, m, altKey('4'))
+	require.Equal(t, qsoentry.Notes, m.entry.focus)
+	m = typeText(t, m, "note")
+	m = press(t, m, altKey('.'))
+	assert.Equal(t, entryTabQSL, m.entry.tab, "alt+. leaves the notes")
+	m = press(t, m, altKey(','))
+	assert.Equal(t, entryTabNotes, m.entry.tab, "alt+, returns to the notes")
+	assert.Equal(t, "note", entryValue(m, qsoentry.Notes), "nothing is typed in the notes")
+}
+
+func TestEntryHelpShowsAltTabKeys(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	assert.Regexp(t, `alt\+\./ctrl\+pgdn\s+next tab`, plain(m.footerView()))
+
+	m.help.ShowAll = true
+	assert.Regexp(t, `alt\+\./ctrl\+pgdn\s+next tab`, plain(m.footerView()))
+	assert.Regexp(t, `alt\+,/ctrl\+pgup\s+prev tab`, plain(m.footerView()))
+}
+
 func TestEntryHelpCountsTabsShown(t *testing.T) {
 	m := newEntryModel(t, newEntryStore(t, nil))
 	m.help.ShowAll = true
