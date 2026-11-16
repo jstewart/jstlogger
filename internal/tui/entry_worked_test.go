@@ -60,7 +60,7 @@ func TestLookupWorked(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := lookupWorked(t.Context(), s, tt.key)
+			res, err := lookupWorked(t.Context(), s, tt.key, 0)
 			require.NoError(t, err)
 			assert.Equal(t, tt.total, res.total)
 			assert.Equal(t, tt.badges, res.badges(tt.key))
@@ -82,7 +82,7 @@ func TestLookupWorkedListsTheNewest(t *testing.T) {
 	}
 	s := newWorkedStore(t, qsos...)
 
-	res, err := lookupWorked(t.Context(), s, workedKey{"W1AW", "20m", "CW"})
+	res, err := lookupWorked(t.Context(), s, workedKey{"W1AW", "20m", "CW"}, 0)
 	require.NoError(t, err)
 	assert.Equal(t, workedRecent+2, res.total)
 	require.Len(t, res.recent, workedRecent)
@@ -253,4 +253,41 @@ func TestEntryWorkedCountsTheSavedQSO(t *testing.T) {
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Call: "W1AW"})
 	m = sendWorkedTick(t, m, lastTick(t, *ticks))
 	assert.Contains(t, bodyText(m), "4 earlier QSOs")
+}
+
+func TestLookupWorkedLeavesOutTheEditedQSO(t *testing.T) {
+	s := newWorkedStore(t, workedQSOs...)
+	ids, err := s.IDs(t.Context(), logbook.CallBaseIs{Call: "W1AW"})
+	require.NoError(t, err)
+	require.Len(t, ids, 3)
+	oldest := ids[len(ids)-1]
+
+	k := workedKey{"W1AW", "20m", "SSB"}
+	res, err := lookupWorked(t.Context(), s, k, oldest)
+	require.NoError(t, err)
+	assert.Equal(t, 2, res.total)
+	assert.Equal(t, 1, res.onBand)
+	assert.Zero(t, res.onMode, "the only SSB QSO is the one left out")
+	for _, q := range res.recent {
+		assert.NotEqual(t, oldest, q.ID)
+	}
+}
+
+func TestEntryWorkedLeavesOutTheEditedQSO(t *testing.T) {
+	s := newWorkedStore(t, workedQSOs...)
+	ids, err := s.IDs(t.Context(), logbook.CallBaseIs{Call: "W1AW"})
+	require.NoError(t, err)
+	q, err := s.Get(t.Context(), ids[len(ids)-1])
+	require.NoError(t, err)
+	require.Equal(t, "W1AW", q.Call)
+
+	m, ticks := newWorkedModel(t, s)
+	m = m.closeEntry()
+	m, _ = update(t, m, editLoadedMsg{qso: q})
+	require.True(t, m.entry.editing)
+
+	m = sendWorkedTick(t, m, lastTick(t, *ticks))
+	body := bodyText(m)
+	assert.Contains(t, body, "Worked before  W1AW  2 earlier QSOs  NEW MODE")
+	assert.NotContains(t, body, "59 / 57", "the edited QSO is not listed")
 }
