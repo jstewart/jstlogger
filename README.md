@@ -158,6 +158,8 @@ the pager is open, `q` closes it instead of quitting; `ctrl+c` still quits.
 shows which one is active. The tab stays the same as you move between
 QSOs.
 
+`e` edits the QSO shown in the pager, as it does in the index.
+
 - **QSO** — the details above.
 - **Station** — the station callsign, operator, station grid, TX power
   and station name, followed by any `MY_*` ADIF fields such as `MY_RIG`
@@ -288,6 +290,7 @@ The index keys follow NeoMutt's generic menu.
 | `l`                       | Limit the index to the QSOs matching a pattern     |
 | `ctrl+l`                  | Reload the index and redraw the screen             |
 | `enter`                   | [Show the QSO](#showing-a-qso) in the pager        |
+| `e`                       | [Edit the QSO](#editing-a-qso)                     |
 | `f`                       | Set the rig frequency                              |
 | `m`                       | Set the rig mode                                   |
 | `?`                       | Show or hide full help                             |
@@ -316,6 +319,20 @@ without PgUp and PgDn. They work in any field, including Notes, without
 typing a character. On macOS, the `alt` keys need the terminal to send
 Option as Meta (Esc+): in Terminal, tick *Use Option as Meta key*; in
 iTerm2, set the Option key to *Esc+*.
+
+### Editing a QSO
+
+`e` in the index or the pager opens the selected QSO in the New QSO
+form, in post mode, with every tab filled from the logbook. Saving
+updates the QSO in place and keeps it selected; the distance and ITU
+region are recalculated from the saved values. ADIF fields the form
+doesn't show, and QSL details such as received status and dates, are
+kept as they were. `esc` asks before discarding unsaved changes.
+
+The QSO's station values are shown as stored, even when they differ
+from the current profile; choosing a profile on the Station tab replaces
+them. The rig never changes an edited QSO, and live mode is off while
+editing.
 
 ### Rig control
 
