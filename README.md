@@ -332,7 +332,8 @@ kept as they were. `esc` asks before discarding unsaved changes.
 The QSO's station values are shown as stored, even when they differ
 from the current profile; choosing a profile on the Station tab replaces
 them. The rig never changes an edited QSO, and live mode is off while
-editing. The worked-before panel leaves out the QSO being edited.
+editing. The worked-before panel leaves out the QSO being edited, and
+never marks its call as new.
 
 ### Rig control
 

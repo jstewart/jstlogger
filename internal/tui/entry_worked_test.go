@@ -63,7 +63,7 @@ func TestLookupWorked(t *testing.T) {
 			res, err := lookupWorked(t.Context(), s, tt.key, 0)
 			require.NoError(t, err)
 			assert.Equal(t, tt.total, res.total)
-			assert.Equal(t, tt.badges, res.badges(tt.key))
+			assert.Equal(t, tt.badges, res.badges(tt.key, false))
 			if tt.wantRecent != nil {
 				var calls []string
 				for _, q := range res.recent {
@@ -268,6 +268,7 @@ func TestLookupWorkedLeavesOutTheEditedQSO(t *testing.T) {
 	assert.Equal(t, 2, res.total)
 	assert.Equal(t, 1, res.onBand)
 	assert.Zero(t, res.onMode, "the only SSB QSO is the one left out")
+	assert.Equal(t, []string{"new mode"}, res.badges(k, true))
 	for _, q := range res.recent {
 		assert.NotEqual(t, oldest, q.ID)
 	}
@@ -290,4 +291,24 @@ func TestEntryWorkedLeavesOutTheEditedQSO(t *testing.T) {
 	body := bodyText(m)
 	assert.Contains(t, body, "Worked before  W1AW  2 earlier QSOs  NEW MODE")
 	assert.NotContains(t, body, "59 / 57", "the edited QSO is not listed")
+}
+
+func TestEntryWorkedEditedOnlyQSOIsNotANewCall(t *testing.T) {
+	s := newWorkedStore(t, workedQSOs...)
+	ids, err := s.IDs(t.Context(), logbook.CallBaseIs{Call: "K1ABC"})
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
+	q, err := s.Get(t.Context(), ids[0])
+	require.NoError(t, err)
+
+	m, ticks := newWorkedModel(t, s)
+	m = m.closeEntry()
+	m, _ = update(t, m, editLoadedMsg{qso: q})
+	require.True(t, m.entry.editing)
+
+	m = sendWorkedTick(t, m, lastTick(t, *ticks))
+	body := bodyText(m)
+	assert.Contains(t, body, "Worked before  K1ABC  0 earlier QSOs")
+	assert.NotContains(t, body, "NEW CALL", "the edited QSO itself was the call's first")
+	assert.Empty(t, workedResult{}.badges(workedKey{"K1ABC", "15m", "FT8"}, true))
 }

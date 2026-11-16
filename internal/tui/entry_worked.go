@@ -174,9 +174,14 @@ func (e *entry) applyWorked(msg entryWorkedMsg) {
 
 // badges returns the worked-before badges of r, the lookup for k: a new
 // call with no earlier QSOs, which is new on every band and mode too, or
-// else a new band or mode with none on k's band or in its mode.
-func (r workedResult) badges(k workedKey) []string {
+// else a new band or mode with none on k's band or in its mode. An edited
+// QSO is never a new call, as it is already in the logbook, so with no
+// earlier QSOs it has no badges.
+func (r workedResult) badges(k workedKey, editing bool) []string {
 	if r.total == 0 {
+		if editing {
+			return nil
+		}
 		return []string{"new call"}
 	}
 	var out []string
@@ -209,7 +214,7 @@ func (m Model) workedView(width int) []string {
 	}
 	heading += "  " + st.muted.Render(plural(w.res.total, "earlier QSO"))
 	if w.key == k {
-		for _, b := range w.res.badges(k) {
+		for _, b := range w.res.badges(k, m.entry.editing) {
 			heading += "  " + st.newBadge.Render(strings.ToUpper(b))
 		}
 	}
