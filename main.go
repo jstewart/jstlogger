@@ -325,10 +325,11 @@ func parseFlags(args []string, stderr io.Writer) (opts options, code int, ok boo
 	return opts, exitOK, true
 }
 
-// loadSession finds, loads and validates the config, applies the session
-// overrides and fills in the default logbook path, reporting warnings and
-// errors to stderr. It returns the config path and the resolved session; ok
-// is false on any error.
+// loadSession finds and loads the config, warns when the file exposes
+// callbook passwords, applies environment overrides, validates the result,
+// applies the session overrides and fills in the default logbook path,
+// reporting warnings and errors to stderr. It returns the config path and
+// the resolved session; ok is false on any error.
 func loadSession(opts options, getenv func(string) string, stderr io.Writer) (string, config.Session, bool) {
 	path, explicit := opts.configPath, opts.configPath != ""
 	if !explicit {
@@ -351,6 +352,17 @@ func loadSession(opts options, getenv func(string) string, stderr io.Writer) (st
 	if res.Created {
 		printStderr(stderr, "jstlogger: created %s with the default config\n", path)
 	}
+
+	// Check the file's own passwords before the environment adds any.
+	warn, err := config.PermissionWarning(path, cfg)
+	if err != nil {
+		report(stderr, fmt.Errorf("loading config: %w", err))
+		return path, config.Session{}, false
+	}
+	if warn != "" {
+		printStderr(stderr, "jstlogger: warning: %s: %s\n", path, warn)
+	}
+	cfg.ApplyEnv(getenv)
 
 	if err := cfg.Validate(opts.overrides.Station); err != nil {
 		printErrors(stderr, "invalid config file "+path, err)

@@ -339,3 +339,71 @@ func TestLoadInvalidTOML(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), p)
 }
+
+func TestLoadCallbook(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    Callbook
+		wantErr []string
+	}{
+		{
+			name:    "defaults when the table is absent",
+			content: "",
+			want:    Callbook{CacheTTL: DefaultCallbookCacheTTL},
+		},
+		{
+			name: "all keys",
+			content: `[callbook]
+services  = [" QRZ ", "HamQTH"]
+cache_ttl = "24h"
+
+[callbook.qrz]
+username  = "W1AW"
+password  = "secret"
+full_name = true
+
+[callbook.hamqth]
+username = "w1aw"
+password = "other"
+`,
+			want: Callbook{
+				Services: []string{CallbookQRZ, CallbookHamQTH},
+				CacheTTL: 24 * time.Hour,
+				QRZ:      QRZAccount{Username: "W1AW", Password: "secret", FullName: true},
+				HamQTH:   CallbookAccount{Username: "w1aw", Password: "other"},
+			},
+		},
+		{
+			name:    "zero cache_ttl keeps calls for the session only",
+			content: "[callbook]\ncache_ttl = \"0\"\n",
+			want:    Callbook{CacheTTL: 0},
+		},
+		{
+			name:    "invalid cache_ttl",
+			content: "[callbook]\ncache_ttl = \"forever\"\n",
+			wantErr: []string{"callbook.cache_ttl", `"forever"`},
+		},
+		{
+			name:    "bare number cache_ttl",
+			content: "[callbook]\ncache_ttl = 5\n",
+			wantErr: []string{"callbook.cache_ttl", "5"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := writeConfig(t, tt.content)
+			c, res, err := Load(p, true)
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				for _, s := range tt.wantErr {
+					assert.Contains(t, err.Error(), s)
+				}
+				return
+			}
+			require.NoError(t, err)
+			assert.Empty(t, res.Warnings)
+			assert.Equal(t, tt.want, c.Callbook)
+		})
+	}
+}

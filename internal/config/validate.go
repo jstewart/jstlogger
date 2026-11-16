@@ -42,6 +42,7 @@ func (c Config) Validate(station string) error {
 	errs = append(errs, c.validateRig()...)
 	errs = append(errs, c.validateLogbook()...)
 	errs = append(errs, c.validateIndex()...)
+	errs = append(errs, c.validateCallbook()...)
 	return errors.Join(errs...)
 }
 
@@ -151,6 +152,43 @@ func (c Config) validateIndex() []error {
 	}
 	if c.Index.PagerIndexLines < 0 {
 		errs = append(errs, invalid("index.pager_index_lines", "must be 0 or more, got %d", c.Index.PagerIndexLines))
+	}
+	return errs
+}
+
+// validateCallbook checks the [callbook] table: every listed service must be
+// known, listed once and have a username and password. Credentials for
+// unlisted services are not required.
+func (c Config) validateCallbook() []error {
+	var errs []error
+	var seen []string
+	for _, svc := range c.Callbook.Services {
+		var acct CallbookAccount
+		switch svc {
+		case CallbookQRZ:
+			acct = CallbookAccount{Username: c.Callbook.QRZ.Username, Password: c.Callbook.QRZ.Password}
+		case CallbookHamQTH:
+			acct = c.Callbook.HamQTH
+		default:
+			errs = append(errs, invalid("callbook.services", "unknown service %q (want %s or %s)", svc, CallbookQRZ, CallbookHamQTH))
+			continue
+		}
+		if slices.Contains(seen, svc) {
+			errs = append(errs, invalid("callbook.services", "service %q is listed more than once", svc))
+			continue
+		}
+		seen = append(seen, svc)
+
+		prefix := "callbook." + svc + "."
+		if acct.Username == "" {
+			errs = append(errs, invalid(prefix+"username", "required when %q is in callbook.services", svc))
+		}
+		if acct.Password == "" {
+			errs = append(errs, invalid(prefix+"password", "required when %q is in callbook.services", svc))
+		}
+	}
+	if c.Callbook.CacheTTL < 0 {
+		errs = append(errs, invalid("callbook.cache_ttl", "must be 0 or more, got %s", c.Callbook.CacheTTL))
 	}
 	return errs
 }

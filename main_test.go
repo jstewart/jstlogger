@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -662,4 +664,82 @@ func TestStationProfiles(t *testing.T) {
 		require.Len(t, got, 1)
 		assert.Equal(t, "Home", got[0].Name)
 	})
+}
+
+// callbookConfig is validConfig with both callbook services listed and their
+// usernames set, but no passwords.
+const callbookConfig = validConfig + `
+[callbook]
+services = ["qrz", "hamqth"]
+
+[callbook.qrz]
+username = "W1AW"
+
+[callbook.hamqth]
+username = "w1aw"
+`
+
+// callbookVars returns invoke's default environment plus extra.
+func callbookVars(t *testing.T, extra map[string]string) map[string]string {
+	t.Helper()
+	vars := map[string]string{"XDG_CONFIG_HOME": t.TempDir(), "XDG_DATA_HOME": t.TempDir()}
+	maps.Copy(vars, extra)
+	return vars
+}
+
+func TestRunCallbookEnvPasswordSatisfiesValidation(t *testing.T) {
+	p := writeConfig(t, callbookConfig)
+
+	r := invoke(t, nil, nil, "-c", p, "--check-config")
+	assert.Equal(t, 1, r.code)
+	assert.Contains(t, r.stderr, "callbook.qrz.password: required")
+	assert.Contains(t, r.stderr, "callbook.hamqth.password: required")
+
+	r = invoke(t, callbookVars(t, map[string]string{
+		config.EnvQRZPassword:    "env-qrz",
+		config.EnvHamQTHPassword: "env-hamqth",
+	}), nil, "-c", p, "--check-config")
+	assert.Equal(t, 0, r.code, r.stderr)
+	assert.Empty(t, r.stderr, "env passwords never trigger the permission warning")
+}
+
+func TestRunCallbookPermissionWarning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes are not meaningful on Windows")
+	}
+	content := callbookConfig + "password = \"file-hamqth\"\n"
+	content = strings.Replace(content, "username = \"W1AW\"\n", "username = \"W1AW\"\npassword = \"file-qrz\"\n", 1)
+
+	tests := []struct {
+		name     string
+		mode     os.FileMode
+		wantWarn bool
+	}{
+		{name: "0644 warns", mode: 0o644, wantWarn: true},
+		{name: "0600 is quiet", mode: 0o600},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := writeConfig(t, content)
+			require.NoError(t, os.Chmod(p, tt.mode))
+			r := invoke(t, nil, nil, "-c", p, "--check-config")
+			assert.Equal(t, 0, r.code, r.stderr)
+			if tt.wantWarn {
+				assert.Contains(t, r.stderr, "jstlogger: warning: "+p+": ")
+				assert.Contains(t, r.stderr, "chmod 600")
+			} else {
+				assert.Empty(t, r.stderr)
+			}
+		})
+	}
+}
+
+func TestRunPrintConfigMasksCallbookPasswords(t *testing.T) {
+	content := strings.Replace(callbookConfig, "username = \"W1AW\"\n", "username = \"W1AW\"\npassword = \"file-qrz\"\n", 1)
+	p := writeConfig(t, content)
+	r := invoke(t, callbookVars(t, map[string]string{config.EnvHamQTHPassword: "env-hamqth"}), nil, "-c", p, "--print-config")
+	require.Equal(t, 0, r.code, r.stderr)
+	assert.NotContains(t, r.stdout, "file-qrz")
+	assert.NotContains(t, r.stdout, "env-hamqth")
+	assert.Equal(t, 2, strings.Count(r.stdout, "password = '********'"))
 }

@@ -351,6 +351,44 @@ jstlogger --sync-dxcc   # prints e.g. "DXCC: 6331 prefixes, 21430 exception call
 The download is conditional, so an unchanged file costs no download and
 prints `DXCC: country file unchanged`.
 
+### Callbook lookup
+
+jstlogger can look up a callsign in an online callbook,
+[QRZ.com](https://www.qrz.com/) or [HamQTH](https://www.hamqth.com/), to
+find the operator's name, QTH, grid, state, county and email. No screen
+uses the lookup yet; the New QSO screen will fill in the station's details
+from it in a later release. Configure the services in the `[callbook]`
+section of the config:
+
+```toml
+[callbook]
+# Services to try, in order, until one finds the call. Empty disables lookups.
+services = ["qrz", "hamqth"]
+cache_ttl = "168h"     # how long to keep a found call; "0" keeps it for the session only
+
+[callbook.qrz]
+username = "W1AW"
+password = "..."
+full_name = false      # true adds the last name to the first name
+
+[callbook.hamqth]
+username = "w1aw"
+password = "..."
+```
+
+Any QRZ.com account can log in, but without an XML data subscription QRZ
+returns limited data, mainly the name and basic address, and allows only a
+few lookups a day. HamQTH is free with an account. For a portable call
+such as `VE3/W1AW` or `W1AW/P`, jstlogger looks up the base call and keeps
+the name, but not the grid or location, which may not apply where the
+station is operating.
+
+The passwords live in the config file, so keep it private with
+`chmod 600`; jstlogger warns at startup when the file holds a password and
+can be read by group or others. To keep the passwords out of the file, set
+`JSTLOGGER_QRZ_PASSWORD` and `JSTLOGGER_HAMQTH_PASSWORD` instead; they
+override the file. `--print-config` masks the passwords.
+
 ### ADIF import and export
 
 jstlogger reads and writes ADIF `.adi` files from the command line, so you
@@ -440,6 +478,7 @@ JSTLOGGER_ROUNDTRIP_ADIF=/path/to/log.adi go test -run TestRoundTripExternalFile
 ```
 main.go            entry point; parses flags, loads config and starts the app
 internal/adif/     ADIF .adi file reading, writing and comparison
+internal/callbook/ QRZ.com and HamQTH callbook lookups, with caching
 internal/config/   config file loading, validation and session overrides
 internal/dxcc/     DXCC entity lookup from callsign prefixes (AD1C Big CTY)
 internal/eqsl/     eQSL AG member list download, storage and lookup

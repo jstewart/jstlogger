@@ -20,6 +20,20 @@ default_station = "home"
 name       = "Home QTH"
 callsign   = ""   # Required, e.g. "N0CALL"
 gridsquare = ""   # Required, e.g. "CM87WJ"
+
+# Callbook lookup: the QRZ.com and HamQTH accounts used to look up calls.
+# [callbook]
+# services  = ["qrz", "hamqth"]   # Tried in order until one finds the call; empty disables lookups
+# cache_ttl = "168h"              # How long to keep a found call; "0" keeps it for the session only
+#
+# [callbook.qrz]
+# username  = "W1AW"
+# password  = "..."               # Or set JSTLOGGER_QRZ_PASSWORD
+# full_name = false               # true adds the last name to the first name
+#
+# [callbook.hamqth]
+# username = "w1aw"
+# password = "..."                # Or set JSTLOGGER_HAMQTH_PASSWORD
 `
 
 // wantFullExample is the "Full Configuration Example" from issue #2, verbatim.
@@ -80,6 +94,19 @@ distance_unit = "mi"             # "mi" | "km"
 # Columns of the QSO index; see the README's Index format section.
 format            = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S"
 pager_index_lines = 10   # Index rows kept above the QSO pager
+
+# [callbook]
+# services  = ["qrz", "hamqth"]   # Tried in order until one finds the call; empty disables lookups
+# cache_ttl = "168h"              # How long to keep a found call; "0" keeps it for the session only
+#
+# [callbook.qrz]
+# username  = "W1AW"
+# password  = "..."               # Or set JSTLOGGER_QRZ_PASSWORD
+# full_name = false               # true adds the last name to the first name
+#
+# [callbook.hamqth]
+# username = "w1aw"
+# password = "..."                # Or set JSTLOGGER_HAMQTH_PASSWORD
 `
 
 func TestDefaultTemplateMatchesIssue(t *testing.T) {
@@ -141,7 +168,8 @@ func TestFullExampleLoads(t *testing.T) {
 				"portable": {Backend: BackendRigctld, Host: "localhost", Port: 4533},
 			},
 		},
-		Logbook: Logbook{DistanceUnit: DistanceUnitMi},
-		Index:   Index{Format: indexfmt.Default, PagerIndexLines: 10},
+		Logbook:  Logbook{DistanceUnit: DistanceUnitMi},
+		Index:    Index{Format: indexfmt.Default, PagerIndexLines: 10},
+		Callbook: Callbook{CacheTTL: DefaultCallbookCacheTTL},
 	}, c)
 }

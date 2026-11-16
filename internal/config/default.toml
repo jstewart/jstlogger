@@ -7,3 +7,17 @@ default_station = "home"
 name       = "Home QTH"
 callsign   = ""   # Required, e.g. "N0CALL"
 gridsquare = ""   # Required, e.g. "CM87WJ"
+
+# Callbook lookup: the QRZ.com and HamQTH accounts used to look up calls.
+# [callbook]
+# services  = ["qrz", "hamqth"]   # Tried in order until one finds the call; empty disables lookups
+# cache_ttl = "168h"              # How long to keep a found call; "0" keeps it for the session only
+#
+# [callbook.qrz]
+# username  = "W1AW"
+# password  = "..."               # Or set JSTLOGGER_QRZ_PASSWORD
+# full_name = false               # true adds the last name to the first name
+#
+# [callbook.hamqth]
+# username = "w1aw"
+# password = "..."                # Or set JSTLOGGER_HAMQTH_PASSWORD

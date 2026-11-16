@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<HamQTH version="2.8" xmlns="https://www.hamqth.com">
+  <session>
+    <error>Wrong user name or password</error>
+  </session>
+</HamQTH>

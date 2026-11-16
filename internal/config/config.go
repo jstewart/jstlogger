@@ -35,6 +35,16 @@ const (
 	DefaultIndexFormat = indexfmt.Default
 	// DefaultPagerIndexLines is the default index.pager_index_lines.
 	DefaultPagerIndexLines = 10
+	// DefaultCallbookCacheTTL is the default callbook.cache_ttl.
+	DefaultCallbookCacheTTL = 168 * time.Hour
+)
+
+// Callbook services accepted in callbook.services.
+const (
+	// CallbookQRZ is the QRZ.com XML data service.
+	CallbookQRZ = "qrz"
+	// CallbookHamQTH is the HamQTH.com XML service.
+	CallbookHamQTH = "hamqth"
 )
 
 // Distance units accepted in logbook.distance_unit.
@@ -57,6 +67,44 @@ type Config struct {
 	Logbook Logbook `mapstructure:"logbook" toml:"logbook"`
 	// Index is the [index] table.
 	Index Index `mapstructure:"index" toml:"index"`
+	// Callbook is the [callbook] table.
+	Callbook Callbook `mapstructure:"callbook" toml:"callbook"`
+}
+
+// Callbook is the [callbook] table, which configures looking up the call
+// being logged in an online callbook.
+type Callbook struct {
+	// Services lists the callbook services to try, in order, until one
+	// finds the call: CallbookQRZ or CallbookHamQTH. Empty disables
+	// lookups. Load trims and lowercases each entry.
+	Services []string `mapstructure:"services" toml:"services"`
+	// CacheTTL is how long a found call is kept. 0 keeps it for the
+	// session only.
+	CacheTTL time.Duration `mapstructure:"cache_ttl" toml:"cache_ttl"`
+	// QRZ is the [callbook.qrz] table.
+	QRZ QRZAccount `mapstructure:"qrz" toml:"qrz"`
+	// HamQTH is the [callbook.hamqth] table.
+	HamQTH CallbookAccount `mapstructure:"hamqth" toml:"hamqth"`
+}
+
+// CallbookAccount holds the login for one callbook service.
+type CallbookAccount struct {
+	// Username is the account's login name.
+	Username string `mapstructure:"username" toml:"username"`
+	// Password is the account's password. An environment variable may
+	// override it; see Config.ApplyEnv.
+	Password string `mapstructure:"password" toml:"password"`
+}
+
+// QRZAccount is the [callbook.qrz] table: the QRZ.com login plus its
+// display options.
+type QRZAccount struct {
+	// Username is the QRZ.com login name.
+	Username string `mapstructure:"username" toml:"username"`
+	// Password is the QRZ.com password. EnvQRZPassword may override it.
+	Password string `mapstructure:"password" toml:"password"`
+	// FullName adds the last name to the first name in looked-up names.
+	FullName bool `mapstructure:"full_name" toml:"full_name"`
 }
 
 // Index is the [index] table, which configures the QSO index.
