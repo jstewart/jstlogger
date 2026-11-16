@@ -39,6 +39,10 @@ const (
 // msgDiscardEntry asks before closing the New QSO screen on unsaved changes.
 const msgDiscardEntry = "Discard the unsaved QSO? (y/N)"
 
+// msgDiscardEdit asks before closing the screen on unsaved changes to an
+// edited QSO.
+const msgDiscardEdit = "Discard changes to this QSO? (y/N)"
+
 // entry is the New QSO screen, shown in the body in place of the index.
 type entry struct {
 	open bool
@@ -46,6 +50,11 @@ type entry struct {
 	// earlier one is dropped.
 	gen int
 	tab entryTab
+	// editing reports whether the screen edits orig, a stored QSO, rather
+	// than logging a new one. An edit is always in post mode: the rig is
+	// never applied to it.
+	editing bool
+	orig    logbook.QSO
 	// live reports whether the screen is in live mode, where the clock
 	// fills in the times and the rig the freq, band and mode, rather than
 	// post mode, where every field is typed by hand.
@@ -110,6 +119,13 @@ type entrySavedMsg struct {
 	qso   logbook.QSO
 	close bool
 	err   error
+}
+
+// editLoadedMsg carries the stored QSO to open in the form for editing, or
+// the error loading it.
+type editLoadedMsg struct {
+	qso logbook.QSO
+	err error
 }
 
 // entryEditedMsg reports that the editor opened on field f of the New QSO
@@ -394,7 +410,9 @@ func (e *entry) form() qsoentry.Form {
 }
 
 // setForm puts f's values in the form. Reports and bands that match what
-// the mode and freqs would fill in are replaced as if filled in.
+// the mode and freqs would fill in are replaced as if filled in. While
+// editing, a picked value that is none of its picker's options is added
+// to them.
 func (e *entry) setForm(f qsoentry.Form) {
 	for k := range qsoentry.FieldCount {
 		if k == qsoentry.Submode {
@@ -402,6 +420,12 @@ func (e *entry) setForm(f qsoentry.Form) {
 			e.picker(k).setOptions(e.submodes())
 		}
 		e.setValue(k, f[k])
+		if e.editing && isPicked(k) && !strings.EqualFold(e.value(k), f[k]) {
+			// A stored value that is none of the options, such as an old
+			// mode or a station no longer configured, is offered as it is
+			// rather than dropped.
+			e.picker(k).offer(f[k])
+		}
 	}
 	e.rst = qsoentry.DefaultRST(e.value(qsoentry.Mode), e.value(qsoentry.Submode))
 	e.band = freqBand(f[qsoentry.Freq])
@@ -569,6 +593,65 @@ func (m Model) closeEntry() Model {
 	return m
 }
 
+// editCurrent returns a command that loads the QSO under the index cursor,
+// which is also the one the pager shows, to open it in the form. It does
+// nothing while the row is loading.
+func (m Model) editCurrent() tea.Cmd {
+	q, ok := m.idx.current()
+	if !ok || m.logbook == nil {
+		return nil
+	}
+	return loadEditCmd(m.logbook, q.ID)
+}
+
+// loadEditCmd returns a command that loads the stored QSO with the given ID
+// for editing.
+func loadEditCmd(s logbook.Store, id int64) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		q, err := s.Get(ctx, id)
+		if err != nil {
+			return editLoadedMsg{err: fmt.Errorf("load QSO %d to edit: %w", id, err)}
+		}
+		return editLoadedMsg{qso: q}
+	}
+}
+
+// applyEditLoaded opens the loaded QSO in the form, or shows the error
+// loading it on the index status line. A QSO landing once the screen is
+// already open is dropped.
+func (m Model) applyEditLoaded(msg editLoadedMsg) (Model, tea.Cmd) {
+	if m.entry.open {
+		return m, nil
+	}
+	if msg.err != nil {
+		m.idx.msg = msg.err.Error()
+		return m, nil
+	}
+	return m.openEdit(msg.qso)
+}
+
+// openEdit opens the screen on the stored QSO q, in post mode, with every
+// tab filled in from q, and loads the logbook's tags. The Station tab shows
+// q's own values rather than a profile's, though picking a profile still
+// fills them in. The rig is never applied, and the clock does not run.
+func (m Model) openEdit(q logbook.QSO) (Model, tea.Cmd) {
+	e := newEntry()
+	e.setStations(m.stations)
+	e.editing, e.orig = true, q
+	e.setForm(qsoentry.Load(q))
+	// The stored values are the form's own, not unsaved changes.
+	e.base = e.form()
+	e.open = true
+	e.gen = m.entry.gen + 1
+	e.tags = m.entry.tags
+	e.dataMode, e.dataSubmode = m.entry.dataMode, m.entry.dataSubmode
+	cmd := e.focusField(qsoentry.Date)
+	m.entry = e
+	return m, tea.Batch(cmd, loadTagsCmd(m.logbook))
+}
+
 // applyRigState fills in the New QSO screen's rig fields from the rig's
 // state s, when the screen is open in live mode.
 func (m *Model) applyRigState(s rig.State) {
@@ -698,7 +781,11 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		if !e.unsaved() {
 			return m.closeEntry(), nil
 		}
-		return m.askConfirm(msgDiscardEntry, func(m Model) (Model, tea.Cmd) {
+		question := msgDiscardEntry
+		if e.editing {
+			question = msgDiscardEdit
+		}
+		return m.askConfirm(question, func(m Model) (Model, tea.Cmd) {
 			return m.closeEntry(), nil
 		}), nil
 	case key.Matches(msg, k.NextTab):
@@ -712,7 +799,10 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			return m, e.goTab(ts[n-1])
 		}
 	case key.Matches(msg, k.Live):
-		return m.toggleLive()
+		// An edited QSO stays in post mode, so the rig never changes it.
+		if !e.editing {
+			return m.toggleLive()
+		}
 	case key.Matches(msg, k.ResetTime):
 		if e.live {
 			e.setOn(m.now())
@@ -912,9 +1002,10 @@ func (m *Model) revalidateEntry() {
 }
 
 // saveEntry saves the form as a new QSO, then clears it for the next QSO or,
-// when close is true, closes the screen. A form that fails validation shows
-// its errors, with focus on the first field in error, on its tab, and is
-// not saved.
+// when close is true, closes the screen. While editing, it saves the form
+// over the stored QSO instead, keeping what the form doesn't show. A form
+// that fails validation shows its errors, with focus on the first field in
+// error, on its tab, and is not saved.
 func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 	e := &m.entry
 	if e.saving {
@@ -929,7 +1020,13 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 		f[qsoentry.DateOff] = now.UTC().Format(entryDateLayout)
 		f[qsoentry.TimeOff] = now.UTC().Format(entryTimeLayout)
 	}
-	q, err := qsoentry.Build(f, now)
+	var q logbook.QSO
+	var err error
+	if e.editing {
+		q, err = qsoentry.Edit(f, e.orig, now)
+	} else {
+		q, err = qsoentry.Build(f, now)
+	}
 	if errs, ok := errors.AsType[qsoentry.Errors](err); ok {
 		e.errs = errs
 		fs := errs.Fields()
@@ -945,7 +1042,28 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 		return m, nil
 	}
 	e.errs, e.err, e.saving = nil, nil, true
+	if e.editing {
+		return m, updateQSOCmd(m.logbook, q, close)
+	}
 	return m, addQSOCmd(m.logbook, q, close)
+}
+
+// updateQSOCmd returns a command that saves q over the stored QSO with its
+// ID, then reads it back, so the screen has the stored copy, with its
+// derived fields worked out again.
+func updateQSOCmd(s logbook.Store, q logbook.QSO, close bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
+		defer cancel()
+		if err := s.Update(ctx, q); err != nil {
+			return entrySavedMsg{close: close, err: fmt.Errorf("save QSO %d with %s: %w", q.ID, q.Call, err)}
+		}
+		saved, err := s.Get(ctx, q.ID)
+		if err != nil {
+			return entrySavedMsg{close: close, err: fmt.Errorf("reload saved QSO %d: %w", q.ID, err)}
+		}
+		return entrySavedMsg{qso: saved, close: close}
+	}
 }
 
 // addQSOCmd returns a command that adds q to the logbook.
@@ -962,7 +1080,8 @@ func addQSOCmd(s logbook.Store, q logbook.QSO, close bool) tea.Cmd {
 }
 
 // applySaved reloads the index on the saved QSO and clears the form for the
-// next QSO, keeping the values that carry over, or closes the screen. A
+// next QSO, keeping the values that carry over, or closes the screen. An
+// edited QSO stays in the form as saved instead, and the pager shows it. A
 // failed save keeps the form as it is.
 func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 	e := &m.entry
@@ -972,6 +1091,9 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	saved := "Saved QSO with " + msg.qso.Call + "."
+	if e.editing {
+		saved = "Updated QSO with " + msg.qso.Call + "."
+	}
 	for _, t := range msg.qso.Tags {
 		if !slices.ContainsFunc(e.tags, func(s string) bool { return strings.EqualFold(s, t) }) {
 			e.tags = append(e.tags, t)
@@ -981,9 +1103,22 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 	e.worked = workedBefore{}
 	m.idx.restart()
 	reload := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, msg.qso.ID, m.idx.cursor)
+	if e.editing && m.pager.open {
+		// The pager shows the saved QSO, as stored, rather than the copy it
+		// fetched before.
+		m.pager.fetched, m.pager.pending, m.pager.qso, m.pager.err = msg.qso.ID, 0, msg.qso, nil
+	}
 	if msg.close {
 		m = m.closeEntry()
 		m.idx.msg = saved
+		return m, reload
+	}
+	if e.editing {
+		// The form stays on the QSO, now as saved.
+		e.orig = msg.qso
+		e.setForm(qsoentry.Load(msg.qso))
+		e.base = e.form()
+		e.msg = saved
 		return m, reload
 	}
 	next := e.form().Carry()
@@ -1028,7 +1163,10 @@ func (m Model) entryView(width, height int) string {
 		lines = append(lines, "")
 	}
 	status := "New QSO · post"
-	if e.live {
+	switch {
+	case e.editing:
+		status = "Edit QSO"
+	case e.live:
 		status = "New QSO · live"
 	}
 	switch {

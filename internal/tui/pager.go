@@ -153,6 +153,8 @@ type pagerKeyMap struct {
 	Top      key.Binding
 	Bottom   key.Binding
 	Close    key.Binding
+	// Edit opens the QSO shown in the QSO form.
+	Edit key.Binding
 	// Quit replaces the global quit binding, since q closes the pager.
 	Quit key.Binding
 	// LookupPrefix arms the lookup-prefix; the lookup key that follows
@@ -204,6 +206,12 @@ func defaultPagerKeys(lookup bool) pagerKeyMap {
 			key.WithKeys("q", "esc"),
 			key.WithHelp("q/esc", "close"),
 		),
+		// ge, the eQSL lookup, is handled before this, while the
+		// lookup-prefix is armed.
+		Edit: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit"),
+		),
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
@@ -237,12 +245,12 @@ func defaultPagerKeys(lookup bool) pagerKeyMap {
 }
 
 func (k pagerKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Next, k.Prev, k.NextTab, k.Close}
+	return []key.Binding{k.Next, k.Prev, k.NextTab, k.Edit, k.Close}
 }
 
 func (k pagerKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Next, k.Prev, k.Close},
+		{k.Next, k.Prev, k.Edit, k.Close},
 		{k.NextTab, k.PrevTab},
 		{k.PageDown, k.PageUp, k.Top, k.Bottom},
 		{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL},
@@ -292,6 +300,8 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, k.Close):
 		return m.closePager(), nil
+	case key.Matches(msg, k.Edit):
+		return m, m.editCurrent()
 	case key.Matches(msg, k.Next):
 		m.idx.next()
 	case key.Matches(msg, k.Prev):

@@ -64,6 +64,13 @@ func (p *picker) set(v string) bool {
 	return true
 }
 
+// offer adds v as the last option and chooses it, as for a stored value
+// that is none of the options, so it shows and saves as it is.
+func (p *picker) offer(v string) {
+	p.options = append(slices.Clip(p.options), v)
+	p.i, p.typed = len(p.options)-1, ""
+}
+
 // setOptions replaces the options, keeping the chosen value if it is still
 // offered and choosing the first option otherwise.
 func (p *picker) setOptions(options []string) {
