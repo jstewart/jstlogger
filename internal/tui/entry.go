@@ -309,8 +309,8 @@ func newEntry() entry {
 		pickers: make([]picker, len(entryPicked)),
 	}}
 	// The options picked from start with none.
-	none := func(options []string) []string { return append([]string{""}, options...) }
-	*e.picker(qsoentry.Mode) = newPicker(none(adif.Modes()))
+	none := func(options []adif.Enum) []adif.Enum { return append([]adif.Enum{{}}, options...) }
+	*e.picker(qsoentry.Mode) = newPicker(none(modeOptions(adif.Modes())))
 	*e.picker(qsoentry.Submode) = newPicker(none(nil))
 	*e.picker(qsoentry.PropMode) = newPicker(none(adif.PropModes()))
 	*e.picker(qsoentry.AntPath) = newPicker(none(adif.AntPaths()))
@@ -404,8 +404,18 @@ func (e *entry) setValue(f qsoentry.Field, v string) {
 
 // submodes returns the submodes offered for the mode picked, with none
 // first.
-func (e *entry) submodes() []string {
-	return append([]string{""}, adif.Submodes(e.picker(qsoentry.Mode).value())...)
+func (e *entry) submodes() []adif.Enum {
+	return append([]adif.Enum{{}}, modeOptions(adif.Submodes(e.picker(qsoentry.Mode).value()))...)
+}
+
+// modeOptions returns the modes or submodes named, each with what it is
+// when its name doesn't say.
+func modeOptions(names []string) []adif.Enum {
+	out := make([]adif.Enum, len(names))
+	for i, n := range names {
+		out[i] = adif.Enum{Code: n, Description: adif.DescribeMode(n)}
+	}
+	return out
 }
 
 // form returns the values in the form.

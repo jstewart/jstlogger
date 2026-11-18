@@ -348,8 +348,8 @@ func (b *builder) general(q *logbook.QSO) {
 		}
 		b.put(Email, email)
 	}
-	b.put(PropMode, b.enum(PropMode, adif.PropModes(), "an ADIF propagation mode"))
-	b.put(AntPath, b.enum(AntPath, adif.AntPaths(), "an ADIF antenna path"))
+	b.put(PropMode, b.enum(PropMode, adif.Codes(adif.PropModes()), "an ADIF propagation mode"))
+	b.put(AntPath, b.enum(AntPath, adif.Codes(adif.AntPaths()), "an ADIF antenna path"))
 }
 
 // satellite reads the Satellite tab, which only means something when the
@@ -379,7 +379,7 @@ var qslServices = []struct {
 // never fields.
 func (b *builder) qsl() []logbook.Confirmation {
 	var confs []logbook.Confirmation
-	statuses := adif.QSLSentStatuses()
+	statuses := adif.Codes(adif.QSLSentStatuses())
 	for _, s := range qslServices {
 		sent := b.upper(s.field)
 		if sent == "" {
@@ -391,7 +391,7 @@ func (b *builder) qsl() []logbook.Confirmation {
 		}
 		confs = append(confs, logbook.Confirmation{Service: s.service, Sent: sent})
 	}
-	b.put(QSLSentVia, b.enum(QSLSentVia, adif.QSLSentVias(), "a QSL sent via"))
+	b.put(QSLSentVia, b.enum(QSLSentVia, adif.Codes(adif.QSLSentVias()), "a QSL sent via"))
 	b.put(QSLVia, b.text(QSLVia))
 	b.put(QSLMsg, b.text(QSLMsg))
 	return confs

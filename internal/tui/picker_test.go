@@ -45,7 +45,7 @@ func TestPickerSteps(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := pick(newPicker(pickerOptions), tt.keys...)
+			p := pick(newPicker(codeOptions(pickerOptions)), tt.keys...)
 			assert.Equal(t, tt.want, p.value())
 		})
 	}
@@ -68,21 +68,21 @@ func TestPickerTypeAhead(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := pick(newPicker(pickerOptions), tt.keys...)
+			p := pick(newPicker(codeOptions(pickerOptions)), tt.keys...)
 			assert.Equal(t, tt.want, p.value())
 		})
 	}
 }
 
 func TestPickerReportsChange(t *testing.T) {
-	p := newPicker(pickerOptions)
+	p := newPicker(codeOptions(pickerOptions))
 	assert.True(t, p.update(special(tea.KeyRight)))
 	assert.False(t, p.update(keyPress('a', 0)), "already on AM")
 	assert.False(t, p.update(special(tea.KeyTab)), "tab is not a picker key")
 }
 
 func TestPickerSet(t *testing.T) {
-	p := newPicker(pickerOptions)
+	p := newPicker(codeOptions(pickerOptions))
 
 	assert.True(t, p.set("ssb"))
 	assert.Equal(t, "SSB", p.value())
@@ -91,13 +91,13 @@ func TestPickerSet(t *testing.T) {
 }
 
 func TestPickerSetOptions(t *testing.T) {
-	p := newPicker([]string{"", "LSB", "USB"})
+	p := newPicker(codeOptions([]string{"", "LSB", "USB"}))
 	p.set("USB")
 
-	p.setOptions([]string{"", "FM", "USB"})
+	p.setOptions(codeOptions([]string{"", "FM", "USB"}))
 	assert.Equal(t, "USB", p.value(), "a value still offered is kept")
 
-	p.setOptions([]string{"", "FT4"})
+	p.setOptions(codeOptions([]string{"", "FT4"}))
 	assert.Equal(t, "", p.value(), "otherwise the first option is chosen")
 
 	p.setOptions(nil)
@@ -107,7 +107,7 @@ func TestPickerSetOptions(t *testing.T) {
 
 func TestPickerView(t *testing.T) {
 	st := defaultStyles()
-	p := newPicker(pickerOptions)
+	p := newPicker(codeOptions(pickerOptions))
 
 	assert.Equal(t, pagerEmpty, plain(p.view(st, false)))
 	assert.Equal(t, "‹ "+pagerEmpty+" ›", plain(p.view(st, true)))
@@ -117,7 +117,7 @@ func TestPickerView(t *testing.T) {
 }
 
 func TestPickerEraseMultibyte(t *testing.T) {
-	p := pick(newPicker([]string{"", "Ä", "ÄÖ"}), keyPress('ä', 0), keyPress('ö', 0))
+	p := pick(newPicker(codeOptions([]string{"", "Ä", "ÄÖ"})), keyPress('ä', 0), keyPress('ö', 0))
 	assert.Equal(t, "ÄÖ", p.value())
 	p = pick(p, special(tea.KeyBackspace))
 	assert.Equal(t, "Ä", p.value(), "backspace drops the whole last character")
