@@ -269,6 +269,20 @@ func TestEntryWheelScrollsForm(t *testing.T) {
 	assert.Contains(t, first(m), "Date", "a key press scrolls back to the focused field")
 }
 
+func TestMouseReleaseAndMotionDoNothing(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m = focusOn(t, m, qsoentry.Notes)
+	for _, msg := range []tea.Msg{
+		tea.MouseReleaseMsg{X: 7, Y: 3, Button: tea.MouseLeft},
+		tea.MouseMotionMsg{X: 8, Y: 4, Button: tea.MouseLeft},
+	} {
+		got, cmd := m.update(msg)
+		assert.Nil(t, cmd, "%T", msg)
+		assert.Equal(t, m.entry.form(), got.entry.form(), "%T", msg)
+		assert.Equal(t, m.entry.focus, got.entry.focus, "%T", msg)
+	}
+}
+
 func TestEntryWheelDoesNothingOnShortForm(t *testing.T) {
 	m := newEntryModel(t, newEntryStore(t, nil))
 	m = press(t, m, altKey('2'))
