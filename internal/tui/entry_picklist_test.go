@@ -168,3 +168,16 @@ func TestEntryPickListFitsNarrowWindows(t *testing.T) {
 		})
 	}
 }
+
+func TestEntryPickListPicksByCodeWhenTheOptionsChange(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Mode: "ssb"})
+	m = focusOn(t, m, qsoentry.Submode)
+	m = press(t, m, enterKey, special(tea.KeyDown))
+
+	// As when the rig changes the options while the list is open.
+	m.entry.picker(qsoentry.Submode).setOptions(codeOptions([]string{"", "USB", "LSB"}))
+	m = press(t, m, enterKey)
+
+	assert.Equal(t, "LSB", entryValue(m, qsoentry.Submode), "the code highlighted is picked, not its old place")
+}

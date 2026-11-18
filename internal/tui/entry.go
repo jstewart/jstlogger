@@ -970,20 +970,24 @@ func (m Model) updateList(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	return m, m.followEdit(e.focus, before)
 }
 
-// pick chooses the list item it in the focused picker. A common mode none
-// of the modes is a submode, such as FT4, which picks its mode and then it.
+// pick chooses the list item it in the focused picker: the option it was,
+// so of two stations with one name the one picked, or else, as when the
+// rig changed the options while the list was open, the option with its
+// code. A common mode none of the modes is a submode, such as FT4, which
+// picks its mode and then it.
 func (e *entry) pick(it pickItem) {
 	p := e.picker(e.focus)
-	if it.i < 0 {
-		if e.focus == qsoentry.Mode {
-			p.set(adif.ModeOf(it.Code))
-			e.picker(qsoentry.Submode).setOptions(e.submodes())
-			e.picker(qsoentry.Submode).set(it.Code)
-		}
-		return
-	}
 	old := p.i
-	p.i, p.typed = it.i, ""
+	switch {
+	case it.i >= 0 && it.i < len(p.options) && p.options[it.i].Code == it.Code:
+		p.i, p.typed = it.i, ""
+	case e.focus == qsoentry.Mode && !strings.EqualFold(adif.ModeOf(it.Code), it.Code):
+		p.set(adif.ModeOf(it.Code))
+		e.picker(qsoentry.Submode).setOptions(e.submodes())
+		e.picker(qsoentry.Submode).set(it.Code)
+	default:
+		p.set(it.Code)
+	}
 	if p.i != old && e.focus == qsoentry.StationName {
 		e.fillStation()
 	}
