@@ -361,11 +361,17 @@ func (m Model) footerView() string {
 		// always among.
 		ek.GoTab.SetHelp(fmt.Sprintf("alt+1-%d", len(m.entry.tabs())), ek.GoTab.Help().Desc)
 		ek.Editor.SetEnabled(slices.Contains(entryEditorFields, m.entry.focus))
+		picked := isPicked(m.entry.focus) && !m.entry.readOnly(m.entry.focus)
+		ek.Change.SetEnabled(picked)
+		ek.List.SetEnabled(picked)
 		// An edited QSO never goes live, so the rig keys do nothing.
 		for _, b := range []*key.Binding{&ek.Live, &ek.ResetTime, &ek.SyncRig} {
 			b.SetEnabled(!m.entry.editing)
 		}
 		keys = ek
+		if m.entry.list.open {
+			keys = pickListKeys
+		}
 	}
 	switch {
 	case m.promptOpen():

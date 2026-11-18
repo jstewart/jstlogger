@@ -55,6 +55,8 @@ type entry struct {
 	// the form scrolls to show the focused field.
 	wheeled bool
 	scroll  int
+	// list is the list the picker with focus opened, while it is open.
+	list pickList
 	// editing reports whether the screen edits orig, a stored QSO, rather
 	// than logging a new one. An edit is always in post mode: the rig is
 	// never applied to it.
@@ -169,6 +171,10 @@ type entryKeyMap struct {
 	Editor key.Binding
 	// Quit replaces the global quit binding, since q is typed into fields.
 	Quit key.Binding
+	// Change only shows in the help, for the arrows a picker steps with.
+	Change key.Binding
+	// List opens the list of a picker's options.
+	List key.Binding
 }
 
 func defaultEntryKeys() entryKeyMap {
@@ -233,17 +239,25 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		Change: key.NewBinding(
+			key.WithKeys("left", "right"),
+			key.WithHelp("←/→", "change"),
+		),
+		List: key.NewBinding(
+			key.WithKeys("enter", "space"),
+			key.WithHelp("enter", "list"),
+		),
 	}
 }
 
 func (k entryKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close}
+	return []key.Binding{k.Change, k.List, k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close}
 }
 
 func (k entryKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Save, k.SaveClose, k.Close, k.Quit},
-		{k.NextField, k.PrevField, k.Editor},
+		{k.NextField, k.PrevField, k.Editor, k.Change, k.List},
 		{k.NextTab, k.PrevTab, k.GoTab},
 		{k.Live, k.ResetTime, k.SyncRig},
 	}
@@ -619,8 +633,10 @@ func (e *entry) canonicalize() {
 	}
 }
 
-// focusField gives field f focus, with the cursor at the end of its value.
+// focusField gives field f focus, with the cursor at the end of its value,
+// closing any list open.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
+	e.list.open = false
 	if f != e.focus && slices.Contains(entryTimes, e.focus) && !e.readOnly(e.focus) {
 		// A date or time left shows what it was read as, so a mistake
 		// shows before the save.
@@ -868,6 +884,8 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, tea.Quit
 	case e.saving:
 		// Other keys wait for the save, so it lands on the form it saved.
+	case e.list.open && !key.Matches(msg, pickListKeys.Leave):
+		return m.updateList(msg)
 	case key.Matches(msg, k.Save):
 		return m.saveEntry(false)
 	case key.Matches(msg, k.SaveClose):
@@ -912,6 +930,8 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 	case key.Matches(msg, k.Editor) && slices.Contains(entryEditorFields, e.focus):
 		return m.openEditor()
+	case isPicked(e.focus) && !e.readOnly(e.focus) && key.Matches(msg, k.List):
+		e.openList()
 	case isMultiLine(e.focus) && key.Matches(msg, e.area(e.focus).KeyMap.InsertNewline):
 		// Enter starts a new line of a multi-line field rather than moving
 		// on.
@@ -924,6 +944,49 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.editEntry(msg)
 	}
 	return m, nil
+}
+
+// openList opens the list of the focused picker's options, below the most
+// used modes for the mode.
+func (e *entry) openList() {
+	var common []adif.Enum
+	if e.focus == qsoentry.Mode {
+		common = adif.CommonModes()
+	}
+	p := e.picker(e.focus)
+	e.list = newPickList(common, p.options, p.value())
+}
+
+// updateList sends a key press to the open list, then fills in what
+// follows from the item picked, if any.
+func (m Model) updateList(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	e := &m.entry
+	it, ok := e.list.update(msg)
+	if !ok {
+		return m, nil
+	}
+	before := e.form()
+	e.pick(it)
+	return m, m.followEdit(e.focus, before)
+}
+
+// pick chooses the list item it in the focused picker. A common mode none
+// of the modes is a submode, such as FT4, which picks its mode and then it.
+func (e *entry) pick(it pickItem) {
+	p := e.picker(e.focus)
+	if it.i < 0 {
+		if e.focus == qsoentry.Mode {
+			p.set(adif.ModeOf(it.Code))
+			e.picker(qsoentry.Submode).setOptions(e.submodes())
+			e.picker(qsoentry.Submode).set(it.Code)
+		}
+		return
+	}
+	old := p.i
+	p.i, p.typed = it.i, ""
+	if p.i != old && e.focus == qsoentry.StationName {
+		e.fillStation()
+	}
 }
 
 // editEntry sends msg, a key press or other input such as a paste, to the
@@ -1334,11 +1397,29 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 		if slices.ContainsFunc(row, func(f qsoentry.Field) bool { return e.errs[f] != nil }) {
 			lines = append(lines, strings.TrimRight(strings.Join(errs, "  "), " "))
 		}
+		if e.list.open && slices.Contains(row, e.focus) {
+			lines = append(lines, m.entryList(slices.Index(row, e.focus), width, colWidth, lw)...)
+		}
 		if slices.Contains(row, e.focus) {
 			focus, rows = start, len(lines)-start
 		}
 	}
 	return lines, focus, rows
+}
+
+// entryList renders the open list below the value of the field in column
+// col of a row of fields colWidth cells wide, labeled lw cells wide, fitted
+// to width cells. In a narrow window it takes the whole width.
+func (m Model) entryList(col, width, colWidth, lw int) []string {
+	indent := col*(colWidth+2) + lw + 2
+	if width-indent < entryListMinWidth {
+		indent = 0
+	}
+	lines := m.entry.list.view(m.styles, width-indent)
+	for i, l := range lines {
+		lines[i] = strings.Repeat(" ", indent) + l
+	}
+	return lines
 }
 
 // joinCells lays out cells side by side, each fitted to width cells, two
