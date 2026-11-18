@@ -114,12 +114,20 @@ var entryLabels = [qsoentry.FieldCount]string{
 	"Club Log sent",
 }
 
+// entryDateHint and entryTimeHint list the layout and the short forms of
+// the dates and times, which qsoentry.ParseDate and qsoentry.ParseTime
+// read.
+const (
+	entryDateHint = "YYYY-MM-DD · t y -N MMDD"
+	entryTimeHint = "HH:MM · n HH"
+)
+
 // entryPlaceholders are shown in empty fields that need a hint.
 var entryPlaceholders = map[qsoentry.Field]string{
-	qsoentry.Date:      "YYYY-MM-DD",
-	qsoentry.TimeOn:    "HH:MM",
-	qsoentry.DateOff:   "YYYY-MM-DD",
-	qsoentry.TimeOff:   "HH:MM",
+	qsoentry.Date:      entryDateHint,
+	qsoentry.TimeOn:    entryTimeHint,
+	qsoentry.DateOff:   entryDateHint,
+	qsoentry.TimeOff:   entryTimeHint,
 	qsoentry.Freq:      "MHz or kHz",
 	qsoentry.FreqRX:    "MHz or kHz",
 	qsoentry.Tags:      "comma-separated",
