@@ -190,6 +190,16 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m.updateIndex(msg)
 		}
 
+	case tea.MouseClickMsg:
+		return m.click(msg.Mouse())
+
+	case tea.MouseWheelMsg:
+		return m.wheel(msg.Mouse()), nil
+
+	case tea.MouseMsg:
+		// Releases and drags do nothing, and are no input for the open
+		// prompt or the New QSO screen's fields.
+
 	case indexLoadedMsg:
 		if m.idx.applyLoad(msg) {
 			return m, m.lookupIndexLoTW(msg.rows)
@@ -316,6 +326,7 @@ func (m Model) View() tea.View {
 
 	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, header, body, footer))
 	v.AltScreen = true
+	v.MouseMode = m.mouseMode()
 	return v
 }
 

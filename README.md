@@ -155,8 +155,8 @@ the pager and returns to the index with the cursor where it was. While
 the pager is open, `q` closes it instead of quitting; `ctrl+c` still quits.
 
 `tab` and `shift+tab` cycle through the pager's tabs, and the tab bar
-shows which one is active. The tab stays the same as you move between
-QSOs.
+shows which one is active; clicking a tab in the tab bar also opens it.
+The tab stays the same as you move between QSOs.
 
 `e` edits the QSO shown in the pager, as it does in the index.
 
@@ -174,7 +174,8 @@ QSOs.
   name, which is handy for checking an import.
 
 A tab taller than the pager scrolls: `space` or `pgdown` pages down, `-`
-or `pgup` pages up, and `home` and `end` jump to the top and bottom.
+or `pgup` pages up, and `home` and `end` jump to the top and bottom. The
+mouse wheel scrolls it three lines at a time.
 
 ### Index format
 
@@ -319,6 +320,23 @@ without PgUp and PgDn. They work in any field, including Notes, without
 typing a character. On macOS, the `alt` keys need the terminal to send
 Option as Meta (Esc+): in Terminal, tick *Use Option as Meta key*; in
 iTerm2, set the Option key to *Esc+*.
+
+Clicking a tab in the tab bar also opens it. A form taller than the
+window scrolls to keep the field being typed in on screen; the mouse
+wheel scrolls it three lines at a time, and the next key press scrolls
+back to that field.
+
+### Mouse
+
+The pager and the New QSO screen turn on the terminal's mouse reporting
+while they are open, for clicking tabs and scrolling with the wheel. The
+index leaves it off, so the terminal's own text selection and wheel work
+there as usual.
+
+With mouse reporting on, click-drag no longer selects text in most
+terminals. Hold a modifier to select text anyway: Option-drag in iTerm2,
+Shift-drag in many others, such as xterm, GNOME Terminal, kitty, WezTerm
+and Alacritty.
 
 ### Editing a QSO
 

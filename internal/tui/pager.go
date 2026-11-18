@@ -294,7 +294,7 @@ func (m Model) closePager() Model {
 func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	k, p := m.pagerKeys, &m.pager
 	room := m.pagerRoom(m.bodyHeight())
-	bottom := max(len(m.pagerContent(m.bodyWidth()))-room, 0)
+	bottom := m.pagerBottom()
 	p.scroll = min(p.scroll, bottom)
 	cursor := m.idx.cursor
 	switch {
@@ -333,6 +333,12 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // below the index strip and tab bar and above the status line.
 func (m Model) pagerRoom(height int) int {
 	return max(height-m.idx.height-pagerChrome, 0)
+}
+
+// pagerBottom is the scroll that shows the last line of the open tab at the
+// bottom of the pager.
+func (m Model) pagerBottom() int {
+	return max(len(m.pagerContent(m.bodyWidth()))-m.pagerRoom(m.bodyHeight()), 0)
 }
 
 // pagerContent returns the lines of the open tab for the QSO under the

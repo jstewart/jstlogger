@@ -51,18 +51,46 @@ const qslDateFormat = "2006-01-02"
 func tabBar(st styles, names []string, active, width int) string {
 	var b strings.Builder
 	room := width
-	for i, n := range names {
+	for i, label := range tabLabels(names, width) {
+		room -= lipgloss.Width(label)
+		if i == active {
+			label = st.tab.Render(label)
+		}
+		b.WriteString(label)
+	}
+	return b.String() + st.muted.Render(strings.Repeat("─", max(room, 0)))
+}
+
+// tabLabels returns the labels drawn for the named tabs in a tab bar width
+// cells wide: each name with a space either side, the last that fits cut
+// short, and none for the tabs after it.
+func tabLabels(names []string, width int) []string {
+	var labels []string
+	room := width
+	for _, n := range names {
 		if room <= 0 {
 			break
 		}
-		name := truncate(" "+n+" ", room, "")
-		room -= lipgloss.Width(name)
-		if i == active {
-			name = st.tab.Render(name)
-		}
-		b.WriteString(name)
+		label := truncate(" "+n+" ", room, "")
+		room -= lipgloss.Width(label)
+		labels = append(labels, label)
 	}
-	return b.String() + st.muted.Render(strings.Repeat("─", max(room, 0)))
+	return labels
+}
+
+// tabAt returns the index of the tab drawn at cell x of a tab bar of the
+// named tabs width cells wide, or -1 when x is on the rule after them or
+// off the bar.
+func tabAt(names []string, width, x int) int {
+	start := 0
+	for i, label := range tabLabels(names, width) {
+		end := start + lipgloss.Width(label)
+		if x >= start && x < end {
+			return i
+		}
+		start = end
+	}
+	return -1
 }
 
 // pagerRow is one labeled row of a pager tab. suffix, already styled,
