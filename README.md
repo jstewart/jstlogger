@@ -340,6 +340,9 @@ the meaning is cut short before the code.
 | typing            | Jump to the first value starting with the text |
 | `enter` / `space` | Open a list of every value and what it means   |
 
+A space typed after other text is part of the code, as in `VARA HF`,
+rather than opening the list.
+
 In the list, typing filters by code or meaning, so `meteor` finds `MS`
 and `bureau` finds `B`. `↑`/`↓` move, `enter` picks, `esc` closes
 without a change and `tab` moves on to the next field. The Mode list

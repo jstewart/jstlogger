@@ -930,7 +930,9 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 	case key.Matches(msg, k.Editor) && slices.Contains(entryEditorFields, e.focus):
 		return m.openEditor()
-	case isPicked(e.focus) && !e.readOnly(e.focus) && key.Matches(msg, k.List):
+	case isPicked(e.focus) && !e.readOnly(e.focus) && key.Matches(msg, k.List) &&
+		(msg.String() != "space" || e.picker(e.focus).typed == ""):
+		// A space after typing is part of a code, such as VARA HF.
 		e.openList()
 	case isMultiLine(e.focus) && key.Matches(msg, e.area(e.focus).KeyMap.InsertNewline):
 		// Enter starts a new line of a multi-line field rather than moving

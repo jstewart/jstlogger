@@ -181,3 +181,14 @@ func TestEntryPickListPicksByCodeWhenTheOptionsChange(t *testing.T) {
 
 	assert.Equal(t, "LSB", entryValue(m, qsoentry.Submode), "the code highlighted is picked, not its old place")
 }
+
+func TestEntryPickerSpaceContinuesTypeAhead(t *testing.T) {
+	m := newEntryModel(t, newEntryStore(t, nil))
+	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Mode: "dynamic"})
+	m = focusOn(t, m, qsoentry.Submode)
+
+	m = press(t, m, typeKeys("VARA H")...)
+
+	assert.False(t, m.entry.list.open, "a space after typing is part of the code")
+	assert.Equal(t, "VARA HF", entryValue(m, qsoentry.Submode))
+}
