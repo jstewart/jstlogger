@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/adif"
 )
@@ -40,9 +41,6 @@ type picker struct {
 	i       int
 	// typed is what has been typed since the last step.
 	typed string
-	// show returns the text shown for an option, such as the word for a
-	// QSL status; nil shows the option as it is.
-	show func(string) string
 }
 
 func newPicker(options []adif.Enum) picker {
@@ -143,18 +141,24 @@ func (p *picker) jump(prefix string) bool {
 	return true
 }
 
-// view renders the chosen value, as show shows it, or pagerEmpty for none,
-// between arrows while the picker has focus.
-func (p picker) view(st styles, focused bool) string {
-	v := p.value()
-	switch {
-	case v == "":
+// view renders the chosen value, or pagerEmpty for none, between arrows
+// while the picker has focus, followed by what it means, cut short to fit
+// width cells. The value is never cut.
+func (p picker) view(st styles, focused bool, width int) string {
+	var o adif.Enum
+	if p.i < len(p.options) {
+		o = p.options[p.i]
+	}
+	v := o.Code
+	if v == "" {
 		v = st.muted.Render(pagerEmpty)
-	case p.show != nil:
-		v = p.show(v)
 	}
-	if !focused {
-		return v
+	if focused {
+		v = st.muted.Render("‹ ") + v + st.muted.Render(" ›")
 	}
-	return st.muted.Render("‹ ") + v + st.muted.Render(" ›")
+	// A description needs a cell after the space, and one for the "…".
+	if room := width - lipgloss.Width(v) - 1; o.Description != "" && room > 1 {
+		v += " " + st.muted.Render(truncate(o.Description, room, "…"))
+	}
+	return v
 }

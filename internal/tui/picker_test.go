@@ -5,6 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
+
+	"jstlogger/internal/adif"
 )
 
 // pick sends each key to p and returns it.
@@ -109,11 +111,36 @@ func TestPickerView(t *testing.T) {
 	st := defaultStyles()
 	p := newPicker(codeOptions(pickerOptions))
 
-	assert.Equal(t, pagerEmpty, plain(p.view(st, false)))
-	assert.Equal(t, "‹ "+pagerEmpty+" ›", plain(p.view(st, true)))
+	assert.Equal(t, pagerEmpty, plain(p.view(st, false, 40)))
+	assert.Equal(t, "‹ "+pagerEmpty+" ›", plain(p.view(st, true, 40)))
 	p.set("CW")
-	assert.Equal(t, "CW", plain(p.view(st, false)))
-	assert.Equal(t, "‹ CW ›", plain(p.view(st, true)))
+	assert.Equal(t, "CW", plain(p.view(st, false, 40)))
+	assert.Equal(t, "‹ CW ›", plain(p.view(st, true, 40)))
+}
+
+func TestPickerViewDescribes(t *testing.T) {
+	st := defaultStyles()
+	p := newPicker([]adif.Enum{{}, {Code: "TEP", Description: "trans-equatorial"}})
+	p.set("TEP")
+
+	tests := []struct {
+		name    string
+		focused bool
+		width   int
+		want    string
+	}{
+		{"with focus", true, 40, "‹ TEP › trans-equatorial"},
+		{"without focus", false, 40, "TEP trans-equatorial"},
+		{"cut short", true, 14, "‹ TEP › trans…"},
+		{"cut short without focus", false, 8, "TEP tra…"},
+		{"no room", true, 9, "‹ TEP ›"},
+		{"code alone at any width", true, 3, "‹ TEP ›"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, plain(p.view(st, tt.focused, tt.width)))
+		})
+	}
 }
 
 func TestPickerEraseMultibyte(t *testing.T) {

@@ -316,9 +316,7 @@ func newEntry() entry {
 	*e.picker(qsoentry.AntPath) = newPicker(none(adif.AntPaths()))
 	*e.picker(qsoentry.QSLSentVia) = newPicker(none(adif.QSLSentVias()))
 	for _, f := range []qsoentry.Field{qsoentry.QSLSent, qsoentry.LoTWSent, qsoentry.EQSLSent, qsoentry.ClubLogSent} {
-		p := newPicker(none(adif.QSLSentStatuses()))
-		p.show = logbook.QSLSentText
-		*e.picker(f) = p
+		*e.picker(f) = newPicker(none(adif.QSLSentStatuses()))
 	}
 	for _, f := range entryMultiLine {
 		*e.area(f) = newArea()
@@ -1386,8 +1384,13 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 		// The lines after the first line up under it.
 		value = strings.ReplaceAll(e.area(f).View(), "\n", "\n"+strings.Repeat(" ", lw+2))
 	case isPicked(f):
-		value = e.picker(f).view(st, focused)
-		if mark := m.entryHandMark(f); mark != "" {
+		// The hand mark keeps its room, cutting the description first.
+		mark := m.entryHandMark(f)
+		if mark != "" {
+			room -= lipgloss.Width(mark) + 2
+		}
+		value = e.picker(f).view(st, focused, room)
+		if mark != "" {
 			value += "  " + mark
 		}
 	default:
