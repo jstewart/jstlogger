@@ -326,6 +326,34 @@ window scrolls to keep the field being typed in on screen; the mouse
 wheel scrolls it three lines at a time, and the next key press scrolls
 back to that field.
 
+### Dates and times
+
+Dates and times are UTC. In post mode, the New QSO screen opens with the
+date set to today; the time on is left blank, so a QSO is never saved at
+a time nobody entered. After a save, the date stays for the next QSO, as
+when typing in a paper log.
+
+Besides `YYYY-MM-DD` and `YYYYMMDD`, dates take short forms:
+
+| Typed            | Date                                                      |
+| ---------------- | --------------------------------------------------------- |
+| `t`              | Today                                                     |
+| `y`              | Yesterday                                                 |
+| `-N`             | N days ago, e.g. `-3`                                     |
+| `MMDD` / `MM-DD` | That day this year, or last year if it's later than today |
+
+Besides `HH:MM`, `HH:MM:SS`, `HHMM` and `HHMMSS`, times take `n` for now
+and an hour on its own, such as `14` for 14:00. On leaving a date or time
+field, its value is rewritten in full (`1430` becomes `14:30`, `t`
+today's date), so a mistake shows before the save.
+
+Date off and time off copy the date and time on, shown in grey, until
+you type in them; clearing one starts the copying again. When the time
+off is earlier than the time on, the date off moves to the next day. A
+copied value is saved as shown, and isn't an unsaved change. In live
+mode the clock fills in all four fields as before, and an edited QSO
+keeps its own date and time off.
+
 ### Mouse
 
 The pager and the New QSO screen turn on the terminal's mouse reporting

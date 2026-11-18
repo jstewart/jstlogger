@@ -101,6 +101,9 @@ type entry struct {
 	worked workedBefore
 	// saving reports whether a save is under way.
 	saving bool
+	// now returns the current time, which the short forms of the dates
+	// and times, such as t and n, count from.
+	now func() time.Time
 	// msg is shown on the status line until the next key press, and err,
 	// the last save or tag load error, until the next save.
 	msg string
@@ -300,7 +303,7 @@ func (e *entry) picker(f qsoentry.Field) *picker {
 // newEntry returns the New QSO screen, closed, with an empty form and a
 // fresh set of widgets.
 func newEntry() entry {
-	e := entry{w: &entryWidgets{
+	e := entry{now: time.Now, w: &entryWidgets{
 		inputs:  make([]textinput.Model, int(qsoentry.FieldCount)-len(entryMultiLine)-len(entryPicked)),
 		areas:   make([]textarea.Model, len(entryMultiLine)),
 		pickers: make([]picker, len(entryPicked)),
@@ -522,12 +525,16 @@ func (e *entry) syncRig(s rig.State) {
 
 // unsaved reports whether the form holds values typed or picked since it
 // was opened or last saved. In live mode, the values the clock and the rig
-// fill in don't count, nor do the default reports.
+// fill in don't count, nor do the default reports. Dates and times are
+// compared as read, so t is no change from today's date.
 func (e *entry) unsaved() bool {
 	f, b := e.form(), e.base
 	for k := range qsoentry.FieldCount {
 		if e.filledIn(k, f[k]) {
 			f[k], b[k] = "", ""
+		}
+		if slices.Contains(entryTimes, k) {
+			f[k], b[k] = qsoentry.Canonical(k, f[k], e.now()), qsoentry.Canonical(k, b[k], e.now())
 		}
 	}
 	return f != b
@@ -541,8 +548,77 @@ func (e *entry) filledIn(f qsoentry.Field, v string) bool {
 	return e.readOnly(f) || e.followsRig(f) || e.live && isRST && v == e.rst
 }
 
+// copies reports whether the blank off fields copy the on fields: in post
+// mode, for a new QSO. Live mode fills in the times from the clock, and an
+// edited QSO keeps its own.
+func (e *entry) copies() bool {
+	return !e.live && !e.editing
+}
+
+// withOff returns f with its blank off fields filled in from the on fields
+// while they copy them. The date off is filled in only with a time off,
+// which it needs.
+func (e *entry) withOff(f qsoentry.Form) qsoentry.Form {
+	if !e.copies() {
+		return f
+	}
+	dateOff, timeOff := f.OffDefaults(e.now())
+	if strings.TrimSpace(f[qsoentry.TimeOff]) == "" {
+		f[qsoentry.TimeOff] = timeOff
+	}
+	if strings.TrimSpace(f[qsoentry.DateOff]) == "" && strings.TrimSpace(f[qsoentry.TimeOff]) != "" {
+		f[qsoentry.DateOff] = dateOff
+	}
+	return f
+}
+
+// offCopy returns what off field f copies from the on fields, shown muted
+// in its place while it is blank, or "" when it copies nothing.
+func (e *entry) offCopy(f qsoentry.Field) string {
+	if !e.copies() || strings.TrimSpace(e.value(f)) != "" {
+		return ""
+	}
+	dateOff, timeOff := e.form().OffDefaults(e.now())
+	switch f {
+	case qsoentry.DateOff:
+		return dateOff
+	case qsoentry.TimeOff:
+		return timeOff
+	}
+	return ""
+}
+
+// defaultDate fills in today's date in an empty date while the off fields
+// copy, as the form's own value rather than an unsaved change. The time on
+// is left for the user, so no QSO is saved at a time nobody entered.
+func (e *entry) defaultDate() {
+	if !e.copies() || strings.TrimSpace(e.value(qsoentry.Date)) != "" {
+		return
+	}
+	today := e.now().UTC().Format(qsoentry.DateLayout)
+	e.input(qsoentry.Date).SetValue(today)
+	e.base[qsoentry.Date] = today
+}
+
+// canonicalize rewrites the dates and times that can be edited in their
+// canonical layouts.
+func (e *entry) canonicalize() {
+	for _, f := range entryTimes {
+		if !e.readOnly(f) {
+			in := e.input(f)
+			in.SetValue(qsoentry.Canonical(f, in.Value(), e.now()))
+		}
+	}
+}
+
 // focusField gives field f focus, with the cursor at the end of its value.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
+	if f != e.focus && slices.Contains(entryTimes, e.focus) && !e.readOnly(e.focus) {
+		// A date or time left shows what it was read as, so a mistake
+		// shows before the save.
+		in := e.input(e.focus)
+		in.SetValue(qsoentry.Canonical(e.focus, in.Value(), e.now()))
+	}
 	switch {
 	case isMultiLine(e.focus):
 		e.area(e.focus).Blur()
@@ -566,6 +642,7 @@ func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
 // connected, and in post mode otherwise.
 func (m Model) openEntry() (Model, tea.Cmd) {
 	e := newEntry()
+	e.now = m.now
 	e.setStations(m.stations)
 	// The profile's values are the form's own, not unsaved changes.
 	e.base = e.form()
@@ -582,6 +659,7 @@ func (m Model) openEntry() (Model, tea.Cmd) {
 			e.syncRig(m.rigState.state)
 		}
 	}
+	e.defaultDate()
 	cmd := e.focusField(focus)
 	m.entry = e
 	return m, tea.Batch(cmd, loadTagsCmd(m.logbook), m.entryTickCmd())
@@ -643,6 +721,7 @@ func (m Model) applyEditLoaded(msg editLoadedMsg) (Model, tea.Cmd) {
 // fills them in. The rig is never applied, and the clock does not run.
 func (m Model) openEdit(q logbook.QSO) (Model, tea.Cmd) {
 	e := newEntry()
+	e.now = m.now
 	e.setStations(m.stations)
 	e.editing, e.orig = true, q
 	e.setForm(qsoentry.Load(q))
@@ -705,6 +784,7 @@ func (m Model) toggleLive() (Model, tea.Cmd) {
 	}
 	e.live = !e.live
 	if !e.live {
+		e.defaultDate()
 		return m, nil
 	}
 	e.onLocked = strings.TrimSpace(e.input(qsoentry.Call).Value()) != ""
@@ -996,7 +1076,7 @@ func (e *entry) fillBand(freq, band qsoentry.Field, last string) string {
 
 // validateEntry checks the form, keeping its errors for the view.
 func (m *Model) validateEntry() {
-	_, err := qsoentry.Build(m.entry.form(), m.now())
+	_, err := qsoentry.Build(m.entry.withOff(m.entry.form()), m.now())
 	m.entry.errs, _ = errors.AsType[qsoentry.Errors](err)
 }
 
@@ -1020,7 +1100,8 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 	}
 	now := m.now()
 	e.tickClock(now)
-	f := e.form()
+	e.canonicalize()
+	f := e.withOff(e.form())
 	if e.live {
 		// The QSO ends as it is saved. The form keeps no time off, so a
 		// save that fails leaves none behind.
@@ -1131,6 +1212,7 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 	next := e.form().Carry()
 	e.setForm(next)
 	e.base = next
+	e.defaultDate()
 	e.msg = saved
 	e.tab = entryTabQSO
 	focus := qsoentry.TimeOn
@@ -1303,6 +1385,9 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 		// A copy, since the view must not resize the widget the copies of
 		// the Model share.
 		in := *e.input(f)
+		if c := e.offCopy(f); c != "" {
+			in.Placeholder = c
+		}
 		inWidth := room
 		if suffix != "" {
 			// The suffix sits next to the value rather than at the far side.

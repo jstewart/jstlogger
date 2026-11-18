@@ -138,8 +138,8 @@ func (f Field) String() string {
 
 // Form holds the text of each field of the New QSO form, as typed.
 //
-// Dates are YYYY-MM-DD or YYYYMMDD and times HH:MM, HH:MM:SS, HHMM or
-// HHMMSS, all UTC. A freq is in MHz or kHz, as ParseFreq reads it. Tags are
+// Dates and times are UTC, in the layouts and short forms ParseDate and
+// ParseTime read. A freq is in MHz or kHz, as ParseFreq reads it. Tags are
 // separated by commas.
 type Form [FieldCount]string
 
@@ -469,10 +469,10 @@ func (b *builder) grid(k Field) string {
 // when it is earlier than the time on.
 func (b *builder) times(now time.Time) (time.Time, sql.Null[time.Time]) {
 	var end sql.Null[time.Time]
-	date, dateOK := b.date(Date, "date", true)
-	on, onOK := b.clock(TimeOn, "time on", true)
-	dateOff, dateOffOK := b.date(DateOff, "date off", false)
-	off, offOK := b.clock(TimeOff, "time off", false)
+	date, dateOK := b.date(Date, "date", true, now)
+	on, onOK := b.clock(TimeOn, "time on", true, now)
+	dateOff, dateOffOK := b.date(DateOff, "date off", false, now)
+	off, offOK := b.clock(TimeOff, "time off", false, now)
 	if strings.TrimSpace(b.f[DateOff]) != "" && strings.TrimSpace(b.f[TimeOff]) == "" {
 		b.fail(TimeOff, "time off is required with a date off")
 	}
@@ -510,12 +510,9 @@ func (b *builder) times(now time.Time) (time.Time, sql.Null[time.Time]) {
 	return start, end
 }
 
-// dateLayouts are the layouts a date can be typed in.
-var dateLayouts = []string{"2006-01-02", "20060102"}
-
-// date parses the date in field k, named name in errors, reporting false
-// when it is invalid, or empty and required.
-func (b *builder) date(k Field, name string, required bool) (time.Time, bool) {
+// date parses the date in field k, named name in errors, as ParseDate reads
+// it, reporting false when it is invalid, or empty and required.
+func (b *builder) date(k Field, name string, required bool, now time.Time) (time.Time, bool) {
 	s := strings.TrimSpace(b.f[k])
 	if s == "" {
 		if required {
@@ -523,22 +520,18 @@ func (b *builder) date(k Field, name string, required bool) (time.Time, bool) {
 		}
 		return time.Time{}, !required
 	}
-	for _, layout := range dateLayouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t, true
-		}
+	t, err := ParseDate(s, now)
+	if err != nil {
+		b.fail(k, "%s must be YYYY-MM-DD", name)
+		return time.Time{}, false
 	}
-	b.fail(k, "%s must be YYYY-MM-DD", name)
-	return time.Time{}, false
+	return t, true
 }
 
-// clockLayouts are the layouts a time can be typed in.
-var clockLayouts = []string{"15:04", "15:04:05", "1504", "150405"}
-
-// clock parses the time of day in field k, named name in errors, as the
-// time since midnight, reporting false when it is invalid, or empty and
+// clock parses the time of day in field k, named name in errors, as
+// ParseTime reads it, reporting false when it is invalid, or empty and
 // required.
-func (b *builder) clock(k Field, name string, required bool) (time.Duration, bool) {
+func (b *builder) clock(k Field, name string, required bool, now time.Time) (time.Duration, bool) {
 	s := strings.TrimSpace(b.f[k])
 	if s == "" {
 		if required {
@@ -546,14 +539,12 @@ func (b *builder) clock(k Field, name string, required bool) (time.Duration, boo
 		}
 		return 0, !required
 	}
-	for _, layout := range clockLayouts {
-		if t, err := time.Parse(layout, s); err == nil {
-			h, m, sec := t.Clock()
-			return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute + time.Duration(sec)*time.Second, true
-		}
+	d, err := ParseTime(s, now)
+	if err != nil {
+		b.fail(k, "%s must be HH:MM or HH:MM:SS", name)
+		return 0, false
 	}
-	b.fail(k, "%s must be HH:MM or HH:MM:SS", name)
-	return 0, false
+	return d, true
 }
 
 // mode checks that mode is an ADIF mode and submode one of its submodes.

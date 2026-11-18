@@ -116,7 +116,12 @@ func focusOn(t *testing.T, m Model, f qsoentry.Field) Model {
 	return m
 }
 
-// fill types each value into its field, in field order.
+// clearKey clears a text field's value before the cursor, which focusOn
+// leaves at its end.
+var clearKey = keyPress('u', tea.ModCtrl)
+
+// fill types each value into its field, in field order, in place of what
+// a text field holds, such as the date filled in as today.
 func fill(t *testing.T, m Model, values map[qsoentry.Field]string) Model {
 	t.Helper()
 	for f := range qsoentry.FieldCount {
@@ -125,6 +130,9 @@ func fill(t *testing.T, m Model, values map[qsoentry.Field]string) Model {
 			continue
 		}
 		m = focusOn(t, m, f)
+		if !isPicked(f) && !isMultiLine(f) {
+			m = press(t, m, clearKey)
+		}
 		m = typeText(t, m, v)
 	}
 	return m
@@ -313,15 +321,15 @@ func TestEntrySaveShowsErrorsInline(t *testing.T) {
 	m = press(t, m, saveKey)
 
 	body := bodyText(m)
-	assert.Contains(t, body, "date is required")
+	assert.Contains(t, body, "time on is required")
 	assert.Contains(t, body, "call is required")
 	assert.Contains(t, body, `"ZZ99" is not a Maidenhead locator`)
-	assert.Equal(t, qsoentry.Date, m.entry.focus, "the first field in error has focus")
+	assert.Equal(t, qsoentry.TimeOn, m.entry.focus, "the first field in error has focus")
 	assert.Empty(t, s.added, "nothing is saved")
 
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Call: "K1ABC"})
 	assert.NotContains(t, bodyText(m), "call is required", "an error clears once fixed")
-	assert.Contains(t, bodyText(m), "date is required")
+	assert.Contains(t, bodyText(m), "time on is required")
 }
 
 // paperQSO is a QSO typed in from a paper log.
