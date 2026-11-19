@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 
@@ -93,6 +94,16 @@ func TestEditDXCCFollowsCall(t *testing.T) {
 
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Call: "VE3ABC"})
 	assert.Equal(t, [4]string{"1", "NA", "5", "9"}, dxccValues(m), "stored values matching the call are updated")
+}
+
+func TestEditDXCCKeepsStoredValues(t *testing.T) {
+	q := editedQSO(t)
+	q.CQZ = sql.Null[int]{V: 4, Valid: true}
+	m := openEditModel(t, newEditStore(t, q), WithDXCC(newDXCCTable(t)))
+
+	m = fill(t, m, map[qsoentry.Field]string{qsoentry.Call: "VE3ABC"})
+	assert.Equal(t, [4]string{"1", "NA", "4", "9"}, dxccValues(m),
+		"a stored CQ zone that differs from the call's is kept")
 }
 
 func TestEntryDXCCShowsEntityBeforeLoTW(t *testing.T) {
