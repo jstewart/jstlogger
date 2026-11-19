@@ -48,11 +48,16 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	if err != nil {
 		return fmt.Errorf("index format: %w", err)
 	}
+	sort, err := logbook.ParseSort(session.Config.Index.Sort)
+	if err != nil {
+		return fmt.Errorf("index sort: %w", err)
+	}
 	tuiOpts := []tui.Option{
 		tui.WithLogbook(store),
 		tui.WithVersion(version),
 		tui.WithIndexFormat(format, indexfmt.Unit(session.Config.Logbook.DistanceUnit)),
 		tui.WithPagerIndexLines(session.Config.Index.PagerIndexLines),
+		tui.WithIndexSort(sort),
 		tui.WithStationName(func(callsign, grid string) string {
 			return config.StationName(session.Config.Stations, callsign, grid)
 		}),

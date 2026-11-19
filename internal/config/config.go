@@ -35,6 +35,8 @@ const (
 	DefaultIndexFormat = indexfmt.Default
 	// DefaultPagerIndexLines is the default index.pager_index_lines.
 	DefaultPagerIndexLines = 10
+	// DefaultIndexSort is the default index.sort: date, newest first.
+	DefaultIndexSort = "date"
 	// DefaultCallbookCacheTTL is the default callbook.cache_ttl.
 	DefaultCallbookCacheTTL = 168 * time.Hour
 )
@@ -116,6 +118,10 @@ type Index struct {
 	// PagerIndexLines is the number of index rows kept above the QSO pager,
 	// as NeoMutt's pager_index_lines.
 	PagerIndexLines int `mapstructure:"pager_index_lines" toml:"pager_index_lines"`
+	// Sort is the order the index starts in, as logbook.ParseSort accepts
+	// it, e.g. "band" or "reverse-call". Load replaces an unknown sort with
+	// DefaultIndexSort and warns.
+	Sort string `mapstructure:"sort" toml:"sort"`
 }
 
 // Logbook is the [logbook] table.

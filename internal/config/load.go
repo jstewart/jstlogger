@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
+	"jstlogger/internal/logbook"
 )
 
 // LoadResult describes what Load did besides producing a Config.
@@ -57,6 +58,7 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 	v.SetDefault("logbook.distance_unit", DefaultDistanceUnit)
 	v.SetDefault("index.format", DefaultIndexFormat)
 	v.SetDefault("index.pager_index_lines", DefaultPagerIndexLines)
+	v.SetDefault("index.sort", DefaultIndexSort)
 	v.SetDefault("callbook.cache_ttl", DefaultCallbookCacheTTL)
 
 	if err := v.ReadInConfig(); err != nil {
@@ -91,6 +93,11 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 
 	for _, k := range md.Unused {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("unknown key %q", unusedKeyReplacer.Replace(k)))
+	}
+	// An unknown sort only changes the starting order, so it is not fatal.
+	if _, err := logbook.ParseSort(c.Index.Sort); err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("index.sort: unknown sort %q; using %q", c.Index.Sort, DefaultIndexSort))
+		c.Index.Sort = DefaultIndexSort
 	}
 	slices.Sort(res.Warnings)
 
