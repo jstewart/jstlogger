@@ -81,6 +81,17 @@ func (s *entryStore) expectAdd() {
 	}).AnyTimes()
 }
 
+// expectGet makes Get return the QSO with the ID it is given, as the
+// logbook fallback of the callbook lookup loads it.
+func (s *entryStore) expectGet() {
+	s.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, id int64) (logbook.QSO, error) {
+		if i := slices.IndexFunc(s.qsos, func(q logbook.QSO) bool { return q.ID == id }); i >= 0 {
+			return s.qsos[i], nil
+		}
+		return logbook.QSO{}, logbook.ErrNotFound
+	}).AnyTimes()
+}
+
 // newEntryModel returns a model on s in a 100 by 30 window with the New QSO
 // screen open.
 func newEntryModel(t *testing.T, s logbook.Store, opts ...Option) Model {
@@ -348,6 +359,7 @@ var paperQSO = map[qsoentry.Field]string{
 func TestEntrySave(t *testing.T) {
 	s := newEntryStore(t, nil, testQSOs(2)...)
 	s.expectAdd()
+	s.expectGet()
 	st := qsoentry.Station{Name: "home", Callsign: "W1AW", Operator: "K1XX", Grid: "FN31"}
 	m := newEntryModel(t, s, WithStations([]qsoentry.Station{st}))
 	m = fill(t, m, paperQSO)
@@ -393,6 +405,7 @@ func TestEntrySave(t *testing.T) {
 func TestEntrySaveAndClose(t *testing.T) {
 	s := newEntryStore(t, nil, testQSOs(5)...)
 	s.expectAdd()
+	s.expectGet()
 	m := newEntryModel(t, s)
 	// Close the screen to move to the oldest QSO, then open it again.
 	m = press(t, m, esc(), special(tea.KeyEnd), newQSOKey)

@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"jstlogger/internal/callbook"
 	"jstlogger/internal/callsign"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/qsoentry"
@@ -57,6 +58,10 @@ type Model struct {
 	// dxcc looks up the DXCC entity of the call typed into the New QSO
 	// screen; nil fills in and shows none.
 	dxcc DXCCLookup
+
+	// callbook looks up the details of the call typed into the New QSO
+	// screen; nil fills them in from the logbook alone.
+	callbook callbook.Looker
 
 	// eqsl looks up the pager QSO's eQSL AG membership; nil shows none.
 	eqsl EQSLLookup
@@ -255,6 +260,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 	case entryWorkedMsg:
 		m.entry.applyWorked(msg)
 
+	case entryCallbookTickMsg:
+		return m.tickCallbook(msg)
+
+	case entryCallbookMsg:
+		m.applyCallbook(msg)
+
 	case pagerQSOMsg:
 		q, _ := m.idx.current()
 		m.pager.applyQSO(msg, q.ID)
@@ -424,8 +435,8 @@ func (m Model) bodyWidth() int {
 // change height with the prompt and help, or to the strip above the open
 // pager, and returns a command loading any rows that come into view and
 // the whole QSO the pager shows, and its LoTW use and eQSL AG membership,
-// and the LoTW use and earlier QSOs of the call typed into the New QSO
-// screen.
+// and the LoTW use, earlier QSOs and callbook details of the call typed
+// into the New QSO screen.
 func (m *Model) layout() tea.Cmd {
 	// A reload or bulk delete may have left no QSO for the pager to show.
 	if m.idx.total == 0 && m.pager.open {
@@ -445,7 +456,7 @@ func (m *Model) layout() tea.Cmd {
 	for _, b := range m.idx.missing() {
 		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
 	}
-	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL(), m.fetchEntryLoTW(), m.fetchWorked())...)
+	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL(), m.fetchEntryLoTW(), m.fetchWorked(), m.fetchCallbook())...)
 }
 
 // updateIndex handles a key press on the QSO index.
