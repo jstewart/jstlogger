@@ -350,6 +350,11 @@ func (m Model) pagerContent(width int) []string {
 		return []string{st.muted.Render("Loading…")}
 	}
 	if p.tab == tabQSO {
+		// The index rows lack the tags; they show once the whole QSO is
+		// fetched, and stay while it is fetched again.
+		if p.qso.ID == q.ID && p.err == nil {
+			q.Tags = p.qso.Tags
+		}
 		return strings.Split(qsoTab(st, q, m.idx.unit, m.lotwStatus(q.Call), m.eqslStatus(q.Call), width), "\n")
 	}
 	switch {
@@ -413,7 +418,7 @@ func (m Model) pagerView(width, height int) string {
 // width cells. An empty field shows pagerEmpty, so every QSO has the same
 // rows. Distances are shown in unit; any unit other than Mi shows
 // kilometers. A LoTW row follows the Call row when lotw is enabled, then an
-// eQSL AG row when eqsl is enabled.
+// eQSL AG row when eqsl is enabled. The Tags row comes last.
 func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, eqsl eqslStatus, width int) string {
 	mode := q.Mode
 	switch {
@@ -458,6 +463,7 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, eqsl 
 		{label: "Comment", value: q.Comment},
 		{label: "Country", value: q.Country},
 		{label: "Continent", value: q.Cont},
+		{label: "Tags", value: strings.Join(q.Tags, ", ")},
 	}
 	// The LoTW row follows the Call row, and the eQSL AG row follows them.
 	after := 2

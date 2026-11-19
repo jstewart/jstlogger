@@ -38,6 +38,7 @@ func fullQSO() logbook.QSO {
 		Comment:    "Nice signal",
 		Country:    "Japan",
 		Cont:       "AS",
+		Tags:       []string{"dx", "pota"},
 	}
 }
 
@@ -273,13 +274,14 @@ func TestQSOTab(t *testing.T) {
 	labels := []string{
 		"Date/time", "Call", "Band", "Frequency", "Mode", "RST sent", "RST rcvd",
 		"Grid", "Distance", "State", "County", "Name", "Comment", "Country", "Continent",
+		"Tags",
 	}
 
 	full := plain(qsoTab(defaultStyles(), fullQSO(), indexfmt.Km, lotwStatus{}, eqslStatus{}, 80))
 	for _, want := range append(labels,
 		"2026-10-31 18:34:56 UTC", "JA1ABC", "20m", "14.074 MHz", "MFSK (FT4)",
 		"-10", "+02", "PM95", "10870 km", "MA,MIDDLESEX", "Taro", "Nice signal",
-		"Japan", "AS",
+		"Japan", "AS", "dx, pota",
 	) {
 		assert.Contains(t, full, want)
 	}
