@@ -54,6 +54,10 @@ type Model struct {
 	// until the next successful sync or key press.
 	lotwErr error
 
+	// dxcc looks up the DXCC entity of the call typed into the New QSO
+	// screen; nil fills in and shows none.
+	dxcc DXCCLookup
+
 	// eqsl looks up the pager QSO's eQSL AG membership; nil shows none.
 	eqsl EQSLLookup
 	// eqslErr is the error from the last eQSL sync or pager lookup, shown
