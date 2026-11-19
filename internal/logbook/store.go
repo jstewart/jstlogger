@@ -24,23 +24,25 @@ type Store interface {
 	// Count returns the number of QSOs matching e. A nil e matches every
 	// QSO.
 	Count(ctx context.Context, e Expr) (int, error)
-	// Index returns up to limit QSOs matching e, newest first, starting at
-	// row offset (0 is the newest), without their fields, confirmations or
-	// tags. A nil e matches every QSO.
-	Index(ctx context.Context, e Expr, offset, limit int) ([]QSO, error)
+	// Index returns up to limit QSOs matching e, in sort's order (the zero
+	// Sort is newest first), starting at row offset (0 is the first), without
+	// their fields, confirmations or tags. A nil e matches every QSO.
+	Index(ctx context.Context, e Expr, sort Sort, offset, limit int) ([]QSO, error)
 	// IndexOf returns the row number of the QSO with the given ID in Index's
-	// ordering of the QSOs matching e, or ErrNotFound. A nil e matches every
+	// ordering by sort of the QSOs matching e, or ErrNotFound. A nil e
+	// matches every QSO.
+	IndexOf(ctx context.Context, e Expr, sort Sort, id int64) (int, error)
+	// Search returns the row number, in Index's ordering by sort of the QSOs
+	// matching within, of the first QSO after row from that also matches
+	// match, or of the last one before row from when backward is true. From
+	// may lie outside the rows: -1 searches forward from the first row and a
+	// from at or past the last row searches backward from the last. It
+	// returns ErrNotFound when no such QSO exists. A nil within or match
+	// matches every QSO.
+	Search(ctx context.Context, within, match Expr, sort Sort, from int, backward bool) (int, error)
+	// IDs returns the IDs of every QSO matching e in Index's ordering for the
+	// zero Sort (newest first), or nil when none match. A nil e matches every
 	// QSO.
-	IndexOf(ctx context.Context, e Expr, id int64) (int, error)
-	// Search returns the row number, in Index's ordering of the QSOs matching
-	// within, of the first QSO after row from that also matches match, or of
-	// the last one before row from when backward is true. From may lie outside
-	// the rows: -1 searches forward from the first row and a from at or past
-	// the last row searches backward from the last. It returns ErrNotFound when
-	// no such QSO exists. A nil within or match matches every QSO.
-	Search(ctx context.Context, within, match Expr, from int, backward bool) (int, error)
-	// IDs returns the IDs of every QSO matching e in Index's ordering
-	// (newest first), or nil when none match. A nil e matches every QSO.
 	IDs(ctx context.Context, e Expr) ([]int64, error)
 	// Tag applies tags to each of the given QSOs, creating tags as needed.
 	Tag(ctx context.Context, qsoIDs []int64, tags ...string) error

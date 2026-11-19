@@ -56,7 +56,7 @@ func TestPagerDelete(t *testing.T) {
 	assert.Equal(t, int64(2), m.pager.fetched, "the next QSO is fetched")
 	assert.Equal(t, 0, m.pager.scroll, "the next QSO starts at the top")
 	assert.Contains(t, plain(m.pagerBody(t)), "K2A")
-	assert.Equal(t, "QSO 3/4 · 2 marked · Deleted QSO with K3A on 2026-10-31 12:03.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/4 · sort: date · 2 marked · Deleted QSO with K3A on 2026-10-31 12:03.", statusLine(t, m))
 }
 
 func TestPagerDeleteCancel(t *testing.T) {
@@ -70,7 +70,7 @@ func TestPagerDeleteCancel(t *testing.T) {
 	assert.True(t, m.pager.open)
 	assert.Equal(t, int64(3), m.mustCurrentID(t))
 	assert.Equal(t, 3, m.pager.scroll)
-	assert.Equal(t, "QSO 3/5 · 2 marked", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · sort: date · 2 marked", statusLine(t, m))
 }
 
 func TestPagerDeleteLastQSO(t *testing.T) {
@@ -114,7 +114,7 @@ func TestPagerBulkDelete(t *testing.T) {
 	assert.Equal(t, int64(3), m.mustCurrentID(t), "the pager stays on its QSO")
 	assert.Equal(t, int64(3), m.pager.fetched)
 	assert.Contains(t, plain(m.pagerBody(t)), "K3A")
-	assert.Equal(t, "QSO 1/3 · Deleted 2 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/3 · sort: date · Deleted 2 QSOs.", statusLine(t, m))
 }
 
 func TestPagerBulkDeleteCancel(t *testing.T) {
@@ -203,7 +203,7 @@ func TestPagerBulkTag(t *testing.T) {
 	assert.True(t, m.pager.open)
 	assert.Equal(t, int64(3), m.mustCurrentID(t))
 	assert.Equal(t, "pota", tagsValue(t, m), "the pager shows the new tag")
-	assert.Equal(t, "QSO 3/5 · 3 marked · Tagged 3 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · sort: date · 3 marked · Tagged 3 QSOs.", statusLine(t, m))
 }
 
 func TestPagerBulkUntag(t *testing.T) {

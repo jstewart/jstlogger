@@ -5,33 +5,35 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
-// Index returns up to limit QSOs matching e, newest first (StartUTC
-// descending, then ID descending), starting at row offset, where 0 is the
-// newest. Only the qso row is loaded: Fields, Confirmations and Tags are
-// nil. A limit of zero or less returns nil, and limits above MaxPageSize are
-// capped. It returns an error wrapping ErrInvalidFilter if a Filter in e is
-// invalid. A nil e matches every QSO.
+// Index returns up to limit QSOs matching e, in sort's order, starting at
+// row offset, where 0 is the first. The zero Sort is newest first (StartUTC
+// descending, then ID descending). Only the qso row is loaded: Fields,
+// Confirmations and Tags are nil. A limit of zero or less returns nil, and
+// limits above MaxPageSize are capped. It returns an error wrapping
+// ErrInvalidFilter if a Filter in e is invalid, or ErrInvalidSort if sort
+// is. A nil e matches every QSO.
 //
 // Unlike List, Index can start anywhere in the ordering, so a caller can
 // show any range of a large logbook without reading the rows before it.
-func (s *SQLiteStore) Index(ctx context.Context, e Expr, offset, limit int) ([]QSO, error) {
-	qs, err := s.index(ctx, e, offset, limit)
+func (s *SQLiteStore) Index(ctx context.Context, e Expr, sort Sort, offset, limit int) ([]QSO, error) {
+	qs, err := s.index(ctx, e, sort, offset, limit)
 	if err != nil {
 		return nil, fmt.Errorf("logbook: index qsos: %w", err)
 	}
 	return qs, nil
 }
 
-func (s *SQLiteStore) index(ctx context.Context, e Expr, offset, limit int) (qs []QSO, err error) {
+func (s *SQLiteStore) index(ctx context.Context, e Expr, sort Sort, offset, limit int) (qs []QSO, err error) {
 	if offset < 0 {
 		return nil, fmt.Errorf("negative offset %d", offset)
 	}
 	if limit <= 0 {
 		return nil, nil
 	}
-	query, args, err := indexQuery(e, offset, min(limit, MaxPageSize))
+	query, args, err := indexQuery(e, sort, offset, min(limit, MaxPageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -53,26 +55,31 @@ func (s *SQLiteStore) index(ctx context.Context, e Expr, offset, limit int) (qs 
 	return qs, nil
 }
 
-// indexQuery returns the query Index runs and its arguments. The ORDER BY
-// matches the qso_by_start index, so SQLite skips offset rows of the index
-// instead of sorting the table.
-func indexQuery(e Expr, offset, limit int) (string, []any, error) {
+// indexQuery returns the query Index runs and its arguments. For the zero
+// Sort the ORDER BY matches the qso_by_start index, so SQLite skips offset
+// rows of the index instead of sorting the table.
+func indexQuery(e Expr, sort Sort, offset, limit int) (string, []any, error) {
+	terms, err := sort.terms()
+	if err != nil {
+		return "", nil, err
+	}
 	conds, args, err := exprConds(e)
 	if err != nil {
 		return "", nil, err
 	}
 	query := "SELECT " + qsoColumns + " FROM qso" + where(conds) +
-		" ORDER BY start_utc DESC, id DESC LIMIT ? OFFSET ?"
+		" ORDER BY " + orderBy(terms, false) + " LIMIT ? OFFSET ?"
 	return query, append(args, limit, offset), nil
 }
 
 // IndexOf returns the row number of the QSO with the given ID among the QSOs
-// matching e, in the order Index uses, so that Index(ctx, e, n, 1) returns
-// it. It returns ErrNotFound if the QSO does not exist or does not match e,
-// and an error wrapping ErrInvalidFilter if a Filter in e is invalid. A nil e
-// matches every QSO.
-func (s *SQLiteStore) IndexOf(ctx context.Context, e Expr, id int64) (int, error) {
-	n, err := s.indexOf(ctx, e, id)
+// matching e, in sort's order as Index uses it, so that
+// Index(ctx, e, sort, n, 1) returns it. It returns ErrNotFound if the QSO
+// does not exist or does not match e, an error wrapping ErrInvalidFilter if
+// a Filter in e is invalid, and one wrapping ErrInvalidSort if sort is. A
+// nil e matches every QSO.
+func (s *SQLiteStore) IndexOf(ctx context.Context, e Expr, sort Sort, id int64) (int, error) {
+	n, err := s.indexOf(ctx, e, sort, id)
 	if errors.Is(err, ErrNotFound) {
 		return 0, err
 	}
@@ -82,14 +89,17 @@ func (s *SQLiteStore) IndexOf(ctx context.Context, e Expr, id int64) (int, error
 	return n, nil
 }
 
-func (s *SQLiteStore) indexOf(ctx context.Context, e Expr, id int64) (int, error) {
+func (s *SQLiteStore) indexOf(ctx context.Context, e Expr, sort Sort, id int64) (int, error) {
+	terms, err := sort.terms()
+	if err != nil {
+		return 0, err
+	}
 	match, args, err := exprConds(e)
 	if err != nil {
 		return 0, err
 	}
 	conds := append([]string{"id = ?"}, match...)
-	var start string
-	err = s.db.QueryRowContext(ctx, "SELECT start_utc FROM qso"+where(conds), append([]any{id}, args...)...).Scan(&start)
+	vals, err := s.termValues(ctx, terms, "SELECT "+selectTerms(terms)+" FROM qso"+where(conds), append([]any{id}, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
@@ -97,42 +107,63 @@ func (s *SQLiteStore) indexOf(ctx context.Context, e Expr, id int64) (int, error
 		return 0, fmt.Errorf("query qso: %w", err)
 	}
 
-	return s.rowOf(ctx, match, args, start, id)
+	return s.rowOf(ctx, match, args, terms, vals)
 }
 
-// Conditions that place a QSO strictly before or after the QSO with a given
-// start_utc and id in newest-first order (StartUTC descending, then ID
-// descending). Each takes the start time twice, then the ID, as arguments.
-const (
-	beforeCond = "(start_utc > ? OR (start_utc = ? AND id > ?))"
-	afterCond  = "(start_utc < ? OR (start_utc = ? AND id < ?))"
-)
+// termValues runs query, which selects terms' expressions, and returns the
+// values of its first row, or an error wrapping sql.ErrNoRows when there is
+// none. Text comes back as a string, so that binding it again compares it as
+// text.
+func (s *SQLiteStore) termValues(ctx context.Context, terms []sortTerm, query string, args []any) ([]any, error) {
+	vals := make([]any, len(terms))
+	ptrs := make([]any, len(terms))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(ptrs...); err != nil {
+		return nil, err
+	}
+	for i, v := range vals {
+		if b, ok := v.([]byte); ok {
+			vals[i] = string(b)
+		}
+	}
+	return vals, nil
+}
 
-// rowOf returns the row number, in newest-first order, of the QSO with the
-// given start time and ID among the QSOs matching conds and args, by
-// counting the matching QSOs that come before it.
-func (s *SQLiteStore) rowOf(ctx context.Context, conds []string, args []any, start string, id int64) (int, error) {
-	conds = append([]string{beforeCond}, conds...)
+// rowOf returns the row number, in the order of terms, of the QSO whose
+// term values are vals among the QSOs matching conds and args, by counting
+// the matching QSOs that come before it. It counts each of keysetLevels
+// separately, since each count is a range of an index, and adds them up.
+func (s *SQLiteStore) rowOf(ctx context.Context, conds []string, args []any, terms []sortTerm, vals []any) (int, error) {
+	levels, levelArgs := keysetLevels(terms, vals, true)
+	counts := make([]string, len(levels))
+	var all []any
+	for i, level := range levels {
+		counts[i] = "(SELECT COUNT(*) FROM qso" + where(append([]string{level}, conds...)) + ")"
+		all = append(append(all, levelArgs[i]...), args...)
+	}
 	var n int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM qso"+where(conds), append([]any{start, start, id}, args...)...).Scan(&n)
+	err := s.db.QueryRowContext(ctx, "SELECT "+strings.Join(counts, " + "), all...).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count qsos: %w", err)
 	}
 	return n, nil
 }
 
-// Search returns the row number, in Index's ordering of the QSOs matching
-// within, of the first QSO after row from that also matches match, or of the
-// last one before row from when backward is true. From may lie outside the
-// rows: -1 searches forward from the first row and a from at or past the
-// last row searches backward from the last. It returns ErrNotFound when no
-// such QSO exists, and an error wrapping ErrInvalidFilter if a Filter in
-// within or match is invalid. A nil within or match matches every QSO.
+// Search returns the row number, in Index's ordering by sort of the QSOs
+// matching within, of the first QSO after row from that also matches match,
+// or of the last one before row from when backward is true. From may lie
+// outside the rows: -1 searches forward from the first row and a from at or
+// past the last row searches backward from the last. It returns ErrNotFound
+// when no such QSO exists, an error wrapping ErrInvalidFilter if a Filter in
+// within or match is invalid, and one wrapping ErrInvalidSort if sort is. A
+// nil within or match matches every QSO.
 //
 // Only the anchor row, the matching QSO and a count are read, so a caller
 // can search a large logbook without loading every ID.
-func (s *SQLiteStore) Search(ctx context.Context, within, match Expr, from int, backward bool) (int, error) {
-	n, err := s.search(ctx, within, match, from, backward)
+func (s *SQLiteStore) Search(ctx context.Context, within, match Expr, sort Sort, from int, backward bool) (int, error) {
+	n, err := s.search(ctx, within, match, sort, from, backward)
 	if errors.Is(err, ErrNotFound) {
 		return 0, err
 	}
@@ -142,7 +173,11 @@ func (s *SQLiteStore) Search(ctx context.Context, within, match Expr, from int, 
 	return n, nil
 }
 
-func (s *SQLiteStore) search(ctx context.Context, within, match Expr, from int, backward bool) (int, error) {
+func (s *SQLiteStore) search(ctx context.Context, within, match Expr, sort Sort, from int, backward bool) (int, error) {
+	terms, err := sort.terms()
+	if err != nil {
+		return 0, err
+	}
 	withinConds, withinArgs, err := exprConds(within)
 	if err != nil {
 		return 0, err
@@ -159,11 +194,9 @@ func (s *SQLiteStore) search(ctx context.Context, within, match Expr, from int, 
 	conds := append(append([]string(nil), withinConds...), matchConds...)
 	args := append(append([]any(nil), withinArgs...), matchArgs...)
 	if from >= 0 {
-		var start string
-		var id int64
-		err := s.db.QueryRowContext(ctx,
-			"SELECT start_utc, id FROM qso"+where(withinConds)+" ORDER BY start_utc DESC, id DESC LIMIT 1 OFFSET ?",
-			append(append([]any(nil), withinArgs...), from)...).Scan(&start, &id)
+		anchor, err := s.termValues(ctx, terms,
+			"SELECT "+selectTerms(terms)+" FROM qso"+where(withinConds)+" ORDER BY "+orderBy(terms, false)+" LIMIT 1 OFFSET ?",
+			append(append([]any(nil), withinArgs...), from))
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			if !backward {
@@ -173,28 +206,21 @@ func (s *SQLiteStore) search(ctx context.Context, within, match Expr, from int, 
 		case err != nil:
 			return 0, fmt.Errorf("query anchor qso: %w", err)
 		default:
-			cond := afterCond
-			if backward {
-				cond = beforeCond
-			}
+			cond, condArgs := keysetCond(terms, anchor, backward)
 			conds = append(conds, cond)
-			args = append(args, start, start, id)
+			args = append(args, condArgs...)
 		}
 	}
 
 	// Find the nearest QSO in the search direction.
-	order := " ORDER BY start_utc DESC, id DESC LIMIT 1"
-	if backward {
-		order = " ORDER BY start_utc ASC, id ASC LIMIT 1"
-	}
-	var start string
-	var id int64
-	err = s.db.QueryRowContext(ctx, "SELECT start_utc, id FROM qso"+where(conds)+order, args...).Scan(&start, &id)
+	found, err := s.termValues(ctx, terms,
+		"SELECT "+selectTerms(terms)+" FROM qso"+where(conds)+" ORDER BY "+orderBy(terms, backward)+" LIMIT 1",
+		args)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrNotFound
 	}
 	if err != nil {
 		return 0, fmt.Errorf("query qso: %w", err)
 	}
-	return s.rowOf(ctx, withinConds, withinArgs, start, id)
+	return s.rowOf(ctx, withinConds, withinArgs, terms, found)
 }

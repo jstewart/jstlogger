@@ -45,10 +45,10 @@ const (
 	msgNoMarks          = "No marked QSOs."
 )
 
-// index is the scrolling list of QSOs, newest first. Rows are identified by
-// their position in that order; row 0 is the newest QSO. Only the rows near
-// the view are cached, in blocks of indexBlockSize, so the logbook can be
-// any size.
+// index is the scrolling list of QSOs, in the order of its sort, newest
+// first unless the sort is changed. Rows are identified by their position
+// in that order; row 0 is the first QSO. Only the rows near the view are
+// cached, in blocks of indexBlockSize, so the logbook can be any size.
 type index struct {
 	// loaded reports whether total is known.
 	loaded bool
@@ -72,6 +72,8 @@ type index struct {
 	// limit restricts the rows to the QSOs matching a pattern; the zero
 	// limit shows every QSO.
 	limit indexLimit
+	// sort orders the rows; the zero sort is by date, newest first.
+	sort logbook.Sort
 
 	// marks holds the IDs of the marked QSOs. Limiting the index does not
 	// change them.
@@ -193,10 +195,10 @@ type indexSearchMsg struct {
 }
 
 // loadIndexCmd returns a command that counts the QSOs matching limit and
-// loads the block holding the cursor. The cursor goes to the QSO with the
-// given ID if it still matches, and otherwise to row fallback. A nil limit
-// matches every QSO.
-func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, id int64, fallback int) tea.Cmd {
+// loads the block holding the cursor, in the order of sort. The cursor goes
+// to the QSO with the given ID if it still matches, and otherwise to row
+// fallback. A nil limit matches every QSO.
+func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sort, id int64, fallback int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
@@ -208,7 +210,7 @@ func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, id int64, fallba
 			}
 			cursor := fallback
 			if id != 0 {
-				n, err := s.IndexOf(ctx, limit, id)
+				n, err := s.IndexOf(ctx, limit, sort, id)
 				switch {
 				case err == nil:
 					cursor = n
@@ -218,7 +220,7 @@ func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, id int64, fallba
 			}
 			cursor = max(min(cursor, total-1), 0)
 			block := cursor / indexBlockSize
-			rows, err := s.Index(ctx, limit, block*indexBlockSize, indexBlockSize)
+			rows, err := s.Index(ctx, limit, sort, block*indexBlockSize, indexBlockSize)
 			if err != nil {
 				return fmt.Errorf("load index: %w", err)
 			}
@@ -229,11 +231,12 @@ func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, id int64, fallba
 	}
 }
 
-// limitIndexCmd returns a command that loads the index under limit, as
-// loadIndexCmd does, and reports it as an indexLimitMsg. The cursor stays
-// on the QSO with the given ID if it matches, and otherwise goes to row 0.
-func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, id int64) tea.Cmd {
-	load := loadIndexCmd(s, gen, limit.expr, id, 0)
+// limitIndexCmd returns a command that loads the index under limit, in the
+// order of sort, as loadIndexCmd does, and reports it as an indexLimitMsg.
+// The cursor stays on the QSO with the given ID if it matches, and
+// otherwise goes to row 0.
+func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, sort logbook.Sort, id int64) tea.Cmd {
+	load := loadIndexCmd(s, gen, limit.expr, sort, id, 0)
 	return func() tea.Msg {
 		msg, _ := load().(indexLoadedMsg)
 		return indexLimitMsg{indexLoadedMsg: msg, limit: limit}
@@ -241,12 +244,12 @@ func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, id int64) tea.Cmd
 }
 
 // loadBlockCmd returns a command that loads one block of the rows matching
-// limit. A nil limit matches every QSO.
-func loadBlockCmd(s logbook.Store, gen int, limit logbook.Expr, block int) tea.Cmd {
+// limit, in the order of sort. A nil limit matches every QSO.
+func loadBlockCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sort, block int) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
-		rows, err := s.Index(ctx, limit, block*indexBlockSize, indexBlockSize)
+		rows, err := s.Index(ctx, limit, sort, block*indexBlockSize, indexBlockSize)
 		if err != nil {
 			err = fmt.Errorf("load rows %d–%d: %w", block*indexBlockSize+1, (block+1)*indexBlockSize, err)
 		}
@@ -587,22 +590,23 @@ func markPatternCmd(s logbook.Store, e logbook.Expr, add bool) tea.Cmd {
 	}
 }
 
-// searchIndexCmd returns a command that searches the rows matching limit
-// for the nearest QSO matching match after row from, or before it when
-// backward is true. As in mutt, a search that reaches the end of the total
-// rows wraps around to the other end. A nil limit matches every QSO.
-func searchIndexCmd(s logbook.Store, gen int, limit, match logbook.Expr, from, total int, backward bool) tea.Cmd {
+// searchIndexCmd returns a command that searches the rows matching limit,
+// in the order of sort, for the nearest QSO matching match after row from,
+// or before it when backward is true. As in mutt, a search that reaches
+// the end of the total rows wraps around to the other end. A nil limit
+// matches every QSO.
+func searchIndexCmd(s logbook.Store, gen int, limit, match logbook.Expr, sort logbook.Sort, from, total int, backward bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
 		msg := indexSearchMsg{gen: gen, backward: backward}
-		row, err := s.Search(ctx, limit, match, from, backward)
+		row, err := s.Search(ctx, limit, match, sort, from, backward)
 		if errors.Is(err, logbook.ErrNotFound) {
 			wrapFrom := -1
 			if backward {
 				wrapFrom = total
 			}
-			row, err = s.Search(ctx, limit, match, wrapFrom, backward)
+			row, err = s.Search(ctx, limit, match, sort, wrapFrom, backward)
 			msg.wrapped = err == nil
 		}
 		if err != nil {
@@ -687,7 +691,7 @@ func (m *Model) limitIndex(s string) (tea.Cmd, error) {
 		return nil, nil
 	}
 	id := m.idx.restart()
-	return limitIndexCmd(m.logbook, m.idx.gen, limit, id), nil
+	return limitIndexCmd(m.logbook, m.idx.gen, limit, m.idx.sort, id), nil
 }
 
 // markPattern returns a command that marks, when add is true, or unmarks the
@@ -738,7 +742,7 @@ func (m *Model) searchAgain(opposite bool) tea.Cmd {
 // within the limit.
 func (m *Model) runSearch(backward bool) tea.Cmd {
 	x := &m.idx
-	return searchIndexCmd(m.logbook, x.gen, x.limit.expr, x.search.expr, x.cursor, x.total, backward)
+	return searchIndexCmd(m.logbook, x.gen, x.limit.expr, x.search.expr, x.sort, x.cursor, x.total, backward)
 }
 
 // jump moves the index cursor to the row number typed in the jump prompt.

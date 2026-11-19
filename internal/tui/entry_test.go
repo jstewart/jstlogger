@@ -52,12 +52,12 @@ func newEntryStore(t *testing.T, tags []string, qsos ...logbook.QSO) *entryStore
 	e.Count(gomock.Any(), gomock.Any()).DoAndReturn(func(context.Context, logbook.Expr) (int, error) {
 		return len(s.qsos), nil
 	}).AnyTimes()
-	e.Index(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ logbook.Expr, offset, limit int) ([]logbook.QSO, error) {
+	e.Index(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ logbook.Expr, _ logbook.Sort, offset, limit int) ([]logbook.QSO, error) {
 			return slices.Clone(s.qsos[min(offset, len(s.qsos)):min(offset+limit, len(s.qsos))]), nil
 		}).AnyTimes()
-	e.IndexOf(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ logbook.Expr, id int64) (int, error) {
+	e.IndexOf(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ logbook.Expr, _ logbook.Sort, id int64) (int, error) {
 			if i := slices.IndexFunc(s.qsos, func(q logbook.QSO) bool { return q.ID == id }); i >= 0 {
 				return i, nil
 			}
@@ -497,7 +497,7 @@ func TestEntryTagLoadErrorIsShown(t *testing.T) {
 	s := &entryStore{MockStore: mock.NewMockStore(gomock.NewController(t))}
 	e := s.EXPECT()
 	e.Count(gomock.Any(), gomock.Any()).Return(0, nil).AnyTimes()
-	e.Index(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	e.Index(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	e.Tags(gomock.Any()).Return(nil, assert.AnError)
 
 	m := newEntryModel(t, s)

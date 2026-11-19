@@ -54,7 +54,7 @@ func TestPagerOpensOnEnter(t *testing.T) {
 	assert.Contains(t, view, "Call")
 	assert.Contains(t, view, "K8A", "the pager shows the QSO under the cursor")
 	assert.NotContains(t, view, "Date       Time  Call", "the index header is hidden")
-	assert.Equal(t, "QSO 3/10", statusLine(t, m))
+	assert.Equal(t, "QSO 3/10 · sort: date", statusLine(t, m))
 
 	v := m.View()
 	assert.Equal(t, 24, lipgloss.Height(v.Content), "the pager fills the window")

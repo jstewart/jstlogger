@@ -75,6 +75,12 @@ const (
 	// promptConfirm asks a y/N question, Model.confirm, answered by a
 	// single key press rather than typed input.
 	promptConfirm
+	// promptSort asks for the field to sort the QSO index by, answered by
+	// a single key press.
+	promptSort
+	// promptSortReverse asks for the field to sort the QSO index by in
+	// reverse, answered by a single key press.
+	promptSortReverse
 )
 
 // rigState is the rig status as last reported by the rig events.
@@ -89,6 +95,16 @@ type rigState struct {
 func isPatternPrompt(kind promptKind) bool {
 	switch kind {
 	case promptLimit, promptMark, promptUnmark, promptSearch, promptSearchReverse:
+		return true
+	}
+	return false
+}
+
+// isKeyPrompt reports whether the prompt of the given kind is answered by a
+// single key press rather than typed input.
+func isKeyPrompt(kind promptKind) bool {
+	switch kind {
+	case promptConfirm, promptSort, promptSortReverse:
 		return true
 	}
 	return false
@@ -178,14 +194,16 @@ func (m *Model) sizeInput() {
 }
 
 // updatePrompt handles a key press while a prompt is open. Every key goes to
-// the prompt except submit, cancel and force quit. A y/N question takes any
-// key but force quit as its answer.
+// the prompt except submit, cancel and force quit. A y/N question or the
+// sort prompt takes any key but force quit as its answer.
 func (m Model) updatePrompt(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.promptKeys.Quit):
 		return m, tea.Quit
 	case m.prompt == promptConfirm:
 		return m.answerConfirm(msg)
+	case m.prompt == promptSort, m.prompt == promptSortReverse:
+		return m.answerSort(msg)
 	case key.Matches(msg, m.promptKeys.Cancel):
 		return m.closePrompt(), nil
 	case key.Matches(msg, m.promptKeys.Submit):
@@ -272,10 +290,13 @@ func rigCmd(desc string, fn func(ctx context.Context) error) tea.Cmd {
 }
 
 // promptView renders the open prompt and any parse error, or the open y/N
-// question.
+// question or sort prompt.
 func (m Model) promptView() string {
-	if m.prompt == promptConfirm && m.confirm != nil {
+	switch {
+	case m.prompt == promptConfirm && m.confirm != nil:
 		return m.confirm.question
+	case m.prompt == promptSort, m.prompt == promptSortReverse:
+		return sortQuestion(m.prompt == promptSortReverse)
 	}
 	lines := []string{m.input.View()}
 	if m.promptErr != nil {

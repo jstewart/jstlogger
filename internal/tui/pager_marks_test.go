@@ -64,7 +64,7 @@ func TestPagerMark(t *testing.T) {
 	assert.Equal(t, int64(2), m.pager.fetched)
 	assert.Contains(t, plain(m.pagerBody(t)), "K2A")
 	assert.True(t, isMarkedRow(stripLine(t, m, "K3A")), "the strip shows the mark")
-	assert.Equal(t, "QSO 4/5 · 3 marked", statusLine(t, m))
+	assert.Equal(t, "QSO 4/5 · sort: date · 3 marked", statusLine(t, m))
 }
 
 func TestPagerUnmark(t *testing.T) {
@@ -103,7 +103,7 @@ func TestPagerMarkPrefixArms(t *testing.T) {
 
 	assert.True(t, m.idx.prefix)
 	assert.True(t, m.pager.open)
-	assert.Equal(t, "QSO 3/5 · 2 marked · mark-prefix", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · sort: date · 2 marked · mark-prefix", statusLine(t, m))
 }
 
 func TestPagerMarkPrefixWithoutMarks(t *testing.T) {
@@ -114,7 +114,7 @@ func TestPagerMarkPrefixWithoutMarks(t *testing.T) {
 	m = pressPager(t, m, prefixKey)
 
 	assert.False(t, m.idx.prefix)
-	assert.Equal(t, "QSO 1/3 · No marked QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/3 · sort: date · No marked QSOs.", statusLine(t, m))
 }
 
 func TestPagerMarkPrefixEscCancels(t *testing.T) {
@@ -124,7 +124,7 @@ func TestPagerMarkPrefixEscCancels(t *testing.T) {
 
 	assert.False(t, m.idx.prefix)
 	assert.True(t, m.pager.open, "esc cancels the prefix, not the pager")
-	assert.Equal(t, "QSO 3/5 · 2 marked", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · sort: date · 2 marked", statusLine(t, m))
 }
 
 func TestPagerMarkPrefixQDoesNotQuit(t *testing.T) {
@@ -136,7 +136,7 @@ func TestPagerMarkPrefixQDoesNotQuit(t *testing.T) {
 	assert.NotContains(t, collectMsgs(cmd), tea.QuitMsg{})
 	assert.False(t, m.idx.prefix)
 	assert.True(t, m.pager.open, "q does not close the pager either")
-	assert.Equal(t, "QSO 3/5 · 2 marked · q does not apply to marked QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · sort: date · 2 marked · q does not apply to marked QSOs.", statusLine(t, m))
 }
 
 func TestPagerMarkPrefixCtrlCQuits(t *testing.T) {
@@ -155,7 +155,7 @@ func TestPagerMarkPrefixThenLookupPrefix(t *testing.T) {
 
 	assert.False(t, m.idx.prefix)
 	assert.False(t, m.pager.lookupPrefix, "g does not start a lookup")
-	assert.Equal(t, "QSO 3/5 · 2 marked · g does not apply to marked QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · sort: date · 2 marked · g does not apply to marked QSOs.", statusLine(t, m))
 }
 
 func TestPagerLookupPrefixCancelsMarkKeys(t *testing.T) {
@@ -179,7 +179,7 @@ func TestPagerLookupPrefixCancelsMarkKeys(t *testing.T) {
 			assert.Len(t, m.idx.marks, 2, "the marks are unchanged")
 			assert.Equal(t, 2, m.idx.cursor)
 			assert.Equal(t, 5, countAll(t, s))
-			assert.Equal(t, "QSO 3/5 · 2 marked · g"+tt.key.String()+" is not a lookup.", statusLine(t, m))
+			assert.Equal(t, "QSO 3/5 · sort: date · 2 marked · g"+tt.key.String()+" is not a lookup.", statusLine(t, m))
 		})
 	}
 }

@@ -148,7 +148,7 @@ func (m Model) Init() tea.Cmd {
 	if m.logbook == nil {
 		return nil
 	}
-	return loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, 0, 0)
+	return loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, 0, 0)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -312,8 +312,8 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	default:
 		// Other input, such as pastes, goes to the open prompt, but not to
-		// a y/N question, or else to the New QSO screen.
-		if m.promptOpen() && m.prompt != promptConfirm {
+		// a y/N question or the sort prompt, or else to the New QSO screen.
+		if m.promptOpen() && !isKeyPrompt(m.prompt) {
 			var cmd tea.Cmd
 			m.input, cmd = m.input.Update(msg)
 			return m, cmd
@@ -398,8 +398,9 @@ func (m Model) footerView() string {
 	case m.promptOpen():
 		lines = append(lines, m.promptView())
 		keys = m.promptKeys
-		if m.prompt == promptConfirm {
-			// Only y answers yes; enter and esc are no like any other key.
+		if isKeyPrompt(m.prompt) {
+			// Only y answers yes, and only a field's key sorts; enter and
+			// esc cancel like any other key.
 			keys = promptKeyMap{Quit: m.promptKeys.Quit}
 		}
 	case m.rigErr != nil:
@@ -454,7 +455,7 @@ func (m *Model) layout() tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	for _, b := range m.idx.missing() {
-		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, b))
+		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, b))
 	}
 	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL(), m.fetchEntryLoTW(), m.fetchWorked(), m.fetchCallbook())...)
 }
@@ -504,6 +505,10 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return next, cmd
 	case key.Matches(msg, k.Limit):
 		return m.openPrompt(promptLimit)
+	case key.Matches(msg, k.Sort):
+		return m.askSort(false), nil
+	case key.Matches(msg, k.SortReverse):
+		return m.askSort(true), nil
 	case key.Matches(msg, k.MarkPattern):
 		return m.openPrompt(promptMark)
 	case key.Matches(msg, k.UnmarkPattern):
@@ -534,5 +539,5 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // dropped. The redraw repairs a screen the terminal has drawn wrong.
 func (m Model) reloadIndex() (Model, tea.Cmd) {
 	id := m.idx.restart()
-	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, id, m.idx.cursor))
+	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor))
 }

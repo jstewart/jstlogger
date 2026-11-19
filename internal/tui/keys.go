@@ -120,6 +120,8 @@ type indexKeyMap struct {
 	MarkPattern    key.Binding
 	UnmarkPattern  key.Binding
 	Limit          key.Binding
+	Sort           key.Binding
+	SortReverse    key.Binding
 	Reload         key.Binding
 	Search         key.Binding
 	SearchReverse  key.Binding
@@ -188,11 +190,11 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 		),
 		First: key.NewBinding(
 			key.WithKeys("=", "home"),
-			key.WithHelp("=/home", "newest"),
+			key.WithHelp("=/home", "first"),
 		),
 		Last: key.NewBinding(
 			key.WithKeys("*", "end"),
-			key.WithHelp("*/end", "oldest"),
+			key.WithHelp("*/end", "last"),
 		),
 		Jump: key.NewBinding(
 			key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9"),
@@ -225,6 +227,14 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 		Limit: key.NewBinding(
 			key.WithKeys("l"),
 			key.WithHelp("l", "limit"),
+		),
+		Sort: key.NewBinding(
+			key.WithKeys("o"),
+			key.WithHelp("o", "sort"),
+		),
+		SortReverse: key.NewBinding(
+			key.WithKeys("O"),
+			key.WithHelp("O", "reverse sort"),
 		),
 		Reload: key.NewBinding(
 			key.WithKeys("ctrl+l"),
@@ -280,7 +290,7 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
 		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
 		&k.First, &k.Last, &k.Jump, &k.Open, &k.NewQSO, &k.Edit, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
-		&k.Limit, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
+		&k.Limit, &k.Sort, &k.SortReverse, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
 		&k.SearchOpposite, &k.Delete, &k.MarkPrefix, &k.PrefixCancel,
 		&k.BulkDelete, &k.BulkSave, &k.BulkTag, &k.BulkUntag,
 	} {
@@ -298,7 +308,7 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 		{k.Next, k.Prev, k.NextLine, k.PrevLine},
 		{k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp},
 		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
-		{k.First, k.Last, k.Limit, k.Reload, k.Open, k.NewQSO, k.Edit},
+		{k.First, k.Last, k.Limit, k.Sort, k.SortReverse, k.Reload, k.Open, k.NewQSO, k.Edit},
 		{k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix},
 		{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite},
 		{k.Delete, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag},
