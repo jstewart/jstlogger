@@ -259,7 +259,7 @@ func TestPagerHelp(t *testing.T) {
 	assert.Contains(t, footer, "close")
 	assert.Contains(t, footer, "next")
 	assert.NotContains(t, footer, "q quit", "q closes the pager")
-	assert.NotContains(t, footer, "mark", "the index keys are not active")
+	assert.NotContains(t, footer, "new QSO", "the index keys are not active")
 
 	m.help.ShowAll = true
 	assert.Contains(t, plain(m.footerView()), "ctrl+c")

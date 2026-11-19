@@ -34,11 +34,12 @@ func notMarkedMsg(k string) string {
 }
 
 // updatePrefix handles the key press that follows the mark-prefix. Quit
-// still quits and esc cancels the prefix silently. A key a marked function
-// accepts runs that function on every marked QSO; any other key cancels the
-// prefix without running its own function.
+// still quits, though in the pager q does not, and esc cancels the prefix
+// silently. A key a marked function accepts runs that function on every
+// marked QSO; any other key cancels the prefix without running its own
+// function.
 func (m Model) updatePrefix(msg tea.KeyPressMsg) (Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.Quit) {
+	if key.Matches(msg, m.globalKeys().Quit) {
 		return m, tea.Quit
 	}
 	m.idx.prefix = false

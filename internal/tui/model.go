@@ -119,8 +119,8 @@ func New(opts ...Option) Model {
 	}
 	m.idx.lotw.now = m.now
 	m.keys = defaultKeys(m.rig != nil)
-	m.pagerKeys = defaultPagerKeys(m.openURL != nil)
 	m.indexKeys = defaultIndexKeys(m.logbook != nil)
+	m.pagerKeys = defaultPagerKeys(m.openURL != nil, m.indexKeys)
 	if m.logbook != nil {
 		m.markedFuncs = m.bulkFuncs()
 	}
