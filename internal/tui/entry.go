@@ -107,6 +107,9 @@ type entry struct {
 	lotw lotwCache
 	// worked is the worked-before panel for the call.
 	worked workedBefore
+	// callbook is the lookup of the call's name, QTH, grid, state, county
+	// and email.
+	callbook callbookLookup
 	// saving reports whether a save is under way.
 	saving bool
 	// now returns the current time, which the short forms of the dates
@@ -448,7 +451,8 @@ func (e *entry) form() qsoentry.Form {
 // setForm puts f's values in the form. Reports, bands and DXCC values that
 // match what the mode, freqs and call would fill in are replaced as if
 // filled in. While editing, a picked value that is none of its picker's
-// options is added to them.
+// options is added to them. The callbook lookup under way is canceled and
+// the form's values are its own, not filled in from the callbook.
 func (e *entry) setForm(f qsoentry.Form) {
 	for k := range qsoentry.FieldCount {
 		if k == qsoentry.Submode {
@@ -467,6 +471,7 @@ func (e *entry) setForm(f qsoentry.Form) {
 	e.band = freqBand(f[qsoentry.Freq])
 	e.bandRX = freqBand(f[qsoentry.FreqRX])
 	e.dxcc = entityValues(e.dxccLookup, f[qsoentry.Call])
+	e.callbook.reset()
 	e.setTagSuggestions()
 }
 
@@ -697,11 +702,12 @@ func (m Model) openEntry() (Model, tea.Cmd) {
 	return m, tea.Batch(cmd, loadTagsCmd(m.logbook), m.entryTickCmd())
 }
 
-// closeEntry closes the New QSO screen, discarding the form. The tags are
-// kept to complete the tags field when it opens again, and the last data
-// mode for a rig in a packet mode.
+// closeEntry closes the New QSO screen, discarding the form and canceling
+// its callbook lookup. The tags are kept to complete the tags field when it
+// opens again, and the last data mode for a rig in a packet mode.
 func (m Model) closeEntry() Model {
 	old := m.entry
+	old.callbook.stop()
 	m.entry = newEntry()
 	m.entry.gen, m.entry.tags = old.gen, old.tags
 	m.entry.dataMode, m.entry.dataSubmode = old.dataMode, old.dataSubmode
@@ -1519,9 +1525,9 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 }
 
 // entrySuffix returns what follows field f's value, styled, and the width
-// of the input before it: the DXCC entity and LoTW status after the call,
-// the path after the grid and the hand mark after the freq and band. It
-// returns "" for other fields.
+// of the input before it: the DXCC entity, LoTW status and callbook status
+// after the call, the path after the grid and the hand mark after the freq
+// and band. It returns "" for other fields.
 func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 	switch f {
 	case qsoentry.Freq, qsoentry.Band:
@@ -1535,7 +1541,7 @@ func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 		}
 	case qsoentry.Call:
 		// A long portable call, such as VE3/W1ABC/P, and the cursor.
-		parts := slices.DeleteFunc([]string{m.entryDXCC(), m.entryLoTW()}, func(s string) bool { return s == "" })
+		parts := slices.DeleteFunc([]string{m.entryDXCC(), m.entryLoTW(), m.entryCallbook()}, func(s string) bool { return s == "" })
 		return strings.Join(parts, "  "), 14
 	case qsoentry.Gridsquare:
 		// An 8-character locator and the cursor.
