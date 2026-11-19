@@ -201,7 +201,13 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		// prompt or the New QSO screen's fields.
 
 	case indexLoadedMsg:
+		before, _ := m.idx.current()
 		if m.idx.applyLoad(msg) {
+			// A reload after a delete can leave the cursor's row on
+			// another QSO, which starts at the top, as after j.
+			if after, _ := m.idx.current(); m.pager.open && after.ID != before.ID {
+				m.pager.scroll = 0
+			}
 			return m, m.lookupIndexLoTW(msg.rows)
 		}
 

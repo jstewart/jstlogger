@@ -260,7 +260,9 @@ func saveQSOsCmd(s logbook.Store, ids []int64, path, version string) tea.Cmd {
 // applyBulk reports the outcome of a bulk operation on the status line,
 // drops the marks of the QSOs it deleted and, if it changed the QSOs,
 // returns a command that reloads the index, keeping the cursor on its QSO
-// when it is still there and on the same row otherwise.
+// when it is still there. When the cursor's QSO was deleted, the cursor
+// moves on to the next QSO left, as d does, or else stays on the same row.
+// The pager fetches its QSO again, as its tags may have changed.
 func (m Model) applyBulk(msg indexBulkMsg) (Model, tea.Cmd) {
 	if msg.err != nil {
 		m.idx.msg = msg.err.Error()
@@ -274,5 +276,29 @@ func (m Model) applyBulk(msg indexBulkMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	id := m.idx.restart()
+	if slices.Contains(msg.deleted, id) {
+		// QSOs deleted above the cursor would leave its row on a QSO
+		// beyond the next one left.
+		id = m.idx.nextKept(msg.deleted)
+	} else if m.pager.open {
+		// A deleted QSO would be fetched in vain; the pager fetches the
+		// QSO the cursor moves to anyway.
+		m.pager.fetched, m.pager.pending = 0, 0
+	}
 	return m, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, id, m.idx.cursor)
+}
+
+// nextKept returns the ID of the first cached QSO below the cursor whose ID
+// is not among deleted, or 0 when there is none or its row is not cached.
+func (x index) nextKept(deleted []int64) int64 {
+	for i := x.cursor + 1; i < x.total; i++ {
+		q, ok := x.row(i)
+		if !ok {
+			return 0
+		}
+		if !slices.Contains(deleted, q.ID) {
+			return q.ID
+		}
+	}
+	return 0
 }
