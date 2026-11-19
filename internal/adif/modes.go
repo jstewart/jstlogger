@@ -89,3 +89,76 @@ func Submodes(name string) []string {
 	}
 	return slices.Clone(modes[i].submodes)
 }
+
+// ModeOf returns the ADIF mode named name, or the mode a submode named name
+// is under, matched ignoring case, or "" when name is neither.
+func ModeOf(name string) string {
+	for _, m := range modes {
+		if strings.EqualFold(m.name, name) ||
+			slices.ContainsFunc(m.submodes, func(s string) bool { return strings.EqualFold(s, name) }) {
+			return m.name
+		}
+	}
+	return ""
+}
+
+// modeDescriptions describes the modes and submodes whose names don't say
+// what they are.
+var modeDescriptions = map[string]string{
+	"ARDOP":        "Amateur Radio Digital Open Protocol",
+	"ATV":          "amateur television",
+	"CHIP":         "chip sequence spread spectrum",
+	"CLO":          "Clover",
+	"CONTESTI":     "Contestia",
+	"DIGITALVOICE": "digital voice: C4FM, DMR, D-STAR…",
+	"DYNAMIC":      "adaptive data: VARA…",
+	"FAX":          "facsimile",
+	"FSK441":       "WSJT meteor scatter",
+	"HELL":         "Hellschreiber",
+	"ISCAT":        "WSJT ionospheric scatter",
+	"MFSK":         "multiple frequency-shift keying: FT4, JS8, Q65…",
+	"MSK144":       "WSJT-X meteor scatter",
+	"PAC":          "PACTOR",
+	"PKT":          "packet",
+	"PSK":          "phase-shift keying: PSK31, PSK63…",
+	"SSTV":         "slow-scan television",
+	"THRB":         "Throb",
+	"TOR":          "teleprinting over radio: AMTOR, SITOR…",
+	"WINMOR":       "Winlink HF data",
+	"WSPR":         "weak signal propagation reporter",
+
+	"ASCI":  "ASCII RTTY",
+	"C4FM":  "Yaesu System Fusion",
+	"DMR":   "Digital Mobile Radio",
+	"DSTAR": "D-STAR",
+	"JS8":   "JS8Call",
+	"LSB":   "lower sideband",
+	"PCW":   "coherent CW",
+	"USB":   "upper sideband",
+}
+
+// DescribeMode returns what the ADIF mode or submode named name is, matched
+// ignoring case, or "" when its name says so already or it is neither.
+func DescribeMode(name string) string {
+	return modeDescriptions[strings.ToUpper(name)]
+}
+
+// commonModes are the modes and submodes most QSOs are made in, most used
+// first.
+var commonModes = []Enum{
+	{"SSB", "single sideband"},
+	{"CW", "Morse"},
+	{"FT8", ""},
+	{"FT4", "MFSK submode"},
+	{"FM", ""},
+	{"AM", ""},
+	{"RTTY", "radioteletype"},
+	{"PSK31", "PSK submode"},
+	{"JS8", "JS8Call, MFSK submode"},
+}
+
+// CommonModes returns the modes and submodes most QSOs are made in, most
+// used first. A submode, such as FT4, is under the mode ModeOf returns.
+func CommonModes() []Enum {
+	return slices.Clone(commonModes)
+}

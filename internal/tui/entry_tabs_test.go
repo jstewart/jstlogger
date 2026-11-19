@@ -412,14 +412,28 @@ func TestEntrySaveJumpsToTheTabInError(t *testing.T) {
 	assert.Contains(t, body, `"nope" is not an email address`)
 }
 
-func TestEntryPickersShowQSLStatusWords(t *testing.T) {
+func TestEntryPickersDescribeTheirValues(t *testing.T) {
 	m := newEntryModel(t, newEntryStore(t, nil))
-	m = fill(t, m, map[qsoentry.Field]string{qsoentry.QSLSent: "q", qsoentry.EQSLSent: "i"})
+	m = fill(t, m, map[qsoentry.Field]string{
+		qsoentry.PropMode: "tep", qsoentry.AntPath: "g",
+		qsoentry.QSLSent: "q", qsoentry.QSLSentVia: "b",
+	})
+	m = press(t, m, altKey('1'))
+	m = focusOn(t, m, qsoentry.Mode)
+	m = press(t, m, keyPress('M', 0), keyPress('F', 0))
 
 	assert.Equal(t, "Q", entryValue(m, qsoentry.QSLSent))
+	assert.Contains(t, bodyText(m), "‹ MFSK › multiple frequency-shift key…", "with focus, cut to fit half the width")
+
+	m = press(t, m, altKey('3'))
 	body := bodyText(m)
-	assert.Contains(t, body, "Queued")
-	assert.Contains(t, body, "Ignored")
+	assert.Contains(t, body, "TEP trans-equatorial", "without focus")
+	assert.Contains(t, body, "G grayline")
+
+	m = press(t, m, altKey('5'))
+	body = bodyText(m)
+	assert.Contains(t, body, "‹ Q › queued to send")
+	assert.Contains(t, body, "B bureau")
 }
 
 func TestEntryTabsFitNarrowWindows(t *testing.T) {

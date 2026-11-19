@@ -55,6 +55,8 @@ type entry struct {
 	// the form scrolls to show the focused field.
 	wheeled bool
 	scroll  int
+	// list is the list the picker with focus opened, while it is open.
+	list pickList
 	// editing reports whether the screen edits orig, a stored QSO, rather
 	// than logging a new one. An edit is always in post mode: the rig is
 	// never applied to it.
@@ -169,6 +171,10 @@ type entryKeyMap struct {
 	Editor key.Binding
 	// Quit replaces the global quit binding, since q is typed into fields.
 	Quit key.Binding
+	// Change only shows in the help, for the arrows a picker steps with.
+	Change key.Binding
+	// List opens the list of a picker's options.
+	List key.Binding
 }
 
 func defaultEntryKeys() entryKeyMap {
@@ -233,17 +239,25 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		Change: key.NewBinding(
+			key.WithKeys("left", "right"),
+			key.WithHelp("←/→", "change"),
+		),
+		List: key.NewBinding(
+			key.WithKeys("enter", "space"),
+			key.WithHelp("enter", "list"),
+		),
 	}
 }
 
 func (k entryKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close}
+	return []key.Binding{k.Change, k.List, k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close}
 }
 
 func (k entryKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Save, k.SaveClose, k.Close, k.Quit},
-		{k.NextField, k.PrevField, k.Editor},
+		{k.NextField, k.PrevField, k.Editor, k.Change, k.List},
 		{k.NextTab, k.PrevTab, k.GoTab},
 		{k.Live, k.ResetTime, k.SyncRig},
 	}
@@ -309,16 +323,14 @@ func newEntry() entry {
 		pickers: make([]picker, len(entryPicked)),
 	}}
 	// The options picked from start with none.
-	none := func(options []string) []string { return append([]string{""}, options...) }
-	*e.picker(qsoentry.Mode) = newPicker(none(adif.Modes()))
+	none := func(options []adif.Enum) []adif.Enum { return append([]adif.Enum{{}}, options...) }
+	*e.picker(qsoentry.Mode) = newPicker(none(modeOptions(adif.Modes())))
 	*e.picker(qsoentry.Submode) = newPicker(none(nil))
 	*e.picker(qsoentry.PropMode) = newPicker(none(adif.PropModes()))
 	*e.picker(qsoentry.AntPath) = newPicker(none(adif.AntPaths()))
 	*e.picker(qsoentry.QSLSentVia) = newPicker(none(adif.QSLSentVias()))
 	for _, f := range []qsoentry.Field{qsoentry.QSLSent, qsoentry.LoTWSent, qsoentry.EQSLSent, qsoentry.ClubLogSent} {
-		p := newPicker(none(adif.QSLSentStatuses()))
-		p.show = logbook.QSLSentText
-		*e.picker(f) = p
+		*e.picker(f) = newPicker(none(adif.QSLSentStatuses()))
 	}
 	for _, f := range entryMultiLine {
 		*e.area(f) = newArea()
@@ -404,8 +416,18 @@ func (e *entry) setValue(f qsoentry.Field, v string) {
 
 // submodes returns the submodes offered for the mode picked, with none
 // first.
-func (e *entry) submodes() []string {
-	return append([]string{""}, adif.Submodes(e.picker(qsoentry.Mode).value())...)
+func (e *entry) submodes() []adif.Enum {
+	return append([]adif.Enum{{}}, modeOptions(adif.Submodes(e.picker(qsoentry.Mode).value()))...)
+}
+
+// modeOptions returns the modes or submodes named, each with what it is
+// when its name doesn't say.
+func modeOptions(names []string) []adif.Enum {
+	out := make([]adif.Enum, len(names))
+	for i, n := range names {
+		out[i] = adif.Enum{Code: n, Description: adif.DescribeMode(n)}
+	}
+	return out
 }
 
 // form returns the values in the form.
@@ -611,8 +633,10 @@ func (e *entry) canonicalize() {
 	}
 }
 
-// focusField gives field f focus, with the cursor at the end of its value.
+// focusField gives field f focus, with the cursor at the end of its value,
+// closing any list open.
 func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
+	e.list.open = false
 	if f != e.focus && slices.Contains(entryTimes, e.focus) && !e.readOnly(e.focus) {
 		// A date or time left shows what it was read as, so a mistake
 		// shows before the save.
@@ -860,6 +884,8 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, tea.Quit
 	case e.saving:
 		// Other keys wait for the save, so it lands on the form it saved.
+	case e.list.open && !key.Matches(msg, pickListKeys.Leave):
+		return m.updateList(msg)
 	case key.Matches(msg, k.Save):
 		return m.saveEntry(false)
 	case key.Matches(msg, k.SaveClose):
@@ -904,6 +930,10 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		}
 	case key.Matches(msg, k.Editor) && slices.Contains(entryEditorFields, e.focus):
 		return m.openEditor()
+	case isPicked(e.focus) && !e.readOnly(e.focus) && key.Matches(msg, k.List) &&
+		(msg.String() != "space" || e.picker(e.focus).typed == ""):
+		// A space after typing is part of a code, such as VARA HF.
+		e.openList()
 	case isMultiLine(e.focus) && key.Matches(msg, e.area(e.focus).KeyMap.InsertNewline):
 		// Enter starts a new line of a multi-line field rather than moving
 		// on.
@@ -916,6 +946,53 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.editEntry(msg)
 	}
 	return m, nil
+}
+
+// openList opens the list of the focused picker's options, below the most
+// used modes for the mode.
+func (e *entry) openList() {
+	var common []adif.Enum
+	if e.focus == qsoentry.Mode {
+		common = adif.CommonModes()
+	}
+	p := e.picker(e.focus)
+	e.list = newPickList(common, p.options, p.value())
+}
+
+// updateList sends a key press to the open list, then fills in what
+// follows from the item picked, if any.
+func (m Model) updateList(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	e := &m.entry
+	it, ok := e.list.update(msg)
+	if !ok {
+		return m, nil
+	}
+	before := e.form()
+	e.pick(it)
+	return m, m.followEdit(e.focus, before)
+}
+
+// pick chooses the list item it in the focused picker: the option it was,
+// so of two stations with one name the one picked, or else, as when the
+// rig changed the options while the list was open, the option with its
+// code. A common mode none of the modes is a submode, such as FT4, which
+// picks its mode and then it.
+func (e *entry) pick(it pickItem) {
+	p := e.picker(e.focus)
+	old := p.i
+	switch {
+	case it.i >= 0 && it.i < len(p.options) && p.options[it.i].Code == it.Code:
+		p.i, p.typed = it.i, ""
+	case e.focus == qsoentry.Mode && !strings.EqualFold(adif.ModeOf(it.Code), it.Code):
+		p.set(adif.ModeOf(it.Code))
+		e.picker(qsoentry.Submode).setOptions(e.submodes())
+		e.picker(qsoentry.Submode).set(it.Code)
+	default:
+		p.set(it.Code)
+	}
+	if p.i != old && e.focus == qsoentry.StationName {
+		e.fillStation()
+	}
 }
 
 // editEntry sends msg, a key press or other input such as a paste, to the
@@ -1326,11 +1403,29 @@ func (m Model) entryFields(width int) (lines []string, focus, rows int) {
 		if slices.ContainsFunc(row, func(f qsoentry.Field) bool { return e.errs[f] != nil }) {
 			lines = append(lines, strings.TrimRight(strings.Join(errs, "  "), " "))
 		}
+		if e.list.open && slices.Contains(row, e.focus) {
+			lines = append(lines, m.entryList(slices.Index(row, e.focus), width, colWidth, lw)...)
+		}
 		if slices.Contains(row, e.focus) {
 			focus, rows = start, len(lines)-start
 		}
 	}
 	return lines, focus, rows
+}
+
+// entryList renders the open list below the value of the field in column
+// col of a row of fields colWidth cells wide, labeled lw cells wide, fitted
+// to width cells. In a narrow window it takes the whole width.
+func (m Model) entryList(col, width, colWidth, lw int) []string {
+	indent := col*(colWidth+2) + lw + 2
+	if width-indent < entryListMinWidth {
+		indent = 0
+	}
+	lines := m.entry.list.view(m.styles, width-indent)
+	for i, l := range lines {
+		lines[i] = strings.Repeat(" ", indent) + l
+	}
+	return lines
 }
 
 // joinCells lays out cells side by side, each fitted to width cells, two
@@ -1376,8 +1471,13 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 		// The lines after the first line up under it.
 		value = strings.ReplaceAll(e.area(f).View(), "\n", "\n"+strings.Repeat(" ", lw+2))
 	case isPicked(f):
-		value = e.picker(f).view(st, focused)
-		if mark := m.entryHandMark(f); mark != "" {
+		// The hand mark keeps its room, cutting the description first.
+		mark := m.entryHandMark(f)
+		if mark != "" {
+			room -= lipgloss.Width(mark) + 2
+		}
+		value = e.picker(f).view(st, focused, room)
+		if mark != "" {
 			value += "  " + mark
 		}
 	default:

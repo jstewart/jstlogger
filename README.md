@@ -326,6 +326,30 @@ window scrolls to keep the field being typed in on screen; the mouse
 wheel scrolls it three lines at a time, and the next key press scrolls
 back to that field.
 
+### Pickers
+
+Mode, submode, propagation mode, antenna path and the QSL fields are
+pickers: they hold one of the values ADIF defines. A picker shows its
+ADIF code followed by what it means in grey, such as `‹ G › grayline` or
+`TEP trans-equatorial`, so a tab reads at a glance. In a narrow window
+the meaning is cut short before the code.
+
+| Key               | Action                                         |
+| ----------------- | ---------------------------------------------- |
+| `←` / `→`         | Previous or next value, in ADIF's order        |
+| typing            | Jump to the first value starting with the text |
+| `enter` / `space` | Open a list of every value and what it means   |
+
+A space typed after other text is part of the code, as in `VARA HF`,
+rather than opening the list.
+
+In the list, typing filters by code or meaning, so `meteor` finds `MS`
+and `bureau` finds `B`. `↑`/`↓` move, `enter` picks, `esc` closes
+without a change and `tab` moves on to the next field. The Mode list
+starts with the most used modes (SSB, CW, FT8, FT4, FM, AM, RTTY, PSK31
+and JS8); picking a submode there, such as FT4, also picks its mode,
+MFSK.
+
 ### Dates and times
 
 Dates and times are UTC. In post mode, the New QSO screen opens with the

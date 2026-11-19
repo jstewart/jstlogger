@@ -64,3 +64,57 @@ func TestModesHaveUniqueSubmodes(t *testing.T) {
 		}
 	}
 }
+
+func TestDescribeMode(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"MFSK", "multiple frequency-shift keying: FT4, JS8, Q65…"},
+		{"DIGITALVOICE", "digital voice: C4FM, DMR, D-STAR…"},
+		{"C4FM", "Yaesu System Fusion"},
+		{"c4fm", "Yaesu System Fusion"},
+		{"SSB", ""},
+		{"NOSUCH", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, DescribeMode(tt.name))
+		})
+	}
+}
+
+func TestModeOf(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"FT4", "MFSK"},
+		{"ft4", "MFSK"},
+		{"PSK31", "PSK"},
+		{"USB", "SSB"},
+		{"SSB", "SSB"},
+		{"FT8", "FT8"},
+		{"NOSUCH", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ModeOf(tt.name))
+		})
+	}
+}
+
+func TestCommonModes(t *testing.T) {
+	common := CommonModes()
+	assert.Equal(t, []string{"SSB", "CW", "FT8", "FT4", "FM", "AM", "RTTY", "PSK31", "JS8"}, Codes(common))
+	for _, m := range common {
+		assert.NotEmpty(t, ModeOf(m.Code), "%s is a mode or submode", m.Code)
+	}
+
+	common[0].Code = "changed"
+	assert.Equal(t, "SSB", CommonModes()[0].Code, "the caller gets a copy")
+}
+
+func TestModeDescriptionsAreModes(t *testing.T) {
+	for name := range modeDescriptions {
+		assert.NotEmpty(t, ModeOf(name), "%s is a mode or submode", name)
+	}
+}

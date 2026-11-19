@@ -22,7 +22,7 @@ func (e *entry) setStations(stations []qsoentry.Station) {
 	for i, st := range stations {
 		names[i] = st.Name
 	}
-	*e.picker(qsoentry.StationName) = newPicker(names)
+	*e.picker(qsoentry.StationName) = newPicker(codeOptions(names))
 	e.fillStation()
 }
 
