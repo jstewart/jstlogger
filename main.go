@@ -59,6 +59,9 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		tui.WithURLOpener(browser.Open),
 		tui.WithStations(stationProfiles(session)),
 	}
+	if l := newCallbook(session.Config.Callbook); l != nil {
+		tuiOpts = append(tuiOpts, tui.WithCallbook(l))
+	}
 
 	var syncer *lotw.Syncer
 	var eqslSyncer *eqsl.Syncer
