@@ -164,12 +164,32 @@ type pagerKeyMap struct {
 	LookupQRZ    key.Binding
 	LookupHamQTH key.Binding
 	LookupEQSL   key.Binding
+	// Delete deletes the QSO shown, Mark marks or unmarks it, and
+	// MarkPrefix arms the mark-prefix, as in the index.
+	Delete     key.Binding
+	Mark       key.Binding
+	MarkPrefix key.Binding
+	// The functions the mark-prefix runs, for help only: updatePrefix
+	// matches the index's bindings.
+	BulkDelete key.Binding
+	BulkSave   key.Binding
+	BulkTag    key.Binding
+	BulkUntag  key.Binding
 }
 
 // defaultPagerKeys returns the pager's keybindings, with the lookup keys
-// enabled only when lookup is true.
-func defaultPagerKeys(lookup bool) pagerKeyMap {
+// enabled only when lookup is true. The keys it shares with the index,
+// enabled only when the index's are, are the index's bindings, so the two
+// agree.
+func defaultPagerKeys(lookup bool, ik indexKeyMap) pagerKeyMap {
 	k := pagerKeyMap{
+		Delete:     ik.Delete,
+		Mark:       ik.Mark,
+		MarkPrefix: ik.MarkPrefix,
+		BulkDelete: ik.BulkDelete,
+		BulkSave:   ik.BulkSave,
+		BulkTag:    ik.BulkTag,
+		BulkUntag:  ik.BulkUntag,
 		Next: key.NewBinding(
 			key.WithKeys("j", "down"),
 			key.WithHelp("j/↓", "next QSO"),
@@ -245,7 +265,7 @@ func defaultPagerKeys(lookup bool) pagerKeyMap {
 }
 
 func (k pagerKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Next, k.Prev, k.NextTab, k.Edit, k.Close}
+	return []key.Binding{k.Next, k.Prev, k.NextTab, k.Edit, k.Close, k.Delete, k.Mark, k.MarkPrefix}
 }
 
 func (k pagerKeyMap) FullHelp() [][]key.Binding {
@@ -254,6 +274,7 @@ func (k pagerKeyMap) FullHelp() [][]key.Binding {
 		{k.NextTab, k.PrevTab},
 		{k.PageDown, k.PageUp, k.Top, k.Bottom},
 		{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL},
+		{k.Delete, k.Mark, k.MarkPrefix, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag},
 	}
 }
 
@@ -320,6 +341,12 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		p.scroll = bottom
 	case key.Matches(msg, k.LookupPrefix):
 		p.lookupPrefix = true
+	case key.Matches(msg, k.Delete):
+		return m.askDeleteCurrent(), nil
+	case key.Matches(msg, k.Mark):
+		m.idx.toggleMark()
+	case key.Matches(msg, k.MarkPrefix) && m.idx.loaded:
+		m.idx.armPrefix()
 	}
 	// Another QSO starts at the top; j or k at the end of the index leaves
 	// the scroll alone.
@@ -350,6 +377,11 @@ func (m Model) pagerContent(width int) []string {
 		return []string{st.muted.Render("Loading…")}
 	}
 	if p.tab == tabQSO {
+		// The index rows lack the tags; they show once the whole QSO is
+		// fetched, and stay while it is fetched again.
+		if p.qso.ID == q.ID && p.err == nil {
+			q.Tags = p.qso.Tags
+		}
 		return strings.Split(qsoTab(st, q, m.idx.unit, m.lotwStatus(q.Call), m.eqslStatus(q.Call), width), "\n")
 	}
 	switch {
@@ -413,7 +445,7 @@ func (m Model) pagerView(width, height int) string {
 // width cells. An empty field shows pagerEmpty, so every QSO has the same
 // rows. Distances are shown in unit; any unit other than Mi shows
 // kilometers. A LoTW row follows the Call row when lotw is enabled, then an
-// eQSL AG row when eqsl is enabled.
+// eQSL AG row when eqsl is enabled. The Tags row comes last.
 func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, eqsl eqslStatus, width int) string {
 	mode := q.Mode
 	switch {
@@ -458,6 +490,7 @@ func qsoTab(st styles, q logbook.QSO, unit indexfmt.Unit, lotw lotwStatus, eqsl 
 		{label: "Comment", value: q.Comment},
 		{label: "Country", value: q.Country},
 		{label: "Continent", value: q.Cont},
+		{label: "Tags", value: strings.Join(q.Tags, ", ")},
 	}
 	// The LoTW row follows the Call row, and the eQSL AG row follows them.
 	after := 2

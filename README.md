@@ -95,7 +95,7 @@ highlighted; set `[index] pager_index_lines` to keep more or fewer, or
 top of the QSO tab stays visible. Below them, the QSO tab lists the date
 and time (UTC), call, LoTW status, eQSL AG status, band, frequency, mode and submode, the reports sent and received, grid,
 distance (in `[logbook] distance_unit`), state, county, name, comment,
-country and continent. An empty field shows `—`, so the layout doesn't
+country, continent and tags. An empty field shows `—`, so the layout doesn't
 shift between QSOs.
 
 Next to the call, the badges `[Q] [H] [E]` link to the station's page on
@@ -159,6 +159,17 @@ shows which one is active; clicking a tab in the tab bar also opens it.
 The tab stays the same as you move between QSOs.
 
 `e` edits the QSO shown in the pager, as it does in the index.
+
+As in NeoMutt's pager, `d` deletes the QSO shown, after the same y/N
+question as the index, and `t` marks or unmarks it; both then move on to
+the next QSO, so you can work through the log while reading it. On the
+last QSO, `t` stays put and `d` shows the new last QSO; deleting the only
+QSO closes the pager. The mark-prefix works too: `;d` deletes, `;s`
+saves, `;y` tags and `;Y` untags the marked QSOs, with the same prompts
+as in the index, and the pager shows the result. Marking by pattern
+(`T`, `ctrl+t`), limiting (`l`), searching (`/`) and jumping (`1`–`9`)
+stay in the index, since they change which QSOs are listed or where the
+cursor is.
 
 - **QSO** — the details above.
 - **Station** — the station callsign, operator, station grid, TX power

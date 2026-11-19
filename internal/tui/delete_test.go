@@ -53,8 +53,9 @@ func TestDelete(t *testing.T) {
 			assert.Equal(t, []int64{6, 5, 4, 2, 1}, idsMatching(t, s, "~A"))
 			assert.Equal(t, map[int64]bool{5: true, 4: true}, m.idx.marks, "the other marks stay")
 			assert.Equal(t, 5, m.idx.total, "the index reloads")
-			assert.Equal(t, 2, m.idx.cursor, "the cursor stays on the same row")
-			assert.Equal(t, "QSO 3/5 · 2 marked · Deleted QSO with K3A on 2026-10-31 12:03.", statusLine(t, m))
+			assert.Equal(t, int64(2), currentID(t, m), "the cursor moves on to the next QSO")
+			assert.Equal(t, 3, m.idx.cursor, "below QSO 6, logged meanwhile")
+			assert.Equal(t, "QSO 4/5 · 2 marked · Deleted QSO with K3A on 2026-10-31 12:03.", statusLine(t, m))
 		})
 	}
 }
