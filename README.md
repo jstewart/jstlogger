@@ -399,6 +399,10 @@ A value typed by hand is never overwritten; changing the call updates
 the fields that were filled in, and a call with no entity, such as an
 unknown prefix or `/MM`, clears them.
 
+The New QSO screen also fills in the name, QTH, grid, state, county and
+email from the [callbook](#callbook-lookup), in the same way: typed values
+are kept, and a changed call replaces what was filled in.
+
 ### Mouse
 
 The pager and the New QSO screen turn on the terminal's mouse reporting
@@ -483,10 +487,8 @@ prints `DXCC: country file unchanged`.
 
 jstlogger can look up a callsign in an online callbook,
 [QRZ.com](https://www.qrz.com/) or [HamQTH](https://www.hamqth.com/), to
-find the operator's name, QTH, grid, state, county and email. No screen
-uses the lookup yet; the New QSO screen will fill in the station's details
-from it in a later release. Configure the services in the `[callbook]`
-section of the config:
+find the operator's name, QTH, grid, state, county and email. Configure
+the services in the `[callbook]` section of the config:
 
 ```toml
 [callbook]
@@ -510,6 +512,24 @@ few lookups a day. HamQTH is free with an account. For a portable call
 such as `VE3/W1AW` or `W1AW/P`, jstlogger looks up the base call and keeps
 the name, but not the grid or location, which may not apply where the
 station is operating.
+
+On the New QSO screen, once you pause typing the call (or leave the field),
+jstlogger looks it up in the background and fills in Name, QTH, Grid,
+State, County (as `ST,County`, the ADIF form, when the callbook gives both)
+and Email. Typing never waits for the lookup. A value you typed is never
+overwritten; changing the call replaces the values that were filled in,
+and a call the callbook doesn't list clears them. The lookup is canceled
+when the call changes, the QSO is saved or the screen closes, and an edited
+QSO is never looked up.
+
+Next to the call, the screen shows where the details came from: `QRZ.com`,
+`QRZ.com (limited)` for a QRZ.com account without an XML subscription,
+`HamQTH` or `logbook`. When no callbook is configured, or the lookup fails,
+the details come from your latest earlier QSO with the same base call: the
+name and email always, and the QTH, grid, state and county only when that
+QSO was with exactly the same call. A failure also shows why: `callbook
+login failed`, `lookup limit reached`, `callbook unreachable` or `lookup
+failed`. A failed lookup never stops you saving the QSO.
 
 The passwords live in the config file, so keep it private with
 `chmod 600`; jstlogger warns at startup when the file holds a password and
