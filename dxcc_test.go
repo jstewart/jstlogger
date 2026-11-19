@@ -184,3 +184,55 @@ func TestSyncDXCCInBackgroundCanceled(t *testing.T) {
 	assert.Contains(t, log.String(), "dxcc sync canceled")
 	assert.NotContains(t, log.String(), "level=ERROR", "a sync stopped by exit is not an error")
 }
+
+// newTestDXCCStore returns a DXCC store on a fresh logbook.
+func newTestDXCCStore(t *testing.T) (*dxcc.Store, *logbook.SQLiteStore) {
+	t.Helper()
+	store, err := logbook.Open(t.Context(), filepath.Join(t.TempDir(), "logbook.db"), logbook.Options{})
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, store.Close()) })
+	return dxcc.NewStore(store.DB()), store
+}
+
+func TestLoadDXCCTable(t *testing.T) {
+	f := &dxccArchive{}
+	s := newTestDXCCSyncer(t, f)
+	_, err := s.Sync(t.Context())
+	require.NoError(t, err)
+	var log strings.Builder
+
+	table := loadDXCCTable(t.Context(), s.Store, logTo(&log))
+
+	_, ok := table.Lookup("JA1ABC")
+	assert.False(t, ok, "the stored copy is used, not the snapshot")
+	ent, ok := table.Lookup("KH6ABC")
+	require.True(t, ok)
+	assert.Equal(t, "Hawaii", ent.Name)
+	assert.Empty(t, log.String())
+}
+
+func TestLoadDXCCTableNeverSynced(t *testing.T) {
+	s, _ := newTestDXCCStore(t)
+	var log strings.Builder
+
+	table := loadDXCCTable(t.Context(), s, logTo(&log))
+
+	_, ok := table.Lookup("JA1ABC")
+	assert.True(t, ok, "the built-in snapshot is used until the first sync")
+	assert.Empty(t, log.String())
+}
+
+func TestLoadDXCCTableCorrupt(t *testing.T) {
+	s, store := newTestDXCCStore(t)
+	_, err := store.DB().ExecContext(t.Context(),
+		"INSERT INTO dxcc_cty (id, cty, synced_at) VALUES (1, ?, '2026-11-15T10:00:00Z')", []byte("not,a,country,file\n"))
+	require.NoError(t, err)
+	var log strings.Builder
+
+	table := loadDXCCTable(t.Context(), s, logTo(&log))
+
+	_, ok := table.Lookup("JA1ABC")
+	assert.True(t, ok, "a corrupt stored copy falls back to the built-in snapshot")
+	assert.Contains(t, log.String(), "level=ERROR")
+	assert.Contains(t, log.String(), "dxcc: load country file")
+}

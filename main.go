@@ -68,8 +68,12 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		syncer = newLoTWSyncer(users)
 		members := eqsl.NewStore(db.DB())
 		eqslSyncer = newEQSLSyncer(members)
-		dxccSyncer = newDXCCSyncer(dxcc.NewStore(db.DB()))
-		tuiOpts = append(tuiOpts, tui.WithLoTW(users), tui.WithEQSL(members))
+		countries := dxcc.NewStore(db.DB())
+		// Loaded before the background sync starts, which may replace the
+		// stored copy.
+		table := loadDXCCTable(ctx, countries, logger)
+		dxccSyncer = newDXCCSyncer(countries)
+		tuiOpts = append(tuiOpts, tui.WithLoTW(users), tui.WithEQSL(members), tui.WithDXCC(table))
 	}
 	var r *rig.Rig
 	if opts, ok := rigOptions(session); ok {

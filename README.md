@@ -389,6 +389,16 @@ copied value is saved as shown, and isn't an unsaved change. In live
 mode the clock fills in all four fields as before, and an edited QSO
 keeps its own date and time off.
 
+### Country and zones
+
+As the call is typed, the New QSO screen looks it up in the
+[country file](#logbook) and fills in DXCC, continent, CQ zone and ITU
+zone on the General tab. The entity also shows after the call on the
+QSO tab, such as `Canada · NA · CQ 4 · ITU 4`, before its LoTW status.
+A value typed by hand is never overwritten; changing the call updates
+the fields that were filled in, and a call with no entity, such as an
+unknown prefix or `/MM`, clears them.
+
 ### Mouse
 
 The pager and the New QSO screen turn on the terminal's mouse reporting
@@ -459,7 +469,8 @@ maps callsigns to DXCC entities, continents and CQ and ITU zones. The
 program has a copy built in for the first run; when the TUI starts and
 the stored copy is more than a week old, it downloads the latest release
 in the background. AD1C updates it every few weeks for new DXpeditions
-and special-event calls. To refresh it now, run:
+and special-event calls. The copy is read once at startup, so a newly
+downloaded one is used from the next launch. To refresh it now, run:
 
 ```sh
 jstlogger --sync-dxcc   # prints e.g. "DXCC: 6331 prefixes, 21430 exception calls"

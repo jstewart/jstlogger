@@ -92,6 +92,12 @@ type entry struct {
 	// band and bandRX are the bands last filled in from the freqs. A band
 	// that still equals them has not been typed.
 	band, bandRX string
+	// dxccLookup looks up the DXCC entity of the call; nil fills in none.
+	dxccLookup DXCCLookup
+	// dxcc holds the DXCC entity, continent and zones last filled in from
+	// the call, in the order of dxccFields. A value that still equals
+	// them has not been typed.
+	dxcc [4]string
 	// errs holds the errors of the last save that failed validation, kept
 	// up to date as the form changes, until a save succeeds.
 	errs qsoentry.Errors
@@ -439,10 +445,10 @@ func (e *entry) form() qsoentry.Form {
 	return f
 }
 
-// setForm puts f's values in the form. Reports and bands that match what
-// the mode and freqs would fill in are replaced as if filled in. While
-// editing, a picked value that is none of its picker's options is added
-// to them.
+// setForm puts f's values in the form. Reports, bands and DXCC values that
+// match what the mode, freqs and call would fill in are replaced as if
+// filled in. While editing, a picked value that is none of its picker's
+// options is added to them.
 func (e *entry) setForm(f qsoentry.Form) {
 	for k := range qsoentry.FieldCount {
 		if k == qsoentry.Submode {
@@ -460,6 +466,7 @@ func (e *entry) setForm(f qsoentry.Form) {
 	e.rst = qsoentry.DefaultRST(e.value(qsoentry.Mode), e.value(qsoentry.Submode))
 	e.band = freqBand(f[qsoentry.Freq])
 	e.bandRX = freqBand(f[qsoentry.FreqRX])
+	e.dxcc = entityValues(e.dxccLookup, f[qsoentry.Call])
 	e.setTagSuggestions()
 }
 
@@ -667,6 +674,7 @@ func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
 func (m Model) openEntry() (Model, tea.Cmd) {
 	e := newEntry()
 	e.now = m.now
+	e.dxccLookup = m.dxcc
 	e.setStations(m.stations)
 	// The profile's values are the form's own, not unsaved changes.
 	e.base = e.form()
@@ -746,6 +754,7 @@ func (m Model) applyEditLoaded(msg editLoadedMsg) (Model, tea.Cmd) {
 func (m Model) openEdit(q logbook.QSO) (Model, tea.Cmd) {
 	e := newEntry()
 	e.now = m.now
+	e.dxccLookup = m.dxcc
 	e.setStations(m.stations)
 	e.editing, e.orig = true, q
 	e.setForm(qsoentry.Load(q))
@@ -1104,8 +1113,8 @@ func (m Model) applyEdited(msg entryEditedMsg) (Model, tea.Cmd) {
 
 // fillIn fills in what follows from a change to the form from before to
 // after: the submodes and default reports from the mode, the bands from the
-// freqs and the tag completions from the tags. A data mode is kept for a
-// rig in a packet mode.
+// freqs, the DXCC entity, continent and zones from the call and the tag
+// completions from the tags. A data mode is kept for a rig in a packet mode.
 func (e *entry) fillIn(before, after qsoentry.Form) {
 	changed := func(f qsoentry.Field) bool { return after[f] != before[f] }
 	if changed(qsoentry.Mode) {
@@ -1122,6 +1131,9 @@ func (e *entry) fillIn(before, after qsoentry.Form) {
 	}
 	if changed(qsoentry.FreqRX) {
 		e.bandRX = e.fillBand(qsoentry.FreqRX, qsoentry.BandRX, e.bandRX)
+	}
+	if changed(qsoentry.Call) {
+		e.fillDXCC()
 	}
 	if changed(qsoentry.Tags) {
 		e.setTagSuggestions()
@@ -1454,9 +1466,9 @@ func joinCells(cells []string, width int) []string {
 }
 
 // entryCell renders field f, labeled with a label lw cells wide, in width
-// cells. The call is followed by its LoTW status and the grid by the
-// bearing and distance to it. A multi-line field takes a line for each line
-// of its text area.
+// cells. The call is followed by its DXCC entity and LoTW status and the
+// grid by the bearing and distance to it. A multi-line field takes a line
+// for each line of its text area.
 func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 	st, e := m.styles, &m.entry
 	focused := f == e.focus
@@ -1507,9 +1519,9 @@ func (m Model) entryCell(f qsoentry.Field, width, lw int) string {
 }
 
 // entrySuffix returns what follows field f's value, styled, and the width
-// of the input before it: the LoTW status after the call, the path after
-// the grid and the hand mark after the freq and band. It returns "" for
-// other fields.
+// of the input before it: the DXCC entity and LoTW status after the call,
+// the path after the grid and the hand mark after the freq and band. It
+// returns "" for other fields.
 func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 	switch f {
 	case qsoentry.Freq, qsoentry.Band:
@@ -1523,7 +1535,8 @@ func (m Model) entrySuffix(f qsoentry.Field) (string, int) {
 		}
 	case qsoentry.Call:
 		// A long portable call, such as VE3/W1ABC/P, and the cursor.
-		return m.entryLoTW(), 14
+		parts := slices.DeleteFunc([]string{m.entryDXCC(), m.entryLoTW()}, func(s string) bool { return s == "" })
+		return strings.Join(parts, "  "), 14
 	case qsoentry.Gridsquare:
 		// An 8-character locator and the cursor.
 		if path := m.entryPath(); path != "" {
