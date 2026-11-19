@@ -456,3 +456,23 @@ func TestNotFoundOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestEntryCallbookFallsBackAfterTimeout(t *testing.T) {
+	orig := callbookTimeout
+	callbookTimeout = 10 * time.Millisecond
+	t.Cleanup(func() { callbookTimeout = orig })
+	l := cbmock.NewMockLooker(gomock.NewController(t))
+	l.EXPECT().Lookup(gomock.Any(), "W1AW").DoAndReturn(func(ctx context.Context, call string) (callbook.Result, error) {
+		<-ctx.Done()
+		return callbook.Result{}, fmt.Errorf("callbook: lookup %s: %w", call, ctx.Err())
+	})
+	m, ticks := newCallbookModel(t, newWorkedStore(t, fallbackQSOs...), l)
+
+	m = typeCall(t, m, "W1AW")
+	m = lookUp(t, m, *ticks)
+
+	assert.Equal(t, "Hiram P", entryValue(m, qsoentry.Name), "the logbook gets its own time once the callbook's runs out")
+	line := entryCallLine(t, m)
+	assert.Contains(t, line, "logbook")
+	assert.Contains(t, line, "callbook unreachable")
+}

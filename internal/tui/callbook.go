@@ -20,13 +20,14 @@ const (
 	// typed before the New QSO screen looks it up in the callbook, so
 	// typing a call does not query the callbook on every key press.
 	callbookDelay = 400 * time.Millisecond
-	// callbookTimeout bounds a callbook lookup and the logbook lookup that
-	// may follow it.
-	callbookTimeout = 15 * time.Second
 	// sourceLogbook is the source shown for details filled in from an
 	// earlier QSO.
 	sourceLogbook = "logbook"
 )
+
+// callbookTimeout bounds a callbook lookup. The logbook lookup that may
+// follow it has logbookTimeout of its own. Tests shorten it.
+var callbookTimeout = 15 * time.Second
 
 // WithCallbook fills in, on the New QSO screen, the name, QTH, grid, state,
 // county and email of the call typed, as looked up in l, and shows where
@@ -183,7 +184,7 @@ func (m Model) tickCallbook(msg entryCallbookTickMsg) (Model, tea.Cmd) {
 // cancel it.
 func (m *Model) startCallbook() tea.Cmd {
 	c := &m.entry.callbook
-	ctx, cancel := context.WithTimeout(context.Background(), callbookTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	c.cancel, c.waiting = cancel, false
 	return callbookCmd(ctx, cancel, m.callbook, m.logbook, m.entry.gen, c.seq, c.wanted)
 }
@@ -202,12 +203,16 @@ func callbookCmd(ctx context.Context, cancel context.CancelFunc, l callbook.Look
 // lookupDetails returns the details of call from l, if not nil. When l
 // fails other than by not finding the call, or is nil, the details come
 // from the latest QSO in s with the call's base callsign instead, and the
-// error is l's failure. A call l does not find has no details. A canceled
-// lookup returns the error canceling it.
+// error is l's failure. A call l does not find has no details. The lookup
+// in l is bounded by callbookTimeout and the one in s by logbookTimeout, so
+// a callbook that runs out of time still leaves time for the logbook. A
+// canceled lookup returns the error canceling it.
 func lookupDetails(ctx context.Context, l callbook.Looker, s logbook.Store, call string) (callbookDetails, error) {
 	var failed error
 	if l != nil {
-		r, err := l.Lookup(ctx, call)
+		lctx, cancel := context.WithTimeout(ctx, callbookTimeout)
+		r, err := l.Lookup(lctx, call)
+		cancel()
 		switch {
 		case err == nil:
 			return resultDetails(r), nil
@@ -221,7 +226,9 @@ func lookupDetails(ctx context.Context, l callbook.Looker, s logbook.Store, call
 	if s == nil {
 		return callbookDetails{}, failed
 	}
-	d, err := logbookDetails(ctx, s, call)
+	sctx, cancel := context.WithTimeout(ctx, logbookTimeout)
+	defer cancel()
+	d, err := logbookDetails(sctx, s, call)
 	if err != nil {
 		return callbookDetails{}, errors.Join(failed, err)
 	}
