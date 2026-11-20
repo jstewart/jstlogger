@@ -9,11 +9,12 @@ import (
 const wheelLines = 3
 
 // mouseMode returns the mouse reporting the screen needs: clicks and the
-// wheel while the pager or the New QSO screen is open, for their tab bars
-// and scrolling, and none on the index, which keeps the terminal's own
-// text selection and wheel.
+// wheel whenever a logbook is open, for the index's rows, the pager's strip
+// and the tab bars and scrolling of the pager and the New QSO screen, and
+// none without a logbook, which leaves the terminal its own text selection
+// and wheel.
 func (m Model) mouseMode() tea.MouseMode {
-	if m.logbook != nil && (m.pager.open || m.entry.open) {
+	if m.logbook != nil {
 		return tea.MouseModeCellMotion
 	}
 	return tea.MouseModeNone
@@ -28,10 +29,14 @@ func (m Model) bodyCell(mouse tea.Mouse) (x, y int, ok bool) {
 }
 
 // click handles a left click on a tab in the tab bar of the pager or the
-// New QSO screen, which opens the tab as the tab keys do. Other clicks do
-// nothing, as do clicks while a prompt is open.
+// New QSO screen, which opens the tab as the tab keys do, on a QSO in the
+// index, which opens it in the pager as enter does, or on a QSO in the
+// strip above the pager, which moves the cursor to it as j and k do. Other
+// clicks do nothing, as do clicks while a prompt is open or a prefix is
+// armed.
 func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
-	if mouse.Button != tea.MouseLeft || m.logbook == nil || m.promptOpen() {
+	if mouse.Button != tea.MouseLeft || m.logbook == nil || m.promptOpen() ||
+		m.idx.prefix || m.pager.lookupPrefix {
 		return m, nil
 	}
 	x, y, ok := m.bodyCell(mouse)
@@ -51,18 +56,53 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 			return m, e.goTab(e.tabs()[i])
 		}
 	case m.pager.open:
+		if y < m.idx.height {
+			return m.clickStrip(y), nil
+		}
 		if y != m.idx.height {
 			return m, nil
 		}
 		if i := tabAt(pagerTabNames[:], m.bodyWidth(), x); i >= 0 {
 			m.pager.tab, m.pager.scroll = pagerTab(i), 0
 		}
+	default:
+		return m.clickIndex(y)
 	}
 	return m, nil
 }
 
+// clickIndex opens the QSO on line y of the index's body in the pager, as
+// moving to it and pressing enter does. Line 0 is the column header, which
+// does nothing, as do the empty lines below the last QSO.
+func (m Model) clickIndex(y int) (Model, tea.Cmd) {
+	row := y - 1
+	if !m.idx.loaded || m.idx.total == 0 || row < 0 || row >= m.idx.visible() {
+		return m, nil
+	}
+	m.idx.moveTo(m.idx.top + row)
+	return m.openPager(), nil
+}
+
+// clickStrip moves the cursor to the QSO on line y of the index strip above
+// the pager, as j and k do. Another QSO starts at the top of the open tab;
+// clicking the cursor's own row leaves the scroll alone, as do the empty
+// lines below the last QSO.
+func (m Model) clickStrip(y int) Model {
+	if y >= m.idx.visible() {
+		return m
+	}
+	cursor := m.idx.cursor
+	m.idx.moveTo(m.idx.top + y)
+	if m.idx.cursor != cursor {
+		m.pager.scroll = 0
+	}
+	return m
+}
+
 // wheel scrolls the open tab of the pager, or the New QSO screen's form,
-// wheelLines lines up or down. It does nothing while a prompt is open.
+// wheelLines lines up or down, or moves the index's cursor wheelLines rows,
+// stopping silently at the first and last QSOs, with the view following.
+// It does nothing while a prompt is open.
 func (m Model) wheel(mouse tea.Mouse) Model {
 	if m.logbook == nil || m.promptOpen() {
 		return m
@@ -82,6 +122,8 @@ func (m Model) wheel(mouse tea.Mouse) Model {
 	case m.pager.open:
 		bottom := m.pagerBottom()
 		m.pager.scroll = min(max(min(m.pager.scroll, bottom)+step, 0), bottom)
+	default:
+		m.idx.moveTo(m.idx.cursor + step)
 	}
 	return m
 }

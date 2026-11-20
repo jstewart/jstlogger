@@ -85,7 +85,7 @@ func TestPagerClickOffTabsDoesNothing(t *testing.T) {
 		{"far end of the rule", tea.MouseClickMsg{X: 78, Y: y, Button: tea.MouseLeft}},
 		{"body padding", pad},
 		{"right button", right},
-		{"index strip", tea.MouseClickMsg{X: 7, Y: y - 1, Button: tea.MouseLeft}},
+		{"blank strip row", tea.MouseClickMsg{X: 7, Y: y - 1, Button: tea.MouseLeft}},
 		{"open tab", tea.MouseClickMsg{X: 7, Y: y + 1, Button: tea.MouseLeft}},
 		{"header", tea.MouseClickMsg{X: 7, Y: 0, Button: tea.MouseLeft}},
 		{"footer", tea.MouseClickMsg{X: 7, Y: 23, Button: tea.MouseLeft}},
@@ -291,19 +291,214 @@ func TestEntryWheelDoesNothingOnShortForm(t *testing.T) {
 	assert.Equal(t, before, m.View().Content)
 }
 
-func TestMouseModeOnlyOnPagerAndEntry(t *testing.T) {
+func TestMouseMode(t *testing.T) {
 	m, _ := newIndexModel(t, 5, 80, 24)
-	assert.Equal(t, tea.MouseModeNone, m.View().MouseMode, "index")
+	assert.Equal(t, tea.MouseModeCellMotion, m.View().MouseMode, "index")
 	m = pressPager(t, m, enter())
 	assert.Equal(t, tea.MouseModeCellMotion, m.View().MouseMode, "pager")
 	m = pressPager(t, m, keyPress('q', 0))
-	assert.Equal(t, tea.MouseModeNone, m.View().MouseMode, "index after the pager")
+	assert.Equal(t, tea.MouseModeCellMotion, m.View().MouseMode, "index after the pager")
 
 	e := newEntryModel(t, newEntryStore(t, nil))
 	assert.Equal(t, tea.MouseModeCellMotion, e.View().MouseMode, "New QSO")
 	e = press(t, e, esc())
 	require.False(t, e.entry.open)
-	assert.Equal(t, tea.MouseModeNone, e.View().MouseMode, "index after New QSO")
+	assert.Equal(t, tea.MouseModeCellMotion, e.View().MouseMode, "index after New QSO")
 
 	assert.Equal(t, tea.MouseModeNone, New().View().MouseMode, "no logbook")
+}
+
+// indexRowY is the screen line of row i of the index, counting from the
+// first visible row, below the header and the column header.
+func indexRowY(i int) int {
+	return 2 + i
+}
+
+// stripRowY is the screen line of row i of the index strip above the
+// pager, below the header.
+func stripRowY(i int) int {
+	return 1 + i
+}
+
+func TestIndexWheelMovesCursor(t *testing.T) {
+	m, _ := newIndexModel(t, 50, 80, 24)
+	require.Greater(t, 50, m.idx.height, "the index is taller than the window")
+
+	m = send(t, m, wheelDown())
+	assert.Equal(t, wheelLines, m.idx.cursor)
+	assert.Zero(t, m.idx.top, "the cursor is still on screen")
+	m = send(t, m, wheelUp())
+	assert.Zero(t, m.idx.cursor)
+	m = send(t, m, wheelUp())
+	assert.Zero(t, m.idx.cursor, "the wheel stops at the first QSO")
+	assert.Empty(t, m.idx.msg, "silently")
+
+	for range 50 {
+		m = send(t, m, wheelDown())
+	}
+	assert.Equal(t, 49, m.idx.cursor, "the wheel stops at the last QSO")
+	assert.Equal(t, m.idx.maxTop(), m.idx.top, "the view follows the cursor")
+	assert.Empty(t, m.idx.msg, "silently")
+	assert.False(t, m.pager.open)
+
+	top := m.idx.top
+	for range 10 {
+		m = send(t, m, wheelUp())
+	}
+	assert.Equal(t, 49-10*wheelLines, m.idx.cursor)
+	assert.Less(t, m.idx.top, top, "the view follows the cursor up")
+}
+
+func TestIndexWheelLoadsRows(t *testing.T) {
+	n := 2 * indexBlockSize
+	m, s := newIndexModel(t, n, 80, 24)
+	require.Equal(t, []int{0}, s.loadedOffsets())
+
+	// Wheel until the rows near the view reach into the next block,
+	// giving up should the wheel not move the view.
+	for i := 0; i < n && m.idx.top+m.idx.height+indexPrefetch < indexBlockSize+wheelLines; i++ {
+		m = send(t, m, wheelDown())
+	}
+	assert.Contains(t, s.loadedOffsets(), indexBlockSize, "the next block loads")
+	_, ok := m.idx.row(indexBlockSize)
+	assert.True(t, ok, "the next block's rows are cached")
+	_, ok = m.idx.current()
+	assert.True(t, ok)
+}
+
+func TestIndexClickOpensQSO(t *testing.T) {
+	tests := []struct {
+		name   string
+		wheels int
+		row    int
+	}{
+		{"first row", 0, 0},
+		{"third row", 0, 2},
+		{"last row", 0, -1},
+		{"scrolled", 15, 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newIndexModel(t, 50, 80, 24)
+			for range tt.wheels {
+				m = send(t, m, wheelDown())
+			}
+			if tt.wheels > 0 {
+				require.Positive(t, m.idx.top, "the view has scrolled")
+			}
+			row := tt.row
+			if row < 0 {
+				row = m.idx.visible() - 1
+			}
+			want := m.idx.top + row
+			q, ok := m.idx.row(want)
+			require.True(t, ok)
+			click := clickOn(t, m, indexRowY(row), q.Call+" ")
+
+			got := send(t, m, click)
+			assert.True(t, got.pager.open)
+			assert.Equal(t, want, got.idx.cursor)
+			assert.Zero(t, got.pager.scroll)
+			moved := m
+			moved.idx.moveTo(want)
+			byKey := pressPager(t, moved, enter())
+			assert.Equal(t, byKey.pager.qso, got.pager.qso, "as moving to the row and pressing enter")
+			assert.Equal(t, q, got.pager.qso, "the pager shows the clicked QSO")
+		})
+	}
+}
+
+func TestPagerClickOnStripMovesCursor(t *testing.T) {
+	m, _ := newIndexModel(t, 50, 80, 30)
+	m = pressPager(t, m, enter())
+	require.Greater(t, m.idx.height, 2)
+	m.pager.scroll = 2
+
+	got := send(t, m, tea.MouseClickMsg{X: 7, Y: stripRowY(2), Button: tea.MouseLeft})
+	assert.Equal(t, m.idx.top+2, got.idx.cursor)
+	assert.True(t, got.pager.open)
+	assert.Zero(t, got.pager.scroll, "another QSO starts at the top")
+	assert.Equal(t, tabQSO, got.pager.tab)
+
+	got.pager.scroll = 2
+	again := send(t, got, tea.MouseClickMsg{X: 7, Y: stripRowY(2), Button: tea.MouseLeft})
+	assert.Equal(t, got.idx.cursor, again.idx.cursor)
+	assert.Equal(t, 2, again.pager.scroll, "the cursor's own row keeps the scroll")
+	assert.True(t, again.pager.open)
+}
+
+func TestIndexClickDoesNothing(t *testing.T) {
+	m, _ := newIndexModel(t, 5, 80, 24)
+	m = send(t, m, wheelDown())
+	require.Equal(t, wheelLines, m.idx.cursor)
+	// The status line is the body's last line, below the 1-line header.
+	status := m.bodyHeight()
+	require.Contains(t, m.screenLine(t, status), "QSO 4/5")
+	row := tea.MouseClickMsg{X: 7, Y: indexRowY(1), Button: tea.MouseLeft}
+	right := row
+	right.Button = tea.MouseRight
+	pad := row
+	pad.X = 0
+	tests := []struct {
+		name  string
+		setup func(Model) Model
+		click tea.MouseClickMsg
+	}{
+		{"column header", nil, tea.MouseClickMsg{X: 7, Y: 1, Button: tea.MouseLeft}},
+		{"empty row", nil, tea.MouseClickMsg{X: 7, Y: indexRowY(5), Button: tea.MouseLeft}},
+		{"status line", nil, tea.MouseClickMsg{X: 7, Y: status, Button: tea.MouseLeft}},
+		{"header", nil, tea.MouseClickMsg{X: 7, Y: 0, Button: tea.MouseLeft}},
+		{"body padding", nil, pad},
+		{"right button", nil, right},
+		{"prompt open", func(m Model) Model {
+			m = press(t, m, keyPress('/', 0))
+			require.True(t, m.promptOpen())
+			return m
+		}, row},
+		{"mark-prefix armed", func(m Model) Model {
+			m.idx.prefix = true
+			return m
+		}, row},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			from := m
+			if tt.setup != nil {
+				from = tt.setup(m)
+			}
+			got := send(t, from, tt.click)
+			assert.False(t, got.pager.open)
+			assert.Equal(t, wheelLines, got.idx.cursor)
+		})
+	}
+}
+
+func TestIndexClickOnEmptyIndexDoesNothing(t *testing.T) {
+	m, _ := newIndexModel(t, 0, 80, 24)
+	got := send(t, m, tea.MouseClickMsg{X: 7, Y: indexRowY(0), Button: tea.MouseLeft})
+	assert.False(t, got.pager.open)
+	got = send(t, m, wheelDown())
+	assert.Zero(t, got.idx.cursor)
+}
+
+func TestPagerClickWhilePrefixArmedDoesNothing(t *testing.T) {
+	m, _ := newIndexModel(t, 50, 80, 30)
+	m = pressPager(t, m, enter())
+	tests := []struct {
+		name string
+		arm  func(*Model)
+	}{
+		{"mark-prefix", func(m *Model) { m.idx.prefix = true }},
+		{"lookup-prefix", func(m *Model) { m.pager.lookupPrefix = true }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			from := m
+			tt.arm(&from)
+			got := send(t, from, tea.MouseClickMsg{X: 7, Y: stripRowY(2), Button: tea.MouseLeft})
+			assert.Equal(t, m.idx.cursor, got.idx.cursor, "strip row")
+			got = send(t, from, clickOn(t, from, from.pagerTabBarY(), " QSL "))
+			assert.Equal(t, tabQSO, got.pager.tab, "tab")
+		})
+	}
 }
