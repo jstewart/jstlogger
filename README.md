@@ -427,15 +427,21 @@ are kept, and a changed call replaces what was filled in.
 
 ### Mouse
 
-The pager and the New QSO screen turn on the terminal's mouse reporting
-while they are open, for clicking tabs and scrolling with the wheel. The
-index leaves it off, so the terminal's own text selection and wheel work
-there as usual.
+jstlogger turns on the terminal's mouse reporting while a logbook is
+open, so the wheel and clicks work the same in every terminal.
+
+In the index, the wheel moves the cursor three QSOs per step, loading
+rows as it goes, and clicking a QSO opens it in the pager, as `enter`
+does. In the pager, clicking a row in the index strip above it shows
+that QSO, as `j` and `k` would. In the pager and the New QSO screen,
+clicking a tab switches to it, and the wheel scrolls the tab. Clicks do
+nothing while a prompt is open or a prefix key, `;` or `g`, is waiting
+for its second key.
 
 With mouse reporting on, click-drag no longer selects text in most
-terminals. Hold a modifier to select text anyway: Option-drag in iTerm2,
-Shift-drag in many others, such as xterm, GNOME Terminal, kitty, WezTerm
-and Alacritty.
+terminals, the index included. Hold a modifier to select text anyway:
+Option-drag in iTerm2, Shift-drag in many others, such as xterm, GNOME
+Terminal, kitty, WezTerm and Alacritty.
 
 ### Editing a QSO
 
