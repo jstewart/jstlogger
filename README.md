@@ -209,6 +209,13 @@ A tab taller than the pager scrolls: `space` or `pgdown` pages down, `-`
 or `pgup` pages up, and `home` and `end` jump to the top and bottom. The
 mouse wheel scrolls it three lines at a time.
 
+To resize the pager without editing the config, `+` makes it one row
+taller, showing one fewer index row above it, and `_` makes it one row
+shorter, showing one more, as vim's `ctrl-w +` and `ctrl-w _` do. The
+strip goes from no rows up to half the body. `=` goes back to
+`[index] pager_index_lines`. The size lasts until you quit and isn't
+written to the config.
+
 ### Index format
 
 `[index] format` lays out each row of the QSO index, in the style of
