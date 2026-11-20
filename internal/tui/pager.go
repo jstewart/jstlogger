@@ -32,8 +32,10 @@ const pagerEmpty = "—"
 type pager struct {
 	open bool
 	// indexLines is the number of index rows kept above the pager, as
-	// NeoMutt's pager_index_lines.
-	indexLines int
+	// NeoMutt's pager_index_lines. The resize keys change it for the
+	// session; configLines is the configured count they reset it to.
+	indexLines  int
+	configLines int
 	// tab is the open tab, kept while moving between QSOs.
 	tab pagerTab
 	// scroll is the first line of the tab shown. The view clamps it to the
@@ -139,6 +141,7 @@ func WithURLOpener(open func(ctx context.Context, url string) error) Option {
 func WithPagerIndexLines(n int) Option {
 	return func(m *Model) {
 		m.pager.indexLines = max(n, 0)
+		m.pager.configLines = m.pager.indexLines
 	}
 }
 
@@ -152,7 +155,13 @@ type pagerKeyMap struct {
 	PageUp   key.Binding
 	Top      key.Binding
 	Bottom   key.Binding
-	Close    key.Binding
+	// Grow and Shrink make the pager one row taller or shorter, showing one
+	// fewer or one more index row above it, and ResetSize goes back to the
+	// configured index rows, as vim's ctrl-w +, _ and =.
+	Grow      key.Binding
+	Shrink    key.Binding
+	ResetSize key.Binding
+	Close     key.Binding
 	// Edit opens the QSO shown in the QSO form.
 	Edit key.Binding
 	// Quit replaces the global quit binding, since q closes the pager.
@@ -222,6 +231,18 @@ func defaultPagerKeys(lookup bool, ik indexKeyMap) pagerKeyMap {
 			key.WithKeys("end"),
 			key.WithHelp("end", "bottom"),
 		),
+		Grow: key.NewBinding(
+			key.WithKeys("+"),
+			key.WithHelp("+", "grow pager"),
+		),
+		Shrink: key.NewBinding(
+			key.WithKeys("_"),
+			key.WithHelp("_", "shrink pager"),
+		),
+		ResetSize: key.NewBinding(
+			key.WithKeys("="),
+			key.WithHelp("=", "reset pager size"),
+		),
 		Close: key.NewBinding(
 			key.WithKeys("q", "esc"),
 			key.WithHelp("q/esc", "close"),
@@ -277,6 +298,7 @@ func (k pagerKeyMap) sections() []helpSection {
 		{"QSO", []key.Binding{k.Next, k.Prev, k.Edit, k.Delete, k.Close}},
 		{"tabs", []key.Binding{k.NextTab, k.PrevTab}},
 		{"scrolling", []key.Binding{k.PageDown, k.PageUp, k.Top, k.Bottom}},
+		{"layout", []key.Binding{k.Grow, k.Shrink, k.ResetSize}},
 		{"lookup", []key.Binding{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL}},
 		{"marks", []key.Binding{k.Mark, k.MarkPrefix, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag}},
 	}
@@ -314,8 +336,8 @@ func (m Model) closePager() Model {
 }
 
 // updatePager handles a key press in the pager. Model.layout fits the index
-// to the strip or the whole body again, loads the rows the cursor moves to
-// and fetches the QSO under it.
+// to the strip or the whole body again, keeps the scroll within the tab,
+// loads the rows the cursor moves to and fetches the QSO under it.
 func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	k, p := m.pagerKeys, &m.pager
 	room := m.pagerRoom(m.bodyHeight())
@@ -343,6 +365,14 @@ func (m Model) updatePager(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		p.scroll = 0
 	case key.Matches(msg, k.Bottom):
 		p.scroll = bottom
+	// The resize keys start from the rows shown, which may be fewer than
+	// indexLines in a short window, so each press takes effect at once.
+	case key.Matches(msg, k.Grow):
+		p.indexLines = max(m.idx.height-1, 0)
+	case key.Matches(msg, k.Shrink):
+		p.indexLines = pagerStripHeight(m.idx.height+1, m.bodyHeight())
+	case key.Matches(msg, k.ResetSize):
+		p.indexLines = p.configLines
 	case key.Matches(msg, k.LookupPrefix):
 		p.lookupPrefix = true
 	case key.Matches(msg, k.Delete):

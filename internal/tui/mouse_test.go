@@ -409,7 +409,7 @@ func TestIndexClickOpensQSO(t *testing.T) {
 }
 
 func TestPagerClickOnStripMovesCursor(t *testing.T) {
-	m, _ := newIndexModel(t, 50, 80, 30)
+	m, _ := newIndexModel(t, 50, 80, 24)
 	m = pressPager(t, m, enter())
 	require.Greater(t, m.idx.height, 2)
 	m.pager.scroll = 2

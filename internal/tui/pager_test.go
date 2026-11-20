@@ -125,6 +125,86 @@ func TestWithPagerIndexLinesNegative(t *testing.T) {
 	assert.Equal(t, 0, m.pager.indexLines, "a negative count shows no strip")
 }
 
+func TestPagerResizeStrip(t *testing.T) {
+	m, _ := newIndexModel(t, 40, 80, 40, WithPagerIndexLines(5))
+	m = press(t, m, enter())
+	require.Equal(t, 5, m.idx.height)
+
+	m = press(t, m, keyPress('_', 0))
+	assert.Equal(t, 6, m.idx.height, "_ shows one more index row")
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(plain(m.tabBarLine(t))), "QSO  Station"), "the tab bar follows the strip")
+
+	m = press(t, m, keyPress('+', 0), keyPress('+', 0))
+	assert.Equal(t, 4, m.idx.height, "+ shows one fewer index row")
+
+	m = press(t, m, keyPress('=', 0))
+	assert.Equal(t, 5, m.idx.height, "= goes back to pager_index_lines")
+}
+
+func TestPagerResizeStripClamps(t *testing.T) {
+	m, _ := newIndexModel(t, 40, 80, 24, WithPagerIndexLines(1))
+	m = press(t, m, enter())
+	body := m.bodyHeight()
+
+	m = press(t, m, keyPress('+', 0), keyPress('+', 0))
+	assert.Equal(t, 0, m.idx.height, "the strip stops at no rows")
+
+	for range body {
+		m = press(t, m, keyPress('_', 0))
+	}
+	most := pagerStripHeight(body, body)
+	assert.Equal(t, most, m.idx.height, "the strip stops at half the body")
+
+	m = press(t, m, keyPress('+', 0))
+	assert.Equal(t, most-1, m.idx.height, "+ takes effect at once at the limit")
+}
+
+func TestPagerResizeStripFromClampedConfig(t *testing.T) {
+	m, _ := newIndexModel(t, 40, 80, 24, WithPagerIndexLines(30))
+	m = press(t, m, enter())
+	shown := m.idx.height
+	require.Less(t, shown, 30)
+
+	m = press(t, m, keyPress('+', 0))
+	assert.Equal(t, shown-1, m.idx.height, "+ starts from the rows shown, not the configured count")
+
+	m = press(t, m, keyPress('=', 0))
+	assert.Equal(t, shown, m.idx.height, "= goes back to the configured count, clamped")
+}
+
+func TestPagerResizeStripKeepsScrollValid(t *testing.T) {
+	m, _ := newIndexModel(t, 40, 80, 14, WithPagerIndexLines(4))
+	m = press(t, m, enter(), special(tea.KeyEnd))
+	bottom := m.pager.scroll
+	require.Positive(t, bottom, "the QSO tab is taller than the pager")
+
+	m = press(t, m, keyPress('+', 0), keyPress('+', 0))
+	assert.Equal(t, m.pagerBottom(), m.pager.scroll, "a taller pager keeps the scroll within the tab")
+	assert.Less(t, m.pager.scroll, bottom)
+	assert.Contains(t, plain(m.pagerBody(t)), "Tags", "the last line of the tab is still shown")
+
+	m = press(t, m, special(tea.KeyHome), keyPress('_', 0))
+	assert.Zero(t, m.pager.scroll, "a shorter pager leaves the scroll alone")
+}
+
+func TestPagerResizeStripLastsTheSession(t *testing.T) {
+	m, _ := newIndexModel(t, 40, 80, 40, WithPagerIndexLines(5))
+	m = press(t, m, enter(), keyPress('_', 0), keyPress('q', 0), enter())
+
+	assert.Equal(t, 6, m.idx.height, "the resized strip stays after closing and reopening the pager")
+}
+
+func TestPagerResizeKeysInHelp(t *testing.T) {
+	m := New(WithLogbook(&fakeIndexStore{}))
+	var keys []string
+	for _, s := range m.pagerKeys.sections() {
+		for _, b := range s.keys {
+			keys = append(keys, b.Help().Key)
+		}
+	}
+	assert.Subset(t, keys, []string{"+", "_", "="})
+}
+
 // currentCall returns the callsign of the QSO under the index cursor.
 func (m Model) currentCall(t *testing.T) string {
 	t.Helper()
