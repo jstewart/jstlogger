@@ -92,7 +92,7 @@ func TestLoadDefaultsInCode(t *testing.T) {
 	assert.Empty(t, c.Rig.Profile)
 	assert.Empty(t, c.Rig.Profiles)
 	assert.Equal(t, Logbook{DistanceUnit: DefaultDistanceUnit}, c.Logbook)
-	assert.Equal(t, Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines}, c.Index)
+	assert.Equal(t, Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines, Sort: DefaultIndexSort}, c.Index)
 }
 
 func TestLoadIndex(t *testing.T) {
@@ -104,17 +104,17 @@ func TestLoadIndex(t *testing.T) {
 		{
 			name:    "section absent uses the defaults",
 			content: "",
-			want:    Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines},
+			want:    Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines, Sort: DefaultIndexSort},
 		},
 		{
 			name:    "custom format is loaded verbatim",
 			content: "[index]\nformat = \"  %-10c  %-*C \"\n",
-			want:    Index{Format: "  %-10c  %-*C ", PagerIndexLines: DefaultPagerIndexLines},
+			want:    Index{Format: "  %-10c  %-*C ", PagerIndexLines: DefaultPagerIndexLines, Sort: DefaultIndexSort},
 		},
 		{
 			name:    "custom pager_index_lines",
 			content: "[index]\npager_index_lines = 3\n",
-			want:    Index{Format: DefaultIndexFormat, PagerIndexLines: 3},
+			want:    Index{Format: DefaultIndexFormat, PagerIndexLines: 3, Sort: DefaultIndexSort},
 		},
 	}
 	for _, tt := range tests {
@@ -170,6 +170,32 @@ poll_interval = "500ms"
 
 	assert.Equal(t, "portable", c.DefaultStation)
 	assert.Equal(t, 500*time.Millisecond, c.Rig.PollInterval)
+}
+
+func TestLoadIndexSort(t *testing.T) {
+	tests := []struct {
+		name         string
+		content      string
+		want         string
+		wantWarnings []string
+	}{
+		{name: "unset uses the default", content: "", want: "reverse-date"},
+		{name: "field", content: "[index]\nsort = \"band\"\n", want: "band"},
+		{name: "reversed field", content: "[index]\nsort = \"reverse-call\"\n", want: "reverse-call"},
+		{
+			name:         "unknown falls back to the default with a warning",
+			content:      "[index]\nsort = \"foo\"\n",
+			want:         "reverse-date",
+			wantWarnings: []string{`index.sort: unknown sort "foo"; using "reverse-date"`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, res := load(t, tt.content)
+			assert.Equal(t, tt.wantWarnings, res.Warnings)
+			assert.Equal(t, tt.want, c.Index.Sort)
+		})
+	}
 }
 
 func TestLoadUnknownKeyWarnings(t *testing.T) {

@@ -285,7 +285,7 @@ func (m Model) applyBulk(msg indexBulkMsg) (Model, tea.Cmd) {
 		// QSO the cursor moves to anyway.
 		m.pager.fetched, m.pager.pending = 0, 0
 	}
-	return m, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, id, m.idx.cursor)
+	return m, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor)
 }
 
 // nextKept returns the ID of the first cached QSO below the cursor whose ID

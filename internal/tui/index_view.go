@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/indexfmt"
+	"jstlogger/internal/logbook"
 	"jstlogger/internal/lotw"
 )
 
@@ -203,9 +205,10 @@ func (x index) rowView(st styles, i, width, nw int) string {
 	})
 }
 
-// statusView renders the position, the limit, the mark count, the armed
-// mark-prefix, any other armed prefixes named by armed, and any message or
-// error, e.g. "QSO 12/4,567 · limit: ~b 20m · 3 marked · mark-prefix".
+// statusView renders the position, the sort unless it is the default, the
+// limit, the mark count, the armed mark-prefix, any other armed prefixes
+// named by armed, and any message or error, e.g. "QSO 12/4,567 · sort: band
+// · limit: ~b 20m · 3 marked · mark-prefix".
 func (x index) statusView(st styles, width int, armed ...string) string {
 	position := "QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)
 	var rest []string
@@ -223,11 +226,14 @@ func (x index) statusView(st styles, width int, armed ...string) string {
 		rest = append(rest, st.err.Render(x.err.Error()))
 	}
 	parts := []string{position}
+	if x.sort != logbook.DefaultSort {
+		parts = append(parts, "sort: "+x.sort.String())
+	}
 	if x.limit.expr != nil {
 		// The limit prompt shows the whole pattern, so shorten it here to
 		// leave room for the marks, message and error.
 		const label = "limit: "
-		room := width - lipgloss.Width(strings.Join(append([]string{position, label}, rest...), " · "))
+		room := width - lipgloss.Width(strings.Join(slices.Concat(parts, []string{label}, rest), " · "))
 		parts = append(parts, label+truncate(x.limit.text, max(room, minLimitWidth), "…"))
 	}
 	line := strings.Join(append(parts, rest...), " · ")

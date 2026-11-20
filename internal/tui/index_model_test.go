@@ -19,14 +19,15 @@ import (
 	"jstlogger/internal/pattern"
 )
 
-// fakeIndexStore serves the index queries from qsos, newest first, and
-// records the offset of each Index call.
+// fakeIndexStore serves the index queries from qsos, in their order
+// whatever the sort, and records the offset and sort of each Index call.
 type fakeIndexStore struct {
 	logbook.Store
 
 	mu      sync.Mutex
 	qsos    []logbook.QSO
 	offsets []int
+	sorts   []logbook.Sort
 	err     error
 	// countErr fails only Count.
 	countErr error
@@ -58,10 +59,11 @@ func (s *fakeIndexStore) Count(_ context.Context, _ logbook.Expr) (int, error) {
 	return len(s.qsos), s.err
 }
 
-func (s *fakeIndexStore) Index(_ context.Context, _ logbook.Expr, offset, limit int) ([]logbook.QSO, error) {
+func (s *fakeIndexStore) Index(_ context.Context, _ logbook.Expr, sort logbook.Sort, offset, limit int) ([]logbook.QSO, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.offsets = append(s.offsets, offset)
+	s.sorts = append(s.sorts, sort)
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -71,7 +73,7 @@ func (s *fakeIndexStore) Index(_ context.Context, _ logbook.Expr, offset, limit 
 	return slices.Clone(s.qsos[offset:min(offset+limit, len(s.qsos))]), nil
 }
 
-func (s *fakeIndexStore) IndexOf(_ context.Context, _ logbook.Expr, id int64) (int, error) {
+func (s *fakeIndexStore) IndexOf(_ context.Context, _ logbook.Expr, _ logbook.Sort, id int64) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if i := slices.IndexFunc(s.qsos, func(q logbook.QSO) bool { return q.ID == id }); i >= 0 {
@@ -84,6 +86,13 @@ func (s *fakeIndexStore) loadedOffsets() []int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.offsets)
+}
+
+// loadedSorts returns the sort of each Index call.
+func (s *fakeIndexStore) loadedSorts() []logbook.Sort {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.sorts)
 }
 
 // runIndex runs cmd and feeds the index messages it produces back into m, until
@@ -500,7 +509,7 @@ func TestIndexHelp(t *testing.T) {
 
 	m = press(t, m, keyPress('?', 0))
 	full := plain(m.footerView())
-	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "oldest", "reload", "limit", "mark pattern", "unmark pattern",
+	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "first", "last", "reload", "limit", "o      sort", "O      reverse sort", "mark pattern", "unmark pattern",
 		"search", "alt+/ search back", "search next", "search opposite"} {
 		assert.Contains(t, full, want)
 	}

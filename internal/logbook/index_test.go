@@ -1,7 +1,9 @@
 package logbook
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -59,7 +61,7 @@ func TestSQLiteStoreIndex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := s.Index(t.Context(), Filter{}, tt.offset, tt.limit)
+			got, err := s.Index(t.Context(), Filter{}, DefaultSort, tt.offset, tt.limit)
 			require.NoError(t, err)
 			if tt.want == nil {
 				assert.Nil(t, got)
@@ -76,7 +78,7 @@ func TestSQLiteStoreIndexPagesMatchList(t *testing.T) {
 
 	var got []int64
 	for offset := 0; offset < len(want); offset += 2 {
-		qs, err := s.Index(t.Context(), Filter{}, offset, 2)
+		qs, err := s.Index(t.Context(), Filter{}, DefaultSort, offset, 2)
 		require.NoError(t, err)
 		got = append(got, ids(qs)...)
 	}
@@ -91,7 +93,7 @@ func TestSQLiteStoreIndexFilter(t *testing.T) {
 	s := newTestStore(t)
 	seedFilterSet(t, s)
 
-	got, err := s.Index(t.Context(), Filter{Countries: []string{"UNITED STATES"}}, 0, 10)
+	got, err := s.Index(t.Context(), Filter{Countries: []string{"UNITED STATES"}}, DefaultSort, 0, 10)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"D", "A"}, calls(got))
@@ -101,7 +103,7 @@ func TestSQLiteStoreIndexLoadsOnlyQSORow(t *testing.T) {
 	s := newTestStore(t)
 	added := seed(t, s, fullQSO())
 
-	got, err := s.Index(t.Context(), Filter{}, 0, 1)
+	got, err := s.Index(t.Context(), Filter{}, DefaultSort, 0, 1)
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -117,7 +119,7 @@ func TestSQLiteStoreIndexCapsLimit(t *testing.T) {
 	s := newTestStore(t)
 	bulkInsert(t, s, MaxPageSize+1)
 
-	got, err := s.Index(t.Context(), Filter{}, 0, MaxPageSize*2)
+	got, err := s.Index(t.Context(), Filter{}, DefaultSort, 0, MaxPageSize*2)
 
 	require.NoError(t, err)
 	assert.Len(t, got, MaxPageSize)
@@ -126,32 +128,20 @@ func TestSQLiteStoreIndexCapsLimit(t *testing.T) {
 func TestSQLiteStoreIndexErrors(t *testing.T) {
 	s := newTestStore(t)
 
-	_, err := s.Index(t.Context(), Filter{}, -1, 10)
+	_, err := s.Index(t.Context(), Filter{}, DefaultSort, -1, 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "negative offset")
 
-	_, err = s.Index(t.Context(), Filter{Confirmed: Confirmed(7)}, 0, 10)
+	_, err = s.Index(t.Context(), Filter{Confirmed: Confirmed(7)}, DefaultSort, 0, 10)
 	require.ErrorIs(t, err, ErrInvalidFilter)
 }
 
 func TestSQLiteStoreIndexUsesStartIndex(t *testing.T) {
 	s := newTestStore(t)
-	query, args, err := indexQuery(Filter{}, 1000, 500)
+	query, args, err := indexQuery(Filter{}, DefaultSort, 1000, 500)
 	require.NoError(t, err)
 
-	rows, err := s.db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+query, args...)
-	require.NoError(t, err)
-	defer func() { assert.NoError(t, rows.Close()) }()
-	var plan []string
-	for rows.Next() {
-		var id, parent, notUsed int
-		var detail string
-		require.NoError(t, rows.Scan(&id, &parent, &notUsed, &detail))
-		plan = append(plan, detail)
-	}
-	require.NoError(t, rows.Err())
-
-	joined := strings.Join(plan, "\n")
+	joined := queryPlan(t, s, query, args)
 	assert.Contains(t, joined, "qso_by_start", "rows are read in index order")
 	assert.NotContains(t, joined, "TEMP B-TREE", "no sort step")
 }
@@ -161,7 +151,7 @@ func TestSQLiteStoreIndexOf(t *testing.T) {
 	want := seedIndexSet(t, s)
 
 	for i, id := range want {
-		got, err := s.IndexOf(t.Context(), Filter{}, id)
+		got, err := s.IndexOf(t.Context(), Filter{}, DefaultSort, id)
 		require.NoError(t, err)
 		assert.Equal(t, i, got, "QSO %d", id)
 	}
@@ -171,28 +161,28 @@ func TestSQLiteStoreIndexOfFilter(t *testing.T) {
 	s := newTestStore(t)
 	want := seedIndexSet(t, s)
 	f := Filter{Bands: []string{"40m"}}
-	matching, err := s.Index(t.Context(), f, 0, 10)
+	matching, err := s.Index(t.Context(), f, DefaultSort, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, matching, 3)
 
 	for i, q := range matching {
-		got, err := s.IndexOf(t.Context(), f, q.ID)
+		got, err := s.IndexOf(t.Context(), f, DefaultSort, q.ID)
 		require.NoError(t, err)
 		assert.Equal(t, i, got, "QSO %d", q.ID)
 	}
 
 	// The newest QSO is on 20m.
-	_, err = s.IndexOf(t.Context(), f, want[0])
+	_, err = s.IndexOf(t.Context(), f, DefaultSort, want[0])
 	require.ErrorIs(t, err, ErrNotFound, "a QSO that does not match the filter")
 }
 
 func TestSQLiteStoreIndexOfErrors(t *testing.T) {
 	s := newTestStore(t)
 
-	_, err := s.IndexOf(t.Context(), Filter{}, 42)
+	_, err := s.IndexOf(t.Context(), Filter{}, DefaultSort, 42)
 	require.ErrorIs(t, err, ErrNotFound)
 
-	_, err = s.IndexOf(t.Context(), Filter{Confirmed: Confirmed(7)}, 42)
+	_, err = s.IndexOf(t.Context(), Filter{Confirmed: Confirmed(7)}, DefaultSort, 42)
 	require.ErrorIs(t, err, ErrInvalidFilter)
 }
 
@@ -242,7 +232,7 @@ func TestSQLiteStoreSearch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := s.Search(t.Context(), tt.within, tt.match, tt.from, tt.backward)
+			got, err := s.Search(t.Context(), tt.within, tt.match, DefaultSort, tt.from, tt.backward)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				return
@@ -251,10 +241,10 @@ func TestSQLiteStoreSearch(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 
 			// Index at the returned row is a QSO matching both.
-			qs, err := s.Index(t.Context(), tt.within, got, 1)
+			qs, err := s.Index(t.Context(), tt.within, DefaultSort, got, 1)
 			require.NoError(t, err)
 			require.Len(t, qs, 1)
-			n, err := s.IndexOf(t.Context(), And{tt.within, tt.match}, qs[0].ID)
+			n, err := s.IndexOf(t.Context(), And{tt.within, tt.match}, DefaultSort, qs[0].ID)
 			require.NoError(t, err, "QSO %d matches within and match", qs[0].ID)
 			assert.GreaterOrEqual(t, n, 0)
 		})
@@ -266,12 +256,105 @@ func TestSQLiteStoreSearchErrors(t *testing.T) {
 	seedIndexSet(t, s)
 	invalid := Filter{ConfirmedService: ServiceLoTW}
 
-	_, err := s.Search(t.Context(), invalid, nil, 0, false)
+	_, err := s.Search(t.Context(), invalid, nil, DefaultSort, 0, false)
 	require.ErrorIs(t, err, ErrInvalidFilter, "invalid within")
 
-	_, err = s.Search(t.Context(), nil, invalid, 0, false)
+	_, err = s.Search(t.Context(), nil, invalid, DefaultSort, 0, false)
 	require.ErrorIs(t, err, ErrInvalidFilter, "invalid match")
 
-	_, err = s.Search(t.Context(), nil, invalid, 0, true)
+	_, err = s.Search(t.Context(), nil, invalid, DefaultSort, 0, true)
 	require.ErrorIs(t, err, ErrInvalidFilter, "invalid match backward")
+}
+
+// BenchmarkSQLiteStoreIndexSort times Index at a deep offset, IndexOf of a
+// QSO deep in the order and Search both ways from a deep row, under every
+// sort, over 100,000 QSOs.
+func BenchmarkSQLiteStoreIndexSort(b *testing.B) {
+	if testing.Short() {
+		b.Skip("seeds 100,000 QSOs")
+	}
+	const n = 100_000
+	s, err := Open(b.Context(), filepath.Join(b.TempDir(), "logbook.db"), Options{})
+	require.NoError(b, err)
+	b.Cleanup(func() { assert.NoError(b, s.Close()) })
+
+	ctx := b.Context()
+	tx, err := s.db.BeginTx(ctx, nil)
+	require.NoError(b, err)
+	modes := [][2]string{{"FT8", ""}, {"MFSK", "FT4"}, {"CW", ""}, {"SSB", "USB"}, {"FM", ""}, {"", ""}}
+	conts := []string{"NA", "EU", "AS", "OC", "SA", "AF", ""}
+	for i := range n {
+		ts := formatTime(queryT0.Add(time.Duration(i) * time.Minute))
+		m := modes[i%len(modes)]
+		_, err := tx.ExecContext(ctx,
+			"INSERT INTO qso (uuid, start_utc, call, band, mode, submode, country, state, cont, created_at, updated_at)"+
+				" VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			newUUID(), ts, fmt.Sprintf("W%dX", i%5000), bands[i%len(bands)].name, m[0], m[1],
+			fmt.Sprintf("Country %d", i%340), fmt.Sprintf("S%d", i%60), conts[i%len(conts)], ts, ts)
+		require.NoError(b, err)
+	}
+	require.NoError(b, tx.Commit())
+
+	for _, sort := range allSorts() {
+		b.Run(sort.String()+"/Index", func(b *testing.B) {
+			for b.Loop() {
+				_, err := s.Index(ctx, nil, sort, n*3/4, 50)
+				require.NoError(b, err)
+			}
+		})
+		deep, err := s.Index(ctx, nil, sort, n*3/4, 1)
+		require.NoError(b, err)
+		require.Len(b, deep, 1)
+		b.Run(sort.String()+"/IndexOf", func(b *testing.B) {
+			for b.Loop() {
+				_, err := s.IndexOf(ctx, nil, sort, deep[0].ID)
+				require.NoError(b, err)
+			}
+		})
+		b.Run(sort.String()+"/Search", func(b *testing.B) {
+			// Depending on the sort there may be no match on one side.
+			match := Filter{Continents: []string{"SA"}}
+			for b.Loop() {
+				_, err := s.Search(ctx, nil, match, sort, n*3/4, false)
+				if !errors.Is(err, ErrNotFound) {
+					require.NoError(b, err)
+				}
+				_, err = s.Search(ctx, nil, match, sort, n*3/4, true)
+				if !errors.Is(err, ErrNotFound) {
+					require.NoError(b, err)
+				}
+			}
+		})
+	}
+}
+
+// queryPlan returns the detail lines of SQLite's query plan for query.
+func queryPlan(t *testing.T, s *SQLiteStore, query string, args []any) string {
+	t.Helper()
+	rows, err := s.db.QueryContext(t.Context(), "EXPLAIN QUERY PLAN "+query, args...)
+	require.NoError(t, err)
+	defer func() { assert.NoError(t, rows.Close()) }()
+	var plan []string
+	for rows.Next() {
+		var id, parent, notUsed int
+		var detail string
+		require.NoError(t, rows.Scan(&id, &parent, &notUsed, &detail))
+		plan = append(plan, detail)
+	}
+	require.NoError(t, rows.Err())
+	return strings.Join(plan, "\n")
+}
+
+func TestSQLiteStoreIndexSortUsesIndex(t *testing.T) {
+	s := newTestStore(t)
+	for _, sort := range allSorts() {
+		t.Run(sort.String(), func(t *testing.T) {
+			query, args, err := indexQuery(nil, sort, 1000, 500)
+			require.NoError(t, err)
+
+			plan := queryPlan(t, s, query, args)
+			assert.Contains(t, plan, "USING INDEX", "rows are read in index order")
+			assert.NotContains(t, plan, "TEMP B-TREE", "no sort step")
+		})
+	}
 }

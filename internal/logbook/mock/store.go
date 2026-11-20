@@ -159,33 +159,33 @@ func (mr *MockStoreMockRecorder) Import(ctx, qsos, tags any) *gomock.Call {
 }
 
 // Index mocks base method.
-func (m *MockStore) Index(ctx context.Context, e logbook.Expr, offset, limit int) ([]logbook.QSO, error) {
+func (m *MockStore) Index(ctx context.Context, e logbook.Expr, sort logbook.Sort, offset, limit int) ([]logbook.QSO, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Index", ctx, e, offset, limit)
+	ret := m.ctrl.Call(m, "Index", ctx, e, sort, offset, limit)
 	ret0, _ := ret[0].([]logbook.QSO)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Index indicates an expected call of Index.
-func (mr *MockStoreMockRecorder) Index(ctx, e, offset, limit any) *gomock.Call {
+func (mr *MockStoreMockRecorder) Index(ctx, e, sort, offset, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Index", reflect.TypeOf((*MockStore)(nil).Index), ctx, e, offset, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Index", reflect.TypeOf((*MockStore)(nil).Index), ctx, e, sort, offset, limit)
 }
 
 // IndexOf mocks base method.
-func (m *MockStore) IndexOf(ctx context.Context, e logbook.Expr, id int64) (int, error) {
+func (m *MockStore) IndexOf(ctx context.Context, e logbook.Expr, sort logbook.Sort, id int64) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IndexOf", ctx, e, id)
+	ret := m.ctrl.Call(m, "IndexOf", ctx, e, sort, id)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IndexOf indicates an expected call of IndexOf.
-func (mr *MockStoreMockRecorder) IndexOf(ctx, e, id any) *gomock.Call {
+func (mr *MockStoreMockRecorder) IndexOf(ctx, e, sort, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IndexOf", reflect.TypeOf((*MockStore)(nil).IndexOf), ctx, e, id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IndexOf", reflect.TypeOf((*MockStore)(nil).IndexOf), ctx, e, sort, id)
 }
 
 // List mocks base method.
@@ -204,18 +204,18 @@ func (mr *MockStoreMockRecorder) List(ctx, f, page any) *gomock.Call {
 }
 
 // Search mocks base method.
-func (m *MockStore) Search(ctx context.Context, within, match logbook.Expr, from int, backward bool) (int, error) {
+func (m *MockStore) Search(ctx context.Context, within, match logbook.Expr, sort logbook.Sort, from int, backward bool) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Search", ctx, within, match, from, backward)
+	ret := m.ctrl.Call(m, "Search", ctx, within, match, sort, from, backward)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Search indicates an expected call of Search.
-func (mr *MockStoreMockRecorder) Search(ctx, within, match, from, backward any) *gomock.Call {
+func (mr *MockStoreMockRecorder) Search(ctx, within, match, sort, from, backward any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockStore)(nil).Search), ctx, within, match, from, backward)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockStore)(nil).Search), ctx, within, match, sort, from, backward)
 }
 
 // Tag mocks base method.

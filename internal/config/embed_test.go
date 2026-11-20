@@ -94,6 +94,7 @@ distance_unit = "mi"             # "mi" | "km"
 # Columns of the QSO index; see the README's Index format section.
 format            = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S"
 pager_index_lines = 10   # Index rows kept above the QSO pager
+sort              = "reverse-date"   # date | call | band | mode | country | state | continent, oldest or A to Z first; a "reverse-" prefix flips it
 
 # [callbook]
 # services  = ["qrz", "hamqth"]   # Tried in order until one finds the call; empty disables lookups
@@ -169,7 +170,7 @@ func TestFullExampleLoads(t *testing.T) {
 			},
 		},
 		Logbook:  Logbook{DistanceUnit: DistanceUnitMi},
-		Index:    Index{Format: indexfmt.Default, PagerIndexLines: 10},
+		Index:    Index{Format: indexfmt.Default, PagerIndexLines: 10, Sort: "reverse-date"},
 		Callbook: Callbook{CacheTTL: DefaultCallbookCacheTTL},
 	}, c)
 }

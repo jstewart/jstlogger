@@ -279,7 +279,7 @@ func resultDetails(r callbook.Result) callbookDetails {
 // QTH, grid, state and county, only when that QSO's call is call itself.
 // It returns no details when there is no such QSO.
 func logbookDetails(ctx context.Context, s logbook.Store, call string) (callbookDetails, error) {
-	rows, err := s.Index(ctx, logbook.CallBaseIs{Call: call}, 0, 1)
+	rows, err := s.Index(ctx, logbook.CallBaseIs{Call: call}, logbook.DefaultSort, 0, 1)
 	if err != nil {
 		return callbookDetails{}, fmt.Errorf("look up QSOs with %s: %w", call, err)
 	}

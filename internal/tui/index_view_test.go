@@ -316,6 +316,21 @@ func TestIndexViewStates(t *testing.T) {
 	assert.Equal(t, assert.AnError.Error(), plain(x.view(st, 78, 10, false)))
 }
 
+func TestIndexStatusSort(t *testing.T) {
+	st := defaultStyles()
+	x := loadedIndex(1234, 8)
+	assert.Equal(t, "QSO 1/1,234", plain(x.statusView(st, 80)), "the default sort is not shown")
+
+	x.sort = logbook.Sort{Field: logbook.SortDate}
+	assert.Equal(t, "QSO 1/1,234 · sort: date", plain(x.statusView(st, 80)))
+
+	x.sort = logbook.Sort{Field: logbook.SortCountry, Reverse: true}
+	x.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
+	x.marks[1] = true
+
+	assert.Equal(t, "QSO 1/1,234 · sort: reverse-country · limit: ~b 20m · 1 marked", plain(x.statusView(st, 80)))
+}
+
 func TestIndexStatusLimit(t *testing.T) {
 	st := defaultStyles()
 	x := loadedIndex(1234, 8)

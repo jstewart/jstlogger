@@ -163,7 +163,7 @@ func TestPrefixSurvivesLoads(t *testing.T) {
 	m = runIndex(t, m, cmd)
 
 	m = press(t, m, prefixKey)
-	m = runIndex(t, m, loadIndexCmd(m.logbook, m.idx.gen, nil, 0, 0))
+	m = runIndex(t, m, loadIndexCmd(m.logbook, m.idx.gen, nil, logbook.DefaultSort, 0, 0))
 
 	assert.True(t, m.idx.prefix, "a reload arriving while armed keeps the prefix")
 }
