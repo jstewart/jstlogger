@@ -197,16 +197,14 @@ func TestLookupKeysDisabledWithoutOpener(t *testing.T) {
 	assertNotQuit(t, cmd)
 
 	m = newLookupModel(t, "W1AW", 80)
-	m.help.ShowAll = true
-	assert.NotContains(t, plain(m.footerView()), "QRZ")
+	assert.NotContains(t, helpText(m), "QRZ")
 }
 
 func TestLookupHelp(t *testing.T) {
 	f := &fakeOpener{}
 	m := newLookupModel(t, "W1AW", 120, WithURLOpener(f.open))
-	m.help.ShowAll = true
 
-	footer := plain(m.footerView())
+	footer := helpText(m)
 	for _, want := range []string{"gq", "QRZ", "gh", "HamQTH", "ge", "eQSL"} {
 		assert.Contains(t, footer, want)
 	}

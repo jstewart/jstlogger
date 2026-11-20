@@ -3,9 +3,7 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -32,6 +30,8 @@ type Model struct {
 	entryKeys  entryKeyMap
 	help       help.Model
 	styles     styles
+	// helpModal lists the keybindings in effect, over the body, while open.
+	helpModal helpModal
 
 	// rig is nil when no rig is configured.
 	rig      RigController
@@ -164,6 +164,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.sizeInput()
 
 	case tea.KeyPressMsg:
+		if m.helpModal.open {
+			return m.updateHelp(msg)
+		}
 		if m.promptOpen() {
 			return m.updatePrompt(msg)
 		}
@@ -188,7 +191,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
+			return m.openHelp(), nil
 		case key.Matches(msg, keys.Freq):
 			return m.openPrompt(promptFreq)
 		case key.Matches(msg, keys.Mode):
@@ -311,6 +314,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.lookupErr = msg.err
 
 	default:
+		// A paste filters the open help modal, and the screen behind gets
+		// none.
+		if paste, ok := msg.(tea.PasteMsg); ok && m.helpModal.open {
+			m.helpModal.typeText(paste.Content)
+			return m, nil
+		}
 		// Other input, such as pastes, goes to the open prompt, but not to
 		// a y/N question or the sort prompt, or else to the New QSO screen.
 		if m.promptOpen() && !isKeyPrompt(m.prompt) {
@@ -340,6 +349,9 @@ func (m Model) View() tea.View {
 	case m.logbook != nil:
 		content = m.idx.view(m.styles, m.bodyWidth(), bodyHeight, m.prompt == promptJump)
 	}
+	if m.helpModal.open {
+		content = m.overlayHelp(content, m.bodyWidth(), bodyHeight)
+	}
 	body := m.styles.body.
 		Width(m.width).
 		Height(bodyHeight).
@@ -367,42 +379,18 @@ func (m Model) headerView() string {
 		Render(title + strings.Repeat(" ", gap) + status)
 }
 
-// footerView renders the help line, preceded by the open prompt or the last
-// rig command, lookup, LoTW sync or eQSL sync error.
+// footerView renders the short help of the keys in effect, or of the open
+// help modal, preceded by the open prompt or the last rig command, lookup,
+// LoTW sync or eQSL sync error.
 func (m Model) footerView() string {
 	var lines []string
-	// The global keys come first so a narrow window still shows them.
-	var keys help.KeyMap = joinedKeyMap{m.keys, m.indexKeys}
-	if m.pager.open {
-		keys = joinedKeyMap{m.globalKeys(), m.pagerKeys}
-	}
-	if m.entry.open {
-		ek := m.entryKeys
-		// The keys number the tabs shown, which the Satellite tab is not
-		// always among.
-		ek.GoTab.SetHelp(fmt.Sprintf("alt+1-%d", len(m.entry.tabs())), ek.GoTab.Help().Desc)
-		ek.Editor.SetEnabled(slices.Contains(entryEditorFields, m.entry.focus))
-		picked := isPicked(m.entry.focus) && !m.entry.readOnly(m.entry.focus)
-		ek.Change.SetEnabled(picked)
-		ek.List.SetEnabled(picked)
-		// An edited QSO never goes live, so the rig keys do nothing.
-		for _, b := range []*key.Binding{&ek.Live, &ek.ResetTime, &ek.SyncRig} {
-			b.SetEnabled(!m.entry.editing)
-		}
-		keys = ek
-		if m.entry.list.open {
-			keys = pickListKeys
-		}
+	var keys help.KeyMap = m.contextKeys()
+	if m.helpModal.open {
+		keys = helpModalKeys
 	}
 	switch {
 	case m.promptOpen():
 		lines = append(lines, m.promptView())
-		keys = m.promptKeys
-		if isKeyPrompt(m.prompt) {
-			// Only y answers yes, and only a field's key sorts; enter and
-			// esc cancel like any other key.
-			keys = promptKeyMap{Quit: m.promptKeys.Quit}
-		}
 	case m.rigErr != nil:
 		lines = append(lines, m.styles.err.Render(m.rigErr.Error()))
 	case m.lookupErr != nil:

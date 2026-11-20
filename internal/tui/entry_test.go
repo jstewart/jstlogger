@@ -229,7 +229,7 @@ func TestEntryTypingIsNotAGlobalKey(t *testing.T) {
 
 	assert.Equal(t, "qf?m", entryValue(m, qsoentry.Call))
 	assert.Equal(t, promptNone, m.prompt, "f and m don't open the rig prompts")
-	assert.False(t, m.help.ShowAll, "? doesn't open help")
+	assert.False(t, m.helpModal.open, "? doesn't open help")
 }
 
 func TestEntryCtrlCQuits(t *testing.T) {

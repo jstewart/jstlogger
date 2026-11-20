@@ -314,7 +314,7 @@ func TestPromptCapturesKeys(t *testing.T) {
 	// q, ? and f are ordinary input while the prompt is open.
 	m = typeText(t, m, "q?f")
 	assert.True(t, m.promptOpen())
-	assert.False(t, m.help.ShowAll, "? should not toggle help in the prompt")
+	assert.False(t, m.helpModal.open, "? should not open help in the prompt")
 	assert.Equal(t, "q?f", m.input.Value())
 }
 
@@ -432,7 +432,7 @@ func TestWindowSizeWithRig(t *testing.T) {
 		keys          []tea.Msg
 	}{
 		{"short help", 80, 24, false, nil},
-		{"full help", 80, 24, true, nil},
+		{"help open", 80, 24, true, nil},
 		{"small terminal", 40, 10, false, nil},
 		{"tiny terminal", 20, 10, false, nil},
 		{"prompt open", 40, 10, false, []tea.Msg{keyPress('f', 0)}},
@@ -441,7 +441,9 @@ func TestWindowSizeWithRig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := New(WithRig("ic7300", &fakeRig{}))
-			m.help.ShowAll = tt.showAll
+			if tt.showAll {
+				m = m.openHelp()
+			}
 			msgs := append([]tea.Msg{
 				tea.WindowSizeMsg{Width: tt.width, Height: tt.height}, state, disc,
 			}, tt.keys...)

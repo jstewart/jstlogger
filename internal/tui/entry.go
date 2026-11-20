@@ -180,6 +180,8 @@ type entryKeyMap struct {
 	Editor key.Binding
 	// Quit replaces the global quit binding, since q is typed into fields.
 	Quit key.Binding
+	// Help replaces the global help binding, since ? is typed into fields.
+	Help key.Binding
 	// Change only shows in the help, for the arrows a picker steps with.
 	Change key.Binding
 	// List opens the list of a picker's options.
@@ -248,6 +250,7 @@ func defaultEntryKeys() entryKeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		Help: helpKey(),
 		Change: key.NewBinding(
 			key.WithKeys("left", "right"),
 			key.WithHelp("←/→", "change"),
@@ -260,15 +263,19 @@ func defaultEntryKeys() entryKeyMap {
 }
 
 func (k entryKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Change, k.List, k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close}
+	return []key.Binding{k.Change, k.List, k.Save, k.SaveClose, k.NextField, k.NextTab, k.Editor, k.Live, k.Close, k.Help}
 }
 
 func (k entryKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Save, k.SaveClose, k.Close, k.Quit},
-		{k.NextField, k.PrevField, k.Editor, k.Change, k.List},
-		{k.NextTab, k.PrevTab, k.GoTab},
-		{k.Live, k.ResetTime, k.SyncRig},
+	return sectionKeys(k.sections())
+}
+
+func (k entryKeyMap) sections() []helpSection {
+	return []helpSection{
+		{"Form", []key.Binding{k.Save, k.SaveClose, k.Close, k.Help, k.Quit}},
+		{"Fields", []key.Binding{k.NextField, k.PrevField, k.Editor, k.Change, k.List}},
+		{"Tabs", []key.Binding{k.NextTab, k.PrevTab, k.GoTab}},
+		{"Rig", []key.Binding{k.Live, k.ResetTime, k.SyncRig}},
 	}
 }
 
@@ -899,6 +906,8 @@ func (m Model) updateEntry(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, tea.Quit
 	case e.saving:
 		// Other keys wait for the save, so it lands on the form it saved.
+	case key.Matches(msg, k.Help):
+		return m.openHelp(), nil
 	case e.list.open && !key.Matches(msg, pickListKeys.Leave):
 		return m.updateList(msg)
 	case key.Matches(msg, k.Save):

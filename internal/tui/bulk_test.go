@@ -499,20 +499,17 @@ func TestBulkKeysNeedPrefix(t *testing.T) {
 
 func TestBulkHelp(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 200, 30)
-	m = press(t, m, keyPress('?', 0))
+	full := helpText(m)
 
-	full := plain(m.footerView())
-
-	for _, want := range []string{";d delete marked", ";s save marked", ";y tag marked", ";Y untag marked"} {
-		assert.Contains(t, full, want)
+	for _, want := range []string{`;d +delete marked`, `;s +save marked`, `;y +tag marked`, `;Y +untag marked`} {
+		assert.Regexp(t, want, full)
 	}
 }
 
 func TestBulkHelpWithoutLogbook(t *testing.T) {
 	m, _ := update(t, New(), tea.WindowSizeMsg{Width: 200, Height: 30})
-	m.help.ShowAll = true
 
-	full := plain(m.footerView())
+	full := helpText(m)
 
 	for _, hidden := range []string{"delete marked", "save marked", "tag marked"} {
 		assert.NotContains(t, full, hidden)

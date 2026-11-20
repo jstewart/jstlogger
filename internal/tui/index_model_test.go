@@ -245,7 +245,8 @@ func TestIndexGlobalKeys(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 24)
 
 	m = press(t, m, keyPress('?', 0))
-	assert.True(t, m.help.ShowAll)
+	assert.True(t, m.helpModal.open)
+	m = press(t, m, esc())
 
 	_, cmd := update(t, m, keyPress('q', 0))
 	require.NotNil(t, cmd)
@@ -507,11 +508,13 @@ func TestIndexHelp(t *testing.T) {
 		assert.Contains(t, short, want)
 	}
 
-	m = press(t, m, keyPress('?', 0))
-	full := plain(m.footerView())
-	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "first", "last", "reload", "limit", "o      sort", "O      reverse sort", "mark pattern", "unmark pattern",
-		"search", "alt+/ search back", "search next", "search opposite"} {
+	full := helpText(m)
+	for _, want := range []string{"next page", "half page down", "scroll up", "middle of page", "first", "last", "reload", "limit", "mark pattern", "unmark pattern",
+		"search", "search next", "search opposite"} {
 		assert.Contains(t, full, want)
+	}
+	for _, want := range []string{`\bo +sort\b`, `\bO +reverse sort\b`, `alt\+/ +search back\b`} {
+		assert.Regexp(t, want, full)
 	}
 }
 
@@ -525,9 +528,8 @@ func TestIndexHelpNarrowWindowKeepsGlobalKeys(t *testing.T) {
 
 func TestHelpWithoutLogbook(t *testing.T) {
 	m, _ := update(t, New(), tea.WindowSizeMsg{Width: 200, Height: 30})
-	m.help.ShowAll = true
 
-	full := plain(m.footerView())
+	full := helpText(m)
 
 	assert.NotContains(t, full, "mark")
 	assert.NotContains(t, full, "search")
@@ -880,7 +882,7 @@ func TestIndexSearchHelpKeyIsNotSearch(t *testing.T) {
 	m = press(t, m, keyPress('?', 0))
 
 	assert.Equal(t, promptNone, m.prompt)
-	assert.True(t, m.help.ShowAll)
+	assert.True(t, m.helpModal.open)
 }
 
 func TestIndexSearchForward(t *testing.T) {

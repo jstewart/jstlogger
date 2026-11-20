@@ -244,11 +244,10 @@ func TestEditOpensFromPager(t *testing.T) {
 
 func TestEditKeyIsInHelp(t *testing.T) {
 	m := newEditIndexModel(t, newEditStore(t, editedQSO(t)))
-	m.help.ShowAll = true
-	assert.Regexp(t, `\be +edit\b`, plain(m.footerView()))
+	assert.Regexp(t, `\be +edit\b`, helpText(m))
 
 	m = pressEdit(t, m, enter())
-	assert.Regexp(t, `\be +edit\b`, plain(m.footerView()))
+	assert.Regexp(t, `\be +edit\b`, helpText(m))
 }
 
 func TestEditPagerLookupStillWorks(t *testing.T) {
@@ -378,8 +377,7 @@ func TestEditNeverAppliesTheRig(t *testing.T) {
 	assert.False(t, m.entry.live, "an edit can't go live")
 	m = pressEdit(t, m, syncRigKey)
 	assertRigFields(t, m, "14.08", "20m", "MFSK", "FT4")
-	m.help.ShowAll = true
-	assert.NotContains(t, plain(m.footerView()), "live/post")
+	assert.NotContains(t, helpText(m), "live/post")
 
 	m = pressEdit(t, m, saveKey)
 	require.Len(t, s.updated, 1)

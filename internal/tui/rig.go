@@ -200,6 +200,8 @@ func (m Model) updatePrompt(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.promptKeys.Quit):
 		return m, tea.Quit
+	case key.Matches(msg, m.promptKeys.Help):
+		return m.openHelp(), nil
 	case m.prompt == promptConfirm:
 		return m.answerConfirm(msg)
 	case m.prompt == promptSort, m.prompt == promptSortReverse:

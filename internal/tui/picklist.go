@@ -34,6 +34,8 @@ type pickListKeyMap struct {
 	Filter key.Binding
 	// Leave closes the list, without picking, and moves to another field.
 	Leave key.Binding
+	// Help opens the help modal; ? filters the list.
+	Help key.Binding
 }
 
 var pickListKeys = pickListKeyMap{
@@ -44,14 +46,19 @@ var pickListKeys = pickListKeyMap{
 	Erase:  key.NewBinding(key.WithKeys("backspace")),
 	Filter: key.NewBinding(key.WithKeys("type"), key.WithHelp("type", "filter")),
 	Leave:  key.NewBinding(key.WithKeys("tab", "shift+tab")),
+	Help:   helpKey(),
 }
 
 func (k pickListKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Pick, k.Close, k.Filter}
+	return []key.Binding{k.Up, k.Pick, k.Close, k.Filter, k.Help}
 }
 
 func (k pickListKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{k.ShortHelp()}
+	return sectionKeys(k.sections())
+}
+
+func (k pickListKeyMap) sections() []helpSection {
+	return []helpSection{{"Pick list", []key.Binding{k.Up, k.Pick, k.Close, k.Filter, k.Help}}}
 }
 
 // pickList is the list a picker opens to choose from: each option with
