@@ -82,7 +82,7 @@ func TestPrefixOtherKeysCancel(t *testing.T) {
 
 			assert.False(t, m.idx.prefix)
 			assert.Equal(t, "QSO 3/10 · 2 marked · "+tt.key.String()+" does not apply to marked QSOs.", statusLine(t, m))
-			assert.False(t, m.help.ShowAll, "the key's own function does not run")
+			assert.False(t, m.helpModal.open, "the key's own function does not run")
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Len(t, m.idx.marks, marks)
 		})
@@ -170,9 +170,7 @@ func TestPrefixSurvivesLoads(t *testing.T) {
 
 func TestPrefixHelp(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 200, 30)
-	m = press(t, m, keyPress('?', 0))
-
-	full := plain(m.footerView())
+	full := helpText(m)
 
 	assert.Contains(t, full, "mark-prefix")
 	assert.NotContains(t, full, "esc")
@@ -180,9 +178,8 @@ func TestPrefixHelp(t *testing.T) {
 
 func TestPrefixHelpWithoutLogbook(t *testing.T) {
 	m, _ := update(t, New(), tea.WindowSizeMsg{Width: 200, Height: 30})
-	m.help.ShowAll = true
 
-	assert.NotContains(t, plain(m.footerView()), "mark-prefix")
+	assert.NotContains(t, helpText(m), "mark-prefix")
 }
 
 func TestStatusViewPrefixWithLimit(t *testing.T) {

@@ -261,8 +261,7 @@ func TestPagerHelp(t *testing.T) {
 	assert.NotContains(t, footer, "q quit", "q closes the pager")
 	assert.NotContains(t, footer, "new QSO", "the index keys are not active")
 
-	m.help.ShowAll = true
-	assert.Contains(t, plain(m.footerView()), "ctrl+c")
+	assert.Contains(t, helpText(m), "ctrl+c")
 }
 
 func TestIndexHelpShowsEnter(t *testing.T) {

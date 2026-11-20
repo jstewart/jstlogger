@@ -327,7 +327,7 @@ The index keys follow NeoMutt's generic menu.
 | `e`                       | [Edit the QSO](#editing-a-qso)                     |
 | `f`                       | Set the rig frequency                              |
 | `m`                       | Set the rig mode                                   |
-| `?`                       | Show or hide full help                             |
+| `?` / `F1`                | [Show every key](#help)                            |
 | `q` / `ctrl+c`            | Quit                                               |
 
 Keys are case-sensitive: `M` is the middle of the page and `m` sets the
@@ -335,6 +335,23 @@ mode. `ctrl+l` keeps the cursor on the same QSO if it still exists, and
 redraws the whole screen, which fixes a display the terminal has drawn
 wrong. `f` and `m` are only available when rig control is on. In a prompt,
 press `enter` to submit or `esc` to cancel.
+
+### Help
+
+The footer shows the most used keys of the screen you're on. `?` opens
+a keybinds window over the screen that lists every key in effect there,
+in groups such as navigation, marks and rig. In the New QSO screen, its
+pick lists and prompts, where `?` is typed as text, `F1` opens it
+instead; `F1` works everywhere.
+
+`/` starts a filter: typing narrows the list by key or description, so
+`mark` finds the mark keys and `ctrl+t` finds what it does. `enter`
+keeps the filter and `esc` clears it; `↑`/`↓` and `ctrl+p`/`ctrl+n`
+scroll while you type. Otherwise `j`/`k`, `↑`/`↓`, `ctrl+p`/`ctrl+n` and
+the mouse wheel scroll, and `PgUp`/`PgDn` move a page. `esc`, `enter`,
+`?` or `F1` closes the window, returning to the screen as it was. The
+window only lists keys: none of them runs from it, and no key reaches
+the screen behind it, except `ctrl+c`, which quits.
 
 ### New QSO tabs
 
@@ -434,9 +451,10 @@ In the index, the wheel moves the cursor three QSOs per step, loading
 rows as it goes, and clicking a QSO opens it in the pager, as `enter`
 does. In the pager, clicking a row in the index strip above it shows
 that QSO, as `j` and `k` would. In the pager and the New QSO screen,
-clicking a tab switches to it, and the wheel scrolls the tab. Clicks do
-nothing while a prompt is open or a prefix key, `;` or `g`, is waiting
-for its second key.
+clicking a tab switches to it, and the wheel scrolls the tab. While the
+[help window](#help) is open, the wheel scrolls it instead. Clicks do
+nothing while a prompt or the help window is open or a prefix key, `;`
+or `g`, is waiting for its second key.
 
 With mouse reporting on, click-drag no longer selects text in most
 terminals, the index included. Hold a modifier to select text anyway:

@@ -196,16 +196,14 @@ func TestEntryEditorDroppedReadBackError(t *testing.T) {
 
 func TestEntryEditorHelp(t *testing.T) {
 	m, _ := newEditorModel(t, "true")
-	m.help.ShowAll = true
 	m = focusOn(t, m, qsoentry.Call)
-	assert.NotRegexp(t, `ctrl\+g`, plain(m.footerView()), "no editor for the call")
+	assert.NotRegexp(t, `ctrl\+g`, helpText(m), "no editor for the call")
 
 	for _, f := range []qsoentry.Field{qsoentry.Comment, qsoentry.Notes, qsoentry.QSLMsg} {
 		m = focusOn(t, m, f)
-		assert.Regexp(t, `ctrl\+g\s+edit in \$EDITOR`, plain(m.footerView()), entryLabels[f])
+		assert.Regexp(t, `ctrl\+g\s+edit in \$EDITOR`, helpText(m), entryLabels[f])
 	}
 	// The short help is cut to the window, and ctrl+g follows the tab keys.
-	m.help.ShowAll = false
 	m, _ = update(t, m, tea.WindowSizeMsg{Width: 120, Height: 30})
 	assert.Regexp(t, `ctrl\+g\s+edit in \$EDITOR`, plain(m.footerView()), "the short help too")
 }

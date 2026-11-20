@@ -5,8 +5,30 @@ import (
 	"charm.land/bubbles/v2/key"
 )
 
+// helpSection is a titled group of keybindings the help modal lists.
+type helpSection struct {
+	title string
+	keys  []key.Binding
+}
+
+// helpKeyMap is a help.KeyMap whose bindings the help modal lists in
+// titled sections.
+type helpKeyMap interface {
+	help.KeyMap
+	sections() []helpSection
+}
+
+// sectionKeys returns the bindings of each section, as FullHelp does.
+func sectionKeys(sections []helpSection) [][]key.Binding {
+	out := make([][]key.Binding, 0, len(sections))
+	for _, s := range sections {
+		out = append(out, s.keys)
+	}
+	return out
+}
+
 // keyMap holds the global keybindings. It implements help.KeyMap so the
-// footer and the full help overlay stay in sync with the actual bindings.
+// footer and the help modal stay in sync with the actual bindings.
 type keyMap struct {
 	Freq key.Binding
 	Mode key.Binding
@@ -27,8 +49,8 @@ func defaultKeys(rigEnabled bool) keyMap {
 			key.WithHelp("m", "mode"),
 		),
 		Help: key.NewBinding(
-			key.WithKeys("?"),
-			key.WithHelp("?", "help"),
+			key.WithKeys("?", "f1"),
+			key.WithHelp("?/f1", "help"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "ctrl+c"),
@@ -45,7 +67,14 @@ func (k keyMap) ShortHelp() []key.Binding {
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Freq, k.Mode}, {k.Help, k.Quit}}
+	return sectionKeys(k.sections())
+}
+
+func (k keyMap) sections() []helpSection {
+	return []helpSection{
+		{"rig", []key.Binding{k.Freq, k.Mode}},
+		{"general", []key.Binding{k.Help, k.Quit}},
+	}
 }
 
 // promptKeyMap holds the keybindings handled while an input prompt is open;
@@ -54,6 +83,8 @@ type promptKeyMap struct {
 	Submit key.Binding
 	Cancel key.Binding
 	Quit   key.Binding
+	// Help opens the help modal; ? is typed into the prompt.
+	Help key.Binding
 	// HistoryPrev and HistoryNext browse the pattern history. They are
 	// enabled only while a pattern prompt is open.
 	HistoryPrev key.Binding
@@ -74,6 +105,7 @@ func defaultPromptKeys() promptKeyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		Help: helpKey(),
 		HistoryPrev: key.NewBinding(
 			key.WithKeys("up", "ctrl+p"),
 			key.WithHelp("↑/ctrl+p", "prev pattern"),
@@ -88,11 +120,27 @@ func defaultPromptKeys() promptKeyMap {
 }
 
 func (k promptKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Submit, k.Cancel, k.HistoryPrev, k.HistoryNext}
+	return []key.Binding{k.Submit, k.Cancel, k.HistoryPrev, k.HistoryNext, k.Help}
 }
 
 func (k promptKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Submit, k.Cancel, k.Quit}, {k.HistoryPrev, k.HistoryNext}}
+	return sectionKeys(k.sections())
+}
+
+func (k promptKeyMap) sections() []helpSection {
+	return []helpSection{
+		{"prompt", []key.Binding{k.Submit, k.Cancel, k.Help, k.Quit}},
+		{"history", []key.Binding{k.HistoryPrev, k.HistoryNext}},
+	}
+}
+
+// helpKey returns the binding that opens the help modal where ? is typed
+// as text, as in a prompt or the New QSO screen.
+func helpKey() key.Binding {
+	return key.NewBinding(
+		key.WithKeys("f1"),
+		key.WithHelp("f1", "help"),
+	)
 }
 
 // indexKeyMap holds the QSO index keybindings, modeled on NeoMutt's generic
@@ -304,19 +352,27 @@ func (k indexKeyMap) ShortHelp() []key.Binding {
 }
 
 func (k indexKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Next, k.Prev, k.NextLine, k.PrevLine},
-		{k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp},
-		{k.TopPage, k.MiddlePage, k.BottomPage, k.Jump},
-		{k.First, k.Last, k.Limit, k.Sort, k.SortReverse, k.Reload, k.Open, k.NewQSO, k.Edit},
-		{k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix},
-		{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite},
-		{k.Delete, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag},
+	return sectionKeys(k.sections())
+}
+
+func (k indexKeyMap) sections() []helpSection {
+	return []helpSection{
+		{"navigation", []key.Binding{
+			k.Next, k.Prev, k.NextLine, k.PrevLine, k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp,
+			k.TopPage, k.MiddlePage, k.BottomPage, k.First, k.Last, k.Jump,
+		}},
+		{"QSOs", []key.Binding{k.Open, k.NewQSO, k.Edit, k.Delete}},
+		{"view", []key.Binding{k.Limit, k.Sort, k.SortReverse, k.Reload}},
+		{"search", []key.Binding{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite}},
+		{"marks", []key.Binding{
+			k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix,
+			k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag,
+		}},
 	}
 }
 
 // joinedKeyMap shows several key maps' help as one, in order.
-type joinedKeyMap []help.KeyMap
+type joinedKeyMap []helpKeyMap
 
 func (j joinedKeyMap) ShortHelp() []key.Binding {
 	var out []key.Binding
@@ -330,6 +386,14 @@ func (j joinedKeyMap) FullHelp() [][]key.Binding {
 	var out [][]key.Binding
 	for _, k := range j {
 		out = append(out, k.FullHelp()...)
+	}
+	return out
+}
+
+func (j joinedKeyMap) sections() []helpSection {
+	var out []helpSection
+	for _, k := range j {
+		out = append(out, k.sections()...)
 	}
 	return out
 }

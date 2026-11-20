@@ -424,8 +424,7 @@ func TestPagerKeepsScrollAtIndexEnds(t *testing.T) {
 func TestPagerHelpListsTabKeys(t *testing.T) {
 	m, _ := newIndexModel(t, 5, 120, 24)
 	m = press(t, m, enter())
-	m.help.ShowAll = true
-	footer := plain(m.footerView())
+	footer := helpText(m)
 	for _, want := range []string{"tab", "shift+tab", "next tab", "prev tab", "space", "home", "end"} {
 		assert.Contains(t, footer, want)
 	}

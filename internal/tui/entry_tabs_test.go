@@ -304,19 +304,16 @@ func TestEntryHelpShowsAltTabKeys(t *testing.T) {
 	m := newEntryModel(t, newEntryStore(t, nil))
 	assert.Regexp(t, `alt\+\./ctrl\+pgdn\s+next tab`, plain(m.footerView()))
 
-	m.help.ShowAll = true
-	assert.Regexp(t, `alt\+\./ctrl\+pgdn\s+next tab`, plain(m.footerView()))
-	assert.Regexp(t, `alt\+,/ctrl\+pgup\s+prev tab`, plain(m.footerView()))
+	assert.Regexp(t, `alt\+\./ctrl\+pgdn\s+next tab`, helpText(m))
+	assert.Regexp(t, `alt\+,/ctrl\+pgup\s+prev tab`, helpText(m))
 }
 
 func TestEntryHelpCountsTabsShown(t *testing.T) {
 	m := newEntryModel(t, newEntryStore(t, nil))
-	m.help.ShowAll = true
-	assert.Regexp(t, `alt\+1-5\s+go to tab`, plain(m.footerView()), "no satellite tab, so five tabs")
+	assert.Regexp(t, `alt\+1-5\s+go to tab`, helpText(m), "no satellite tab, so five tabs")
 
 	m = fill(t, m, map[qsoentry.Field]string{qsoentry.PropMode: "sat"})
-	m.help.ShowAll = true
-	assert.Regexp(t, `alt\+1-6\s+go to tab`, plain(m.footerView()), "the satellite tab makes six")
+	assert.Regexp(t, `alt\+1-6\s+go to tab`, helpText(m), "the satellite tab makes six")
 }
 
 func TestEntryLeavesHiddenSatelliteTab(t *testing.T) {

@@ -32,11 +32,11 @@ func (m Model) bodyCell(mouse tea.Mouse) (x, y int, ok bool) {
 // New QSO screen, which opens the tab as the tab keys do, on a QSO in the
 // index, which opens it in the pager as enter does, or on a QSO in the
 // strip above the pager, which moves the cursor to it as j and k do. Other
-// clicks do nothing, as do clicks while a prompt is open or a prefix is
-// armed.
+// clicks do nothing, as do clicks while a prompt or the help modal is open
+// or a prefix is armed.
 func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 	if mouse.Button != tea.MouseLeft || m.logbook == nil || m.promptOpen() ||
-		m.idx.prefix || m.pager.lookupPrefix {
+		m.idx.prefix || m.pager.lookupPrefix || m.helpModal.open {
 		return m, nil
 	}
 	x, y, ok := m.bodyCell(mouse)
@@ -102,11 +102,9 @@ func (m Model) clickStrip(y int) Model {
 // wheel scrolls the open tab of the pager, or the New QSO screen's form,
 // wheelLines lines up or down, or moves the index's cursor wheelLines rows,
 // stopping silently at the first and last QSOs, with the view following.
-// It does nothing while a prompt is open.
+// While the help modal is open, it scrolls that instead; otherwise it does
+// nothing while a prompt is open.
 func (m Model) wheel(mouse tea.Mouse) Model {
-	if m.logbook == nil || m.promptOpen() {
-		return m
-	}
 	var step int
 	switch mouse.Button {
 	case tea.MouseWheelDown:
@@ -117,6 +115,10 @@ func (m Model) wheel(mouse tea.Mouse) Model {
 		return m
 	}
 	switch {
+	case m.helpModal.open:
+		m.helpModal.scrollBy(step, m.helpListHeight())
+	case m.logbook == nil || m.promptOpen():
+		// Nothing behind a prompt scrolls.
 	case m.entry.open:
 		m.wheelEntry(step)
 	case m.pager.open:

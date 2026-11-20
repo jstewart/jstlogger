@@ -45,15 +45,17 @@ func TestIndexSortPrompt(t *testing.T) {
 	assert.Contains(t, plain(m.View().Content), "Reverse sort by: (d)ate (c)all (b)and (m)ode (C)ountry (s)tate c(o)ntinent")
 }
 
-func TestIndexSortPromptFooterShowsOnlyQuit(t *testing.T) {
+func TestIndexSortPromptHelpShowsOnlyQuitAndHelp(t *testing.T) {
 	m, _ := newIndexModel(t, 10, 100, 24)
-	m = press(t, m, keyPress('?', 0), sortKey)
+	m = press(t, m, sortKey)
 
-	footer := plain(m.footerView())
-
-	assert.Contains(t, footer, "quit")
-	for _, help := range []string{"submit", "cancel", "prev pattern", "next"} {
-		assert.NotContains(t, footer, help)
+	footer, full := plain(m.footerView()), helpText(m)
+	assert.Contains(t, footer, "f1 help")
+	assert.Contains(t, full, "quit")
+	for _, help := range []string{footer, full} {
+		for _, hidden := range []string{"submit", "cancel", "prev pattern", "next"} {
+			assert.NotContains(t, help, hidden)
+		}
 	}
 }
 

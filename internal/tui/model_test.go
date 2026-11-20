@@ -54,13 +54,13 @@ func TestOtherKeysDoNotQuit(t *testing.T) {
 
 func TestHelpToggle(t *testing.T) {
 	m := New()
-	require.False(t, m.help.ShowAll)
+	require.False(t, m.helpModal.open)
 
 	m, _ = update(t, m, keyPress('?', 0))
-	assert.True(t, m.help.ShowAll, "first ? should show full help")
+	assert.True(t, m.helpModal.open, "first ? should open help")
 
 	m, _ = update(t, m, keyPress('?', 0))
-	assert.False(t, m.help.ShowAll, "second ? should hide full help")
+	assert.False(t, m.helpModal.open, "second ? should close help")
 }
 
 func TestWindowSize(t *testing.T) {
@@ -70,13 +70,15 @@ func TestWindowSize(t *testing.T) {
 		showAll       bool
 	}{
 		{"short help", 80, 24, false},
-		{"full help", 80, 24, true},
+		{"help open", 80, 24, true},
 		{"small terminal", 40, 10, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := New()
-			m.help.ShowAll = tt.showAll
+			if tt.showAll {
+				m = m.openHelp()
+			}
 			m, _ = update(t, m, tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
 
 			assert.Equal(t, tt.width, m.width)

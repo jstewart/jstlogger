@@ -116,10 +116,8 @@ func TestDeleteCtrlCQuits(t *testing.T) {
 
 func TestDeleteHelp(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 200, 30)
-	m = press(t, m, keyPress('?', 0))
+	full := helpText(m)
 
-	full := plain(m.footerView())
-
-	assert.Contains(t, full, "d delete")
-	assert.Contains(t, full, ";d delete marked")
+	assert.Regexp(t, `\bd +delete\b`, full)
+	assert.Regexp(t, `;d +delete marked`, full)
 }

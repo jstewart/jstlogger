@@ -194,9 +194,9 @@ func TestPagerHelpListsMarkKeys(t *testing.T) {
 		assert.Contains(t, footer, want)
 	}
 
-	m.help.ShowAll = true
-	full := plain(m.footerView())
-	// Full help aligns the keys and descriptions in columns of their own.
+	full := helpText(m)
+	// The help modal aligns the keys and descriptions in columns of their
+	// own.
 	for _, want := range []string{
 		"delete", "mark", "mark-prefix",
 		";d", "delete marked", ";s", "save marked", ";y", "tag marked", ";Y", "untag marked",
@@ -205,5 +205,5 @@ func TestPagerHelpListsMarkKeys(t *testing.T) {
 	}
 
 	m = pressPager(t, m, prefixKey)
-	assert.Equal(t, full, plain(m.footerView()), "arming the prefix leaves the help alone, as in the index")
+	assert.Equal(t, full, helpText(m), "arming the prefix leaves the help alone, as in the index")
 }

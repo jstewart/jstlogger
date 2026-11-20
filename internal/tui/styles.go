@@ -62,6 +62,14 @@ type styles struct {
 	// newBadge renders the New QSO screen's worked-before badges, such as
 	// NEW BAND.
 	newBadge lipgloss.Style
+
+	// helpBox frames the help modal, helpBadge renders the close badge in
+	// its corner, and helpHeading and helpKey render its section headings
+	// and keys.
+	helpBox     lipgloss.Style
+	helpBadge   lipgloss.Style
+	helpHeading lipgloss.Style
+	helpKey     lipgloss.Style
 }
 
 func defaultStyles() styles {
@@ -88,5 +96,9 @@ func defaultStyles() styles {
 		lotwActive:   lipgloss.NewStyle().Bold(true).Foreground(amber),
 		lotwInactive: lipgloss.NewStyle().Foreground(muted).Faint(true),
 		newBadge:     lipgloss.NewStyle().Bold(true).Foreground(good),
+		helpBox:      lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(blue).Padding(0, 1),
+		helpBadge:    lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(blue),
+		helpHeading:  lipgloss.NewStyle().Bold(true).Foreground(blue),
+		helpKey:      lipgloss.NewStyle().Bold(true).Foreground(purple),
 	}
 }

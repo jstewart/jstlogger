@@ -269,12 +269,16 @@ func (k pagerKeyMap) ShortHelp() []key.Binding {
 }
 
 func (k pagerKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Next, k.Prev, k.Edit, k.Close},
-		{k.NextTab, k.PrevTab},
-		{k.PageDown, k.PageUp, k.Top, k.Bottom},
-		{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL},
-		{k.Delete, k.Mark, k.MarkPrefix, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag},
+	return sectionKeys(k.sections())
+}
+
+func (k pagerKeyMap) sections() []helpSection {
+	return []helpSection{
+		{"QSO", []key.Binding{k.Next, k.Prev, k.Edit, k.Delete, k.Close}},
+		{"tabs", []key.Binding{k.NextTab, k.PrevTab}},
+		{"scrolling", []key.Binding{k.PageDown, k.PageUp, k.Top, k.Bottom}},
+		{"lookup", []key.Binding{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL}},
+		{"marks", []key.Binding{k.Mark, k.MarkPrefix, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag}},
 	}
 }
 
