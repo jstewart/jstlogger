@@ -24,8 +24,8 @@ type Store interface {
 	// Count returns the number of QSOs matching e. A nil e matches every
 	// QSO.
 	Count(ctx context.Context, e Expr) (int, error)
-	// Index returns up to limit QSOs matching e, in sort's order (the zero
-	// Sort is newest first), starting at row offset (0 is the first), without
+	// Index returns up to limit QSOs matching e, in sort's order (DefaultSort
+	// is newest first), starting at row offset (0 is the first), without
 	// their fields, confirmations or tags. A nil e matches every QSO.
 	Index(ctx context.Context, e Expr, sort Sort, offset, limit int) ([]QSO, error)
 	// IndexOf returns the row number of the QSO with the given ID in Index's
@@ -40,8 +40,8 @@ type Store interface {
 	// returns ErrNotFound when no such QSO exists. A nil within or match
 	// matches every QSO.
 	Search(ctx context.Context, within, match Expr, sort Sort, from int, backward bool) (int, error)
-	// IDs returns the IDs of every QSO matching e in Index's ordering for the
-	// zero Sort (newest first), or nil when none match. A nil e matches every
+	// IDs returns the IDs of every QSO matching e in Index's ordering for
+	// DefaultSort (newest first), or nil when none match. A nil e matches every
 	// QSO.
 	IDs(ctx context.Context, e Expr) ([]int64, error)
 	// Tag applies tags to each of the given QSOs, creating tags as needed.

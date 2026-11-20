@@ -237,7 +237,7 @@ func TestIndexView(t *testing.T) {
 	assert.Contains(t, lines[4], "K4556A")
 	assert.NotEqual(t, lines[4], plain(lines[4]), "the cursor row is highlighted")
 	assert.Equal(t, 78, lipgloss.Width(lines[4]), "the cursor bar spans the row")
-	assert.Equal(t, "QSO 12/4,567 · sort: date · 3 marked", lines[6])
+	assert.Equal(t, "QSO 12/4,567 · 3 marked", lines[6])
 }
 
 func TestIndexViewNumbered(t *testing.T) {
@@ -258,7 +258,7 @@ func TestIndexViewNumbered(t *testing.T) {
 		assert.Equal(t, 78, lipgloss.Width(l), "each line spans the width")
 	}
 	assert.Equal(t, strings.Index(header, "Call"), strings.Index(lines[1], "K4559A"), "the columns line up")
-	assert.Equal(t, "QSO 12/4,567 · sort: date · 1 marked", lines[6])
+	assert.Equal(t, "QSO 12/4,567 · 1 marked", lines[6])
 
 	unnumbered := strings.Split(x.view(defaultStyles(), 78, 7, false), "\n")
 	assert.True(t, strings.HasPrefix(plain(unnumbered[0]), "  Date"), "no number column when not numbered")
@@ -285,7 +285,7 @@ func TestIndexViewStatusMessage(t *testing.T) {
 	lines := strings.Split(x.view(defaultStyles(), 78, 7, false), "\n")
 
 	require.Len(t, lines, 7, "the status line stays at the bottom")
-	assert.Equal(t, "QSO 1/3 · sort: date · You are on the first QSO.", lines[6])
+	assert.Equal(t, "QSO 1/3 · You are on the first QSO.", lines[6])
 }
 
 func TestIndexViewPlaceholder(t *testing.T) {
@@ -319,6 +319,9 @@ func TestIndexViewStates(t *testing.T) {
 func TestIndexStatusSort(t *testing.T) {
 	st := defaultStyles()
 	x := loadedIndex(1234, 8)
+	assert.Equal(t, "QSO 1/1,234", plain(x.statusView(st, 80)), "the default sort is not shown")
+
+	x.sort = logbook.Sort{Field: logbook.SortDate}
 	assert.Equal(t, "QSO 1/1,234 · sort: date", plain(x.statusView(st, 80)))
 
 	x.sort = logbook.Sort{Field: logbook.SortCountry, Reverse: true}
@@ -335,16 +338,16 @@ func TestIndexStatusLimit(t *testing.T) {
 	x.msg = "No QSOs match the pattern."
 
 	x.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
-	assert.Equal(t, "QSO 1/1,234 · sort: date · limit: ~b 20m · 1 marked · No QSOs match the pattern.", plain(x.statusView(st, 80)))
+	assert.Equal(t, "QSO 1/1,234 · limit: ~b 20m · 1 marked · No QSOs match the pattern.", plain(x.statusView(st, 80)))
 
 	// A long limit is shortened so the marks and message still fit.
 	x.limit.text = "~c W1 (~b 20m | ~b 40m | ~b 15m) !~m FT8 ~d 2026-01-01-"
-	got := plain(x.statusView(st, 93))
-	assert.Equal(t, "QSO 1/1,234 · sort: date · limit: ~c W1 (~b 20m | ~b… · 1 marked · No QSOs match the pattern.", got)
-	assert.LessOrEqual(t, lipgloss.Width(got), 93)
+	got := plain(x.statusView(st, 80))
+	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (~b 20m | ~b… · 1 marked · No QSOs match the pattern.", got)
+	assert.LessOrEqual(t, lipgloss.Width(got), 80)
 
 	// On a narrow screen the limit keeps a few characters and the line is
 	// cut instead.
-	got = plain(x.statusView(st, 53))
-	assert.Equal(t, "QSO 1/1,234 · sort: date · limit: ~c W1 (… · 1 marked", got)
+	got = plain(x.statusView(st, 40))
+	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (… · 1 marked", got)
 }

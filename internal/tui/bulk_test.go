@@ -114,7 +114,7 @@ func TestBulkTag(t *testing.T) {
 	assert.Equal(t, 6, m.idx.total, "the index reloads")
 	assert.Equal(t, int64(3), currentID(t, m), "the cursor stays on its QSO")
 	assert.Len(t, m.idx.marks, 2, "the marks stay")
-	assert.Equal(t, "QSO 4/6 · sort: date · 2 marked · Tagged 2 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 4/6 · 2 marked · Tagged 2 QSOs.", statusLine(t, m))
 }
 
 func TestBulkTagOne(t *testing.T) {
@@ -126,7 +126,7 @@ func TestBulkTagOne(t *testing.T) {
 	m = press(t, m, enterKey)
 
 	assert.Equal(t, []int64{5}, idsMatching(t, s, "~y pota"))
-	assert.Equal(t, "QSO 2/5 · sort: date · 1 marked · Tagged 1 QSO.", statusLine(t, m))
+	assert.Equal(t, "QSO 2/5 · 1 marked · Tagged 1 QSO.", statusLine(t, m))
 }
 
 func TestBulkUntag(t *testing.T) {
@@ -138,7 +138,7 @@ func TestBulkUntag(t *testing.T) {
 	m = press(t, m, enterKey)
 
 	assert.Equal(t, []int64{3, 2, 1}, idsMatching(t, s, "~y pota"))
-	assert.Equal(t, "QSO 3/5 · sort: date · 2 marked · Untagged 2 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · 2 marked · Untagged 2 QSOs.", statusLine(t, m))
 }
 
 func TestBulkTagEmptyDoesNothing(t *testing.T) {
@@ -154,7 +154,7 @@ func TestBulkTagEmptyDoesNothing(t *testing.T) {
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Empty(t, collectMsgs(cmd))
 			assert.Equal(t, []int64{5}, idsMatching(t, s, "~y pota"))
-			assert.Equal(t, "QSO 3/5 · sort: date · 2 marked", statusLine(t, m))
+			assert.Equal(t, "QSO 3/5 · 2 marked", statusLine(t, m))
 		})
 	}
 }
@@ -202,7 +202,7 @@ func TestBulkDeleteCancel(t *testing.T) {
 			assert.Empty(t, collectMsgs(cmd))
 			assert.Equal(t, 5, countAll(t, s))
 			assert.Len(t, m.idx.marks, 2)
-			assert.Equal(t, "QSO 3/5 · sort: date · 2 marked", statusLine(t, m))
+			assert.Equal(t, "QSO 3/5 · 2 marked", statusLine(t, m))
 		})
 	}
 }
@@ -222,7 +222,7 @@ func TestBulkDelete(t *testing.T) {
 			assert.Empty(t, m.idx.marks, "the deleted QSOs' marks are dropped")
 			assert.Equal(t, 3, m.idx.total)
 			assert.Equal(t, int64(3), currentID(t, m), "the cursor stays on its QSO")
-			assert.Equal(t, "QSO 1/3 · sort: date · Deleted 2 QSOs.", statusLine(t, m))
+			assert.Equal(t, "QSO 1/3 · Deleted 2 QSOs.", statusLine(t, m))
 		})
 	}
 }
@@ -473,7 +473,7 @@ func TestBulkMarksClearedBeforeSubmit(t *testing.T) {
 			m = tt.submit(t, m, dir)
 
 			assert.Equal(t, promptNone, m.prompt)
-			assert.Equal(t, "QSO 3/5 · sort: date · "+msgNoMarks, statusLine(t, m))
+			assert.Equal(t, "QSO 3/5 · "+msgNoMarks, statusLine(t, m))
 			assert.Equal(t, 5, countAll(t, s))
 			assert.Equal(t, []int64{5}, idsMatching(t, s, "~y pota"))
 			assert.NoFileExists(t, filepath.Join(dir, "marked.adi"))
@@ -492,7 +492,7 @@ func TestBulkKeysNeedPrefix(t *testing.T) {
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Empty(t, collectMsgs(cmd))
 			assert.Equal(t, 5, countAll(t, s))
-			assert.Equal(t, "QSO 3/5 · sort: date · 2 marked", statusLine(t, m))
+			assert.Equal(t, "QSO 3/5 · 2 marked", statusLine(t, m))
 		})
 	}
 }

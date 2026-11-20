@@ -9,7 +9,7 @@ import (
 )
 
 // Index returns up to limit QSOs matching e, in sort's order, starting at
-// row offset, where 0 is the first. The zero Sort is newest first (StartUTC
+// row offset, where 0 is the first. DefaultSort is newest first (StartUTC
 // descending, then ID descending). Only the qso row is loaded: Fields,
 // Confirmations and Tags are nil. A limit of zero or less returns nil, and
 // limits above MaxPageSize are capped. It returns an error wrapping
@@ -55,9 +55,9 @@ func (s *SQLiteStore) index(ctx context.Context, e Expr, sort Sort, offset, limi
 	return qs, nil
 }
 
-// indexQuery returns the query Index runs and its arguments. For the zero
-// Sort the ORDER BY matches the qso_by_start index, so SQLite skips offset
-// rows of the index instead of sorting the table.
+// indexQuery returns the query Index runs and its arguments. The ORDER BY
+// matches an index (qso_by_start for date), so SQLite skips offset rows of
+// the index instead of sorting the table.
 func indexQuery(e Expr, sort Sort, offset, limit int) (string, []any, error) {
 	terms, err := sort.terms()
 	if err != nil {

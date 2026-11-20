@@ -143,7 +143,7 @@ func TestLookupPrefixStatus(t *testing.T) {
 	m = pressPager(t, m, esc())
 	assert.True(t, m.pager.open, "esc cancels the prefix, not the pager")
 	assert.NotContains(t, statusLine(t, m), "lookup-prefix")
-	assert.Equal(t, "QSO 1/1 · sort: date", statusLine(t, m), "esc cancels silently")
+	assert.Equal(t, "QSO 1/1", statusLine(t, m), "esc cancels silently")
 
 	m = pressPager(t, m, keyPress('g', 0), keyPress('x', 0))
 	assert.True(t, m.pager.open)

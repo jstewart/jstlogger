@@ -36,7 +36,7 @@ const (
 	// DefaultPagerIndexLines is the default index.pager_index_lines.
 	DefaultPagerIndexLines = 10
 	// DefaultIndexSort is the default index.sort: date, newest first.
-	DefaultIndexSort = "date"
+	DefaultIndexSort = "reverse-date"
 	// DefaultCallbookCacheTTL is the default callbook.cache_ttl.
 	DefaultCallbookCacheTTL = 168 * time.Hour
 )

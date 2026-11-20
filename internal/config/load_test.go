@@ -179,14 +179,14 @@ func TestLoadIndexSort(t *testing.T) {
 		want         string
 		wantWarnings []string
 	}{
-		{name: "unset uses the default", content: "", want: "date"},
+		{name: "unset uses the default", content: "", want: "reverse-date"},
 		{name: "field", content: "[index]\nsort = \"band\"\n", want: "band"},
 		{name: "reversed field", content: "[index]\nsort = \"reverse-call\"\n", want: "reverse-call"},
 		{
 			name:         "unknown falls back to the default with a warning",
 			content:      "[index]\nsort = \"foo\"\n",
-			want:         "date",
-			wantWarnings: []string{`index.sort: unknown sort "foo"; using "date"`},
+			want:         "reverse-date",
+			wantWarnings: []string{`index.sort: unknown sort "foo"; using "reverse-date"`},
 		},
 	}
 	for _, tt := range tests {

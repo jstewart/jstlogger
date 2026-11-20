@@ -163,7 +163,7 @@ func TestIndexIsTheStartScreen(t *testing.T) {
 	assert.Contains(t, lines[1], "Date       Time  Call")
 	assert.Contains(t, lines[2], "K10A", "the newest QSO comes first")
 	assert.Contains(t, lines[11], "K1A")
-	assert.Equal(t, "QSO 1/10 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 1/10", statusLine(t, m))
 	assert.Equal(t, []int{0}, s.loadedOffsets(), "one block loads the whole log")
 
 	v := m.View()
@@ -232,13 +232,13 @@ func TestIndexStopsAtTheEnds(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 24)
 
 	m = press(t, m, keyPress('k', 0))
-	assert.Equal(t, "QSO 1/3 · sort: date · You are on the first QSO.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/3 · You are on the first QSO.", statusLine(t, m))
 
 	m = press(t, m, special(tea.KeyEnd), keyPress('j', 0))
-	assert.Equal(t, "QSO 3/3 · sort: date · You are on the last QSO.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/3 · You are on the last QSO.", statusLine(t, m))
 
 	m = press(t, m, keyPress('k', 0))
-	assert.Equal(t, "QSO 2/3 · sort: date", statusLine(t, m), "the next key clears the message")
+	assert.Equal(t, "QSO 2/3", statusLine(t, m), "the next key clears the message")
 }
 
 func TestIndexGlobalKeys(t *testing.T) {
@@ -279,7 +279,7 @@ func TestIndexMarkKey(t *testing.T) {
 	m = press(t, m, keyPress('t', 0), keyPress('j', 0), keyPress('t', 0))
 
 	assert.Equal(t, map[int64]bool{10: true, 8: true}, m.idx.marks)
-	assert.Equal(t, "QSO 4/10 · sort: date · 2 marked", statusLine(t, m))
+	assert.Equal(t, "QSO 4/10 · 2 marked", statusLine(t, m))
 	lines := strings.Split(plain(m.View().Content), "\n")
 	assert.True(t, strings.HasPrefix(strings.TrimSpace(lines[2]), "* "), "the first QSO is marked")
 	assert.False(t, strings.HasPrefix(strings.TrimSpace(lines[3]), "* "))
@@ -294,7 +294,7 @@ func TestIndexLoadsBlocksInBackground(t *testing.T) {
 	require.NotNil(t, cmd, "the last block loads in a command")
 	assert.Equal(t, []int{0}, s.loadedOffsets(), "the key press does not wait for the query")
 	assert.Contains(t, plain(m.View().Content), "  …", "rows not yet loaded show a placeholder")
-	assert.Equal(t, "QSO 2,000/2,000 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 2,000/2,000", statusLine(t, m))
 
 	m = runIndex(t, m, cmd)
 	assert.Equal(t, []int{0, 3 * indexBlockSize}, s.loadedOffsets(), "the rows in between are not loaded")
@@ -320,7 +320,7 @@ func TestIndexJumpPrompt(t *testing.T) {
 	assert.Equal(t, promptNone, m.prompt)
 	assert.Equal(t, 1749, m.idx.cursor)
 	assert.Equal(t, []int{0, 3 * indexBlockSize}, s.loadedOffsets(), "the rows in between are not loaded")
-	assert.Equal(t, "QSO 1,750/2,000 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 1,750/2,000", statusLine(t, m))
 }
 
 // bodyLine returns line n of the body in m's view, without styling or
@@ -444,7 +444,7 @@ func TestIndexReloadKeepsCursorAndMarks(t *testing.T) {
 	assert.Equal(t, 4, m.idx.cursor)
 	assert.Equal(t, 103, m.idx.total)
 	assert.Equal(t, map[int64]bool{cur.ID: true}, m.idx.marks, "marks survive a reload")
-	assert.Equal(t, "QSO 5/103 · sort: date · 1 marked", statusLine(t, m))
+	assert.Equal(t, "QSO 5/103 · 1 marked", statusLine(t, m))
 }
 
 func TestIndexReloadRedrawsScreen(t *testing.T) {
@@ -668,7 +668,7 @@ func TestIndexLimit(t *testing.T) {
 	assert.Equal(t, 5, m.idx.total)
 	assert.Equal(t, int64(8), currentID(t, m), "the cursor stays on the QSO, which matches")
 	assert.Equal(t, 1, m.idx.cursor)
-	assert.Equal(t, "QSO 2/5 · sort: date · limit: ~b 20m", statusLine(t, m))
+	assert.Equal(t, "QSO 2/5 · limit: ~b 20m", statusLine(t, m))
 	view := plain(m.View().Content)
 	assert.Contains(t, view, "K10A")
 	assert.NotContains(t, view, "K9A")
@@ -679,7 +679,7 @@ func TestIndexLimit(t *testing.T) {
 	m = press(t, m, enterKey)
 	assert.Equal(t, 1, m.idx.total)
 	assert.Equal(t, int64(6), currentID(t, m), "the cursor goes to the first row when its QSO does not match")
-	assert.Equal(t, "QSO 1/1 · sort: date · limit: ~b 20m ~m FT8", statusLine(t, m))
+	assert.Equal(t, "QSO 1/1 · limit: ~b 20m ~m FT8", statusLine(t, m))
 }
 
 func TestIndexLimitNoMatchesKeepsLimit(t *testing.T) {
@@ -693,7 +693,7 @@ func TestIndexLimitNoMatchesKeepsLimit(t *testing.T) {
 
 	assert.Equal(t, 5, m.idx.total)
 	assert.Equal(t, before, m.idx.cursor)
-	assert.Equal(t, "QSO 2/5 · sort: date · limit: ~b 20m · No QSOs match the pattern.", statusLine(t, m))
+	assert.Equal(t, "QSO 2/5 · limit: ~b 20m · No QSOs match the pattern.", statusLine(t, m))
 }
 
 func TestIndexLimitClear(t *testing.T) {
@@ -710,7 +710,7 @@ func TestIndexLimitClear(t *testing.T) {
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Equal(t, 10, m.idx.total)
 			assert.Equal(t, int64(7), currentID(t, m), "the cursor stays on the QSO")
-			assert.Equal(t, "QSO 4/10 · sort: date", statusLine(t, m))
+			assert.Equal(t, "QSO 4/10", statusLine(t, m))
 		})
 	}
 }
@@ -737,7 +737,7 @@ func TestIndexReloadKeepsLimit(t *testing.T) {
 
 	assert.Equal(t, 6, m.idx.total)
 	assert.Equal(t, int64(10), currentID(t, m))
-	assert.Equal(t, "QSO 2/6 · sort: date · limit: ~b 20m", statusLine(t, m))
+	assert.Equal(t, "QSO 2/6 · limit: ~b 20m", statusLine(t, m))
 }
 
 func TestIndexReloadDropsLimitInFlight(t *testing.T) {
@@ -753,7 +753,7 @@ func TestIndexReloadDropsLimitInFlight(t *testing.T) {
 	m = runIndex(t, m, reloadCmd)
 
 	assert.Equal(t, 10, m.idx.total, "the limit loaded before the reload is dropped")
-	assert.Equal(t, "QSO 1/10 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 1/10", statusLine(t, m))
 }
 
 func TestIndexLimitLoadErrorKeepsView(t *testing.T) {
@@ -777,13 +777,13 @@ func TestIndexMarkPattern(t *testing.T) {
 
 	m = submitPattern(t, m, promptMark, "~m FT8")
 	assert.Equal(t, map[int64]bool{3: true, 6: true, 9: true}, m.idx.marks)
-	assert.Equal(t, "QSO 1/10 · sort: date · 3 marked · Marked 3 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/10 · 3 marked · Marked 3 QSOs.", statusLine(t, m))
 
 	m = submitPattern(t, m, promptLimit, "~b 20m")
 	assert.Equal(t, map[int64]bool{3: true, 6: true, 9: true}, m.idx.marks, "limiting keeps the marks")
 	m = submitPattern(t, m, promptMark, "~c K1")
 	assert.Equal(t, map[int64]bool{3: true, 6: true, 9: true, 10: true}, m.idx.marks, "only QSOs within the limit are marked")
-	assert.Equal(t, "QSO 1/5 · sort: date · limit: ~b 20m · 4 marked · Marked 1 QSO.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/5 · limit: ~b 20m · 4 marked · Marked 1 QSO.", statusLine(t, m))
 
 	m = submitPattern(t, m, promptMark, "~b 20m")
 	assert.Len(t, m.idx.marks, 7)
@@ -802,12 +802,12 @@ func TestIndexUnmarkPattern(t *testing.T) {
 
 	m = submitPattern(t, m, promptUnmark, "~b 40m")
 	assert.Equal(t, map[int64]bool{2: true, 4: true, 6: true, 8: true, 10: true}, m.idx.marks)
-	assert.Equal(t, "QSO 1/10 · sort: date · 5 marked · Unmarked 5 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/10 · 5 marked · Unmarked 5 QSOs.", statusLine(t, m))
 
 	m = submitPattern(t, m, promptLimit, "~m FT8")
 	m = submitPattern(t, m, promptUnmark, "~A")
 	assert.Equal(t, map[int64]bool{2: true, 4: true, 8: true, 10: true}, m.idx.marks, "~A unmarks only the QSOs within the limit")
-	assert.Equal(t, "QSO 1/3 · sort: date · limit: ~m FT8 · 4 marked · Unmarked 1 QSO.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/3 · limit: ~m FT8 · 4 marked · Unmarked 1 QSO.", statusLine(t, m))
 }
 
 func TestIndexUnmarkAllWithoutLimit(t *testing.T) {
@@ -822,7 +822,7 @@ func TestIndexUnmarkAllWithoutLimit(t *testing.T) {
 	assert.Empty(t, collectMsgs(cmd), "nothing runs in the background")
 	assert.Empty(t, m.idx.marks)
 	assert.Zero(t, s.idsCalls, "the logbook is not queried")
-	assert.Equal(t, "QSO 3/10 · sort: date · Unmarked 2 QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 3/10 · Unmarked 2 QSOs.", statusLine(t, m))
 }
 
 func TestIndexMarkPatternEmptyInputCloses(t *testing.T) {
@@ -834,7 +834,7 @@ func TestIndexMarkPatternEmptyInputCloses(t *testing.T) {
 
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Zero(t, s.idsCalls)
-			assert.Equal(t, "QSO 1/10 · sort: date", statusLine(t, m))
+			assert.Equal(t, "QSO 1/10", statusLine(t, m))
 		})
 	}
 }
@@ -890,7 +890,7 @@ func TestIndexSearchForward(t *testing.T) {
 	m = submitPattern(t, m, promptSearch, "~m FT8")
 	assert.Equal(t, promptNone, m.prompt)
 	assert.Equal(t, int64(9), currentID(t, m))
-	assert.Equal(t, "QSO 2/10 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 2/10", statusLine(t, m))
 
 	m = press(t, m, searchNextKey)
 	assert.Equal(t, int64(6), currentID(t, m))
@@ -899,11 +899,11 @@ func TestIndexSearchForward(t *testing.T) {
 
 	m = press(t, m, searchNextKey)
 	assert.Equal(t, int64(9), currentID(t, m), "the search wraps to the top")
-	assert.Equal(t, "QSO 2/10 · sort: date · "+msgSearchWrapTop, statusLine(t, m))
+	assert.Equal(t, "QSO 2/10 · "+msgSearchWrapTop, statusLine(t, m))
 
 	m = press(t, m, searchNextKey)
 	assert.Equal(t, int64(6), currentID(t, m))
-	assert.Equal(t, "QSO 5/10 · sort: date", statusLine(t, m), "the next key clears the message")
+	assert.Equal(t, "QSO 5/10", statusLine(t, m), "the next key clears the message")
 }
 
 func TestIndexSearchBareWord(t *testing.T) {
@@ -948,7 +948,7 @@ func TestIndexSearchReverse(t *testing.T) {
 
 	m = press(t, m, searchNextKey)
 	assert.Equal(t, int64(3), currentID(t, m), "the search wraps to the bottom")
-	assert.Equal(t, "QSO 8/10 · sort: date · "+msgSearchWrapBottom, statusLine(t, m))
+	assert.Equal(t, "QSO 8/10 · "+msgSearchWrapBottom, statusLine(t, m))
 }
 
 func TestIndexSearchReverseFromTopWraps(t *testing.T) {
@@ -958,7 +958,7 @@ func TestIndexSearchReverseFromTopWraps(t *testing.T) {
 	m = submitPattern(t, m, promptSearchReverse, "~m FT8")
 
 	assert.Equal(t, int64(3), currentID(t, m), "the search wraps to the match nearest the bottom")
-	assert.Equal(t, "QSO 8/10 · sort: date · "+msgSearchWrapBottom, statusLine(t, m))
+	assert.Equal(t, "QSO 8/10 · "+msgSearchWrapBottom, statusLine(t, m))
 }
 
 func TestIndexSearchNotFound(t *testing.T) {
@@ -969,7 +969,7 @@ func TestIndexSearchNotFound(t *testing.T) {
 	m = submitPattern(t, m, promptSearch, "~c ZZZ")
 
 	assert.Equal(t, 2, m.idx.cursor, "the cursor stays put")
-	assert.Equal(t, "QSO 3/10 · sort: date · "+msgNotFound, statusLine(t, m))
+	assert.Equal(t, "QSO 3/10 · "+msgNotFound, statusLine(t, m))
 }
 
 func TestIndexSearchOnlyCurrentMatches(t *testing.T) {
@@ -987,7 +987,7 @@ func TestIndexSearchOnlyCurrentMatches(t *testing.T) {
 			if kind == promptSearchReverse {
 				want = msgSearchWrapBottom
 			}
-			assert.Equal(t, "QSO 3/10 · sort: date · "+want, statusLine(t, m))
+			assert.Equal(t, "QSO 3/10 · "+want, statusLine(t, m))
 		})
 	}
 }
@@ -1012,7 +1012,7 @@ func TestIndexSearchWithinLimit(t *testing.T) {
 
 	m = press(t, m, searchNextKey)
 	assert.Equal(t, int64(6), currentID(t, m), "QSO 3 is outside the limit")
-	assert.Equal(t, "QSO 3/5 · sort: date · limit: ~b 20m · "+msgSearchWrapTop, statusLine(t, m))
+	assert.Equal(t, "QSO 3/5 · limit: ~b 20m · "+msgSearchWrapTop, statusLine(t, m))
 }
 
 func TestIndexSearchKeepsSearchAcrossLimit(t *testing.T) {
@@ -1034,7 +1034,7 @@ func TestIndexSearchAgainWithoutSearch(t *testing.T) {
 			m = press(t, m, k)
 
 			assert.Equal(t, 0, m.idx.cursor)
-			assert.Equal(t, "QSO 1/10 · sort: date · "+msgNoSearch, statusLine(t, m))
+			assert.Equal(t, "QSO 1/10 · "+msgNoSearch, statusLine(t, m))
 		})
 	}
 }
@@ -1074,7 +1074,7 @@ func TestIndexSearchEmptyInputCloses(t *testing.T) {
 
 	assert.Equal(t, promptNone, m.prompt)
 	assert.Nil(t, m.idx.search.expr)
-	assert.Equal(t, "QSO 1/10 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 1/10", statusLine(t, m))
 }
 
 func TestIndexSearchBeforeLoadDoesNothing(t *testing.T) {

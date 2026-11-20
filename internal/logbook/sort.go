@@ -46,10 +46,11 @@ func (f SortField) String() string {
 	return sortFieldNames[f]
 }
 
-// Sort is an ordering of the QSO index. The zero Sort orders by date,
-// newest first.
+// Sort is an ordering of the QSO index. Like every field, date sorts
+// ascending, oldest first, so the zero Sort is oldest first; the index
+// shows DefaultSort, newest first, unless told otherwise.
 //
-// Sorting by date orders by start time, newest first, then by ID, highest
+// Sorting by date orders by start time, oldest first, then by ID, lowest
 // first; Reverse turns it exactly around. Every other field sorts by its
 // value, A to Z (bands from low frequency to high, modes by the submode
 // when there is one), or Z to A when Reverse is set. Empty values come
@@ -59,6 +60,9 @@ type Sort struct {
 	Field   SortField
 	Reverse bool
 }
+
+// DefaultSort is the index's usual order: by date, newest first.
+var DefaultSort = Sort{Field: SortDate, Reverse: true}
 
 // reversePrefix marks a reversed sort in a sort name, as in mutt.
 const reversePrefix = "reverse-"
@@ -109,8 +113,8 @@ const modeName = "CASE WHEN submode <> '' THEN submode ELSE mode END"
 // date), so SQLite reads rows in index order instead of sorting them.
 func (s Sort) terms() ([]sortTerm, error) {
 	if s.Field == SortDate {
-		// Newest first matches the qso_by_start index.
-		return []sortTerm{{"start_utc", !s.Reverse}, {"id", !s.Reverse}}, nil
+		// Both directions match the qso_by_start index.
+		return []sortTerm{{"start_utc", s.Reverse}, {"id", s.Reverse}}, nil
 	}
 	// value is the field's value, which is empty when the field is; key is
 	// what it sorts by.

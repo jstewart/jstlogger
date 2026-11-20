@@ -60,15 +60,15 @@ The app opens full-screen in the terminal's alternate screen.
 ### QSO index
 
 jstlogger opens on the QSO index: every QSO in the logbook, newest first
-unless you [sort](#sorting-the-index) it otherwise, filling the window. Each row shows the date and time (UTC), call, mode
-(the submode when there is one, so `FT4` rather than `MFSK`), the reports
-sent and received, band, country and station callsign. A `*` marks a
-marked QSO. Set `[index] format` in the config to choose other columns;
-see [Index format](#index-format).
+unless you [sort](#sorting-the-index) it otherwise, filling the window.
+Each row shows the date and time (UTC), call, mode (the submode when
+there is one, so `FT4` rather than `MFSK`), the reports sent and
+received, band, country and station callsign. A `*` marks a marked QSO.
+Set `[index] format` in the config to choose other columns; see
+[Index format](#index-format).
 
-The status line above the help shows where you are, the sort and how many
-QSOs are marked, e.g. `QSO 12/4,567 · sort: date · 3 marked`, along with
-messages such as
+The status line above the help shows where you are and how many QSOs are
+marked, e.g. `QSO 12/4,567 · 3 marked`, along with messages such as
 "You are on the last QSO."
 
 The index loads rows in blocks of 500 in the background as you move, so
@@ -77,7 +77,7 @@ reads only the rows around it. Marks are kept in memory and are lost on
 quit; nothing acts on them yet.
 
 `l` limits the index to the QSOs matching a [pattern](#patterns), and the
-status line shows the limit, e.g. `QSO 2/57 · sort: date · limit: ~b 20m`. The cursor
+status line shows the limit, e.g. `QSO 2/57 · limit: ~b 20m`. The cursor
 stays on the selected QSO if it matches. As in mutt, a pattern no QSO
 matches leaves the index as it was. To show every QSO again, limit to
 `~A` or submit an empty pattern. `ctrl+l` reloads under the limit, and
@@ -88,16 +88,20 @@ limiting never changes the marks.
 `o` sorts the index, and `O` sorts it in reverse, as in mutt. The prompt
 lists the fields, each with the key of its [pattern](#patterns) term:
 `d`ate, `c`all, `b`and, `m`ode, `C`ountry, `s`tate and c`o`ntinent;
-`esc` cancels. Bands sort by frequency (160m before 20m before 70cm), and
-a mode by the submode when there is one, so `FT4` sorts between `FM` and
-`FT8`. QSOs with the same value are newest first, and QSOs with no value
-(no state, say) come last either way. The status line shows the sort,
-e.g. `sort: reverse-band`. The sort applies within the limit, keeps the
-cursor on its QSO and the marks, and lasts until you quit; `j` and `k` in
-the pager follow it. Set `[index] sort` in the config to start with
-another sort: `date`, `call`, `band`, `mode`, `country`, `state` or
-`continent`, optionally prefixed with `reverse-`. The default is `date`,
-newest first; an unknown value is reported as a warning and ignored.
+`esc` cancels. Every field sorts ascending, and in reverse descending:
+dates oldest first, so `o d` shows the oldest QSO first and `O d` goes
+back to newest first. Bands sort by frequency (160m before 20m before
+70cm), and a mode by the submode when there is one, so `FT4` sorts
+between `FM` and `FT8`. QSOs with the same value are newest first, and
+QSOs with no value (no state, say) come last either way. Unless the index
+is in its default order, the status line shows the sort, e.g.
+`QSO 2/57 · sort: reverse-band`. The sort applies within the limit, keeps
+the cursor on its QSO and the marks, and lasts until you quit; `j` and
+`k` in the pager follow it. Set `[index] sort` in the config to start
+with another sort: `date`, `call`, `band`, `mode`, `country`, `state` or
+`continent`, optionally prefixed with `reverse-`. The default is
+`reverse-date`, newest first; an unknown value is reported as a warning
+and ignored.
 
 `T` marks, and `ctrl+t` unmarks, the QSOs matching a pattern. Like mutt,
 they act only on the QSOs within the limit, so `ctrl+t ~A` unmarks just

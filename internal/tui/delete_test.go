@@ -34,7 +34,7 @@ func TestDeleteCancel(t *testing.T) {
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Empty(t, collectMsgs(cmd))
 			assert.Equal(t, 5, countAll(t, s))
-			assert.Equal(t, "QSO 3/5 · sort: date · 2 marked", statusLine(t, m))
+			assert.Equal(t, "QSO 3/5 · 2 marked", statusLine(t, m))
 		})
 	}
 }
@@ -55,7 +55,7 @@ func TestDelete(t *testing.T) {
 			assert.Equal(t, 5, m.idx.total, "the index reloads")
 			assert.Equal(t, int64(2), currentID(t, m), "the cursor moves on to the next QSO")
 			assert.Equal(t, 3, m.idx.cursor, "below QSO 6, logged meanwhile")
-			assert.Equal(t, "QSO 4/5 · sort: date · 2 marked · Deleted QSO with K3A on 2026-10-31 12:03.", statusLine(t, m))
+			assert.Equal(t, "QSO 4/5 · 2 marked · Deleted QSO with K3A on 2026-10-31 12:03.", statusLine(t, m))
 		})
 	}
 }

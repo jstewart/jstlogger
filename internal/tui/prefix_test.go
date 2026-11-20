@@ -39,7 +39,7 @@ func TestPrefixWithoutMarks(t *testing.T) {
 	m = press(t, m, prefixKey)
 
 	assert.False(t, m.idx.prefix)
-	assert.Equal(t, "QSO 1/10 · sort: date · No marked QSOs.", statusLine(t, m))
+	assert.Equal(t, "QSO 1/10 · No marked QSOs.", statusLine(t, m))
 }
 
 func TestPrefixArms(t *testing.T) {
@@ -48,7 +48,7 @@ func TestPrefixArms(t *testing.T) {
 	m = press(t, m, toggleKey, toggleKey, prefixKey)
 
 	assert.True(t, m.idx.prefix)
-	assert.Equal(t, "QSO 3/10 · sort: date · 2 marked · mark-prefix", statusLine(t, m))
+	assert.Equal(t, "QSO 3/10 · 2 marked · mark-prefix", statusLine(t, m))
 }
 
 func TestPrefixEscCancelsSilently(t *testing.T) {
@@ -58,7 +58,7 @@ func TestPrefixEscCancelsSilently(t *testing.T) {
 	m = press(t, m, special(tea.KeyEscape))
 
 	assert.False(t, m.idx.prefix)
-	assert.Equal(t, "QSO 3/10 · sort: date · 2 marked", statusLine(t, m))
+	assert.Equal(t, "QSO 3/10 · 2 marked", statusLine(t, m))
 }
 
 func TestPrefixOtherKeysCancel(t *testing.T) {
@@ -81,7 +81,7 @@ func TestPrefixOtherKeysCancel(t *testing.T) {
 			m = press(t, m, tt.key)
 
 			assert.False(t, m.idx.prefix)
-			assert.Equal(t, "QSO 3/10 · sort: date · 2 marked · "+tt.key.String()+" does not apply to marked QSOs.", statusLine(t, m))
+			assert.Equal(t, "QSO 3/10 · 2 marked · "+tt.key.String()+" does not apply to marked QSOs.", statusLine(t, m))
 			assert.False(t, m.help.ShowAll, "the key's own function does not run")
 			assert.Equal(t, promptNone, m.prompt)
 			assert.Len(t, m.idx.marks, marks)
@@ -130,7 +130,7 @@ func TestPrefixMarksClearedWhileArmed(t *testing.T) {
 	assert.Nil(t, got, "the function does not run on no QSOs")
 	assert.Nil(t, cmd)
 	assert.False(t, m.idx.prefix)
-	assert.Equal(t, "QSO 2/10 · sort: date · "+msgNoMarks, statusLine(t, m))
+	assert.Equal(t, "QSO 2/10 · "+msgNoMarks, statusLine(t, m))
 }
 
 func TestPrefixKeyWithoutPrefixDoesNotRunMarkedFunc(t *testing.T) {
@@ -163,7 +163,7 @@ func TestPrefixSurvivesLoads(t *testing.T) {
 	m = runIndex(t, m, cmd)
 
 	m = press(t, m, prefixKey)
-	m = runIndex(t, m, loadIndexCmd(m.logbook, m.idx.gen, nil, logbook.Sort{}, 0, 0))
+	m = runIndex(t, m, loadIndexCmd(m.logbook, m.idx.gen, nil, logbook.DefaultSort, 0, 0))
 
 	assert.True(t, m.idx.prefix, "a reload arriving while armed keeps the prefix")
 }
@@ -192,8 +192,8 @@ func TestStatusViewPrefixWithLimit(t *testing.T) {
 	x.prefix = true
 	x.limit = indexLimit{expr: logbook.All{}, text: "~c W1 (~b 20m | ~b 40m | ~b 15m) !~m FT8 ~d 2026-01-01-"}
 
-	got := plain(x.statusView(st, 93))
+	got := plain(x.statusView(st, 80))
 
-	assert.Equal(t, "QSO 1/1,234 · sort: date · limit: ~c W1 (~b 20m | ~b 40m | ~b 15m) … · 1 marked · mark-prefix", got)
-	assert.Equal(t, 93, lipgloss.Width(got), "the limit is shortened to leave room for the mark-prefix")
+	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (~b 20m | ~b 40m | ~b 15m) … · 1 marked · mark-prefix", got)
+	assert.Equal(t, 80, lipgloss.Width(got), "the limit is shortened to leave room for the mark-prefix")
 }

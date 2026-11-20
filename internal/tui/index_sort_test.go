@@ -85,7 +85,7 @@ func TestIndexSortKeys(t *testing.T) {
 				want := logbook.Sort{Field: tt.want, Reverse: reverse}
 				assert.Equal(t, promptNone, m.prompt)
 				assert.Equal(t, want, m.idx.sort)
-				if want != (logbook.Sort{}) {
+				if want != logbook.DefaultSort {
 					sorts := s.loadedSorts()
 					assert.Equal(t, want, sorts[len(sorts)-1], "the index reloads in the new order")
 				}
@@ -103,7 +103,7 @@ func TestIndexSortCancel(t *testing.T) {
 			m = press(t, m, sortKey, k)
 
 			assert.Equal(t, promptNone, m.prompt)
-			assert.Equal(t, logbook.Sort{}, m.idx.sort)
+			assert.Equal(t, logbook.DefaultSort, m.idx.sort)
 			assert.Len(t, s.loadedOffsets(), before, "nothing reloads")
 		})
 	}
@@ -151,9 +151,16 @@ func TestIndexSortKeepsCursorOnQSO(t *testing.T) {
 
 	m = press(t, m, sortKey, keyPress('d', 0))
 
+	// Date, like every field, sorts oldest first.
+	assert.Equal(t, []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, rowIDs(t, m, 10))
+	assert.Equal(t, int64(8), currentID(t, m))
+	assert.Equal(t, "QSO 8/10 · sort: date", statusLine(t, m))
+
+	m = press(t, m, sortReverseKey, keyPress('d', 0))
+
 	assert.Equal(t, []int64{10, 9, 8, 7, 6, 5, 4, 3, 2, 1}, rowIDs(t, m, 10))
 	assert.Equal(t, int64(8), currentID(t, m))
-	assert.Equal(t, "QSO 3/10 · sort: date", statusLine(t, m))
+	assert.Equal(t, "QSO 3/10", statusLine(t, m))
 }
 
 func TestIndexSortJump(t *testing.T) {

@@ -184,9 +184,9 @@ func TestSQLiteStoreExprInvalidFilter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := s.Count(t.Context(), tt.e)
 			require.ErrorIs(t, err, ErrInvalidFilter)
-			_, err = s.Index(t.Context(), tt.e, Sort{}, 0, 10)
+			_, err = s.Index(t.Context(), tt.e, DefaultSort, 0, 10)
 			require.ErrorIs(t, err, ErrInvalidFilter)
-			_, err = s.IndexOf(t.Context(), tt.e, Sort{}, 1)
+			_, err = s.IndexOf(t.Context(), tt.e, DefaultSort, 1)
 			require.ErrorIs(t, err, ErrInvalidFilter)
 			_, err = s.IDs(t.Context(), tt.e)
 			require.ErrorIs(t, err, ErrInvalidFilter)
@@ -207,12 +207,12 @@ func TestSQLiteStoreExprMethodsAgree(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, len(gotIDs), n)
 
-	qs, err := s.Index(t.Context(), e, Sort{}, 0, 100)
+	qs, err := s.Index(t.Context(), e, DefaultSort, 0, 100)
 	require.NoError(t, err)
 	assert.Equal(t, gotIDs, ids(qs))
 
 	for i, id := range gotIDs {
-		got, err := s.IndexOf(t.Context(), e, Sort{}, id)
+		got, err := s.IndexOf(t.Context(), e, DefaultSort, id)
 		require.NoError(t, err)
 		assert.Equal(t, i, got, "QSO %d", id)
 	}

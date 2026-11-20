@@ -55,7 +55,8 @@ func TestSortStringRoundTrips(t *testing.T) {
 			assert.Equal(t, s, got)
 		}
 	}
-	assert.Equal(t, "date", Sort{}.String(), "the zero Sort is date, newest first")
+	assert.Equal(t, "date", Sort{}.String(), "the zero Sort is date, oldest first")
+	assert.Equal(t, "reverse-date", DefaultSort.String(), "the default is date, newest first")
 	assert.Equal(t, "band", Sort{Field: SortBand}.String())
 	assert.Equal(t, "reverse-band", Sort{Field: SortBand, Reverse: true}.String())
 }
@@ -121,11 +122,12 @@ func TestSQLiteStoreIndexSort(t *testing.T) {
 		want, reversed []string
 	}{
 		{
-			name:     "date",
-			field:    SortDate,
-			rows:     []sortRow{{"a", 0, nil}, {"b", 2, nil}, {"c", 1, nil}, {"d", 2, nil}},
-			want:     []string{"d", "b", "c", "a"},
-			reversed: []string{"a", "c", "b", "d"},
+			name:  "date",
+			field: SortDate,
+			rows:  []sortRow{{"a", 0, nil}, {"b", 2, nil}, {"c", 1, nil}, {"d", 2, nil}},
+			// Oldest first, then lowest ID; reversed, newest first.
+			want:     []string{"a", "c", "b", "d"},
+			reversed: []string{"d", "b", "c", "a"},
 		},
 		{
 			name:  "call",

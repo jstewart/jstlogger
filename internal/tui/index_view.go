@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"jstlogger/internal/indexfmt"
+	"jstlogger/internal/logbook"
 	"jstlogger/internal/lotw"
 )
 
@@ -204,10 +205,10 @@ func (x index) rowView(st styles, i, width, nw int) string {
 	})
 }
 
-// statusView renders the position, the sort, the limit, the mark count,
-// the armed mark-prefix, any other armed prefixes named by armed, and any
-// message or error, e.g. "QSO 12/4,567 · sort: date · limit: ~b 20m ·
-// 3 marked · mark-prefix".
+// statusView renders the position, the sort unless it is the default, the
+// limit, the mark count, the armed mark-prefix, any other armed prefixes
+// named by armed, and any message or error, e.g. "QSO 12/4,567 · sort: band
+// · limit: ~b 20m · 3 marked · mark-prefix".
 func (x index) statusView(st styles, width int, armed ...string) string {
 	position := "QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)
 	var rest []string
@@ -224,7 +225,10 @@ func (x index) statusView(st styles, width int, armed ...string) string {
 	if x.err != nil {
 		rest = append(rest, st.err.Render(x.err.Error()))
 	}
-	parts := []string{position, "sort: " + x.sort.String()}
+	parts := []string{position}
+	if x.sort != logbook.DefaultSort {
+		parts = append(parts, "sort: "+x.sort.String())
+	}
 	if x.limit.expr != nil {
 		// The limit prompt shows the whole pattern, so shorten it here to
 		// leave room for the marks, message and error.

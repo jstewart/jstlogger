@@ -146,7 +146,7 @@ func lookupWorked(ctx context.Context, s logbook.Store, k workedKey, exclude int
 	if res.total, err = s.Count(ctx, call); err != nil || res.total == 0 {
 		return res, err
 	}
-	if res.recent, err = s.Index(ctx, call, logbook.Sort{}, 0, workedRecent); err != nil {
+	if res.recent, err = s.Index(ctx, call, logbook.DefaultSort, 0, workedRecent); err != nil {
 		return workedResult{}, err
 	}
 	if k.band != "" {

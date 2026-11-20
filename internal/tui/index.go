@@ -72,7 +72,7 @@ type index struct {
 	// limit restricts the rows to the QSOs matching a pattern; the zero
 	// limit shows every QSO.
 	limit indexLimit
-	// sort orders the rows; the zero sort is by date, newest first.
+	// sort orders the rows, logbook.DefaultSort unless changed.
 	sort logbook.Sort
 
 	// marks holds the IDs of the marked QSOs. Limiting the index does not
@@ -117,6 +117,7 @@ func newIndex() index {
 		blocks:  map[int][]logbook.QSO{},
 		pending: map[int]bool{},
 		marks:   map[int64]bool{},
+		sort:    logbook.DefaultSort,
 		format:  defaultIndexFormat,
 		unit:    indexfmt.Mi,
 		lotw:    newIndexLoTW(),
