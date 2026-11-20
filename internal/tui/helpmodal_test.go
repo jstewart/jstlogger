@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,6 +48,7 @@ func TestHelpOpensAndCloses(t *testing.T) {
 		{"? and ?", keyPress('?', 0), keyPress('?', 0)},
 		{"f1 and f1", f1Key, f1Key},
 		{"f1 and esc", f1Key, esc()},
+		{"? and enter", keyPress('?', 0), enter()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,12 +64,17 @@ func TestHelpOpensAndCloses(t *testing.T) {
 
 func TestHelpIsReadOnly(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 24)
-	m = press(t, m, keyPress('?', 0), enter(), keyPress('j', 0), keyPress('q', 0))
+	m = press(t, m, keyPress('?', 0), keyPress('j', 0), keyPress('d', 0), keyPress('a', 0), keyPress('q', 0))
 
-	assert.True(t, m.helpModal.open, "neither enter nor q closes it")
+	assert.True(t, m.helpModal.open, "q doesn't close it")
+	assert.Equal(t, 0, m.idx.cursor, "j scrolls the help rather than moves")
+	assert.Equal(t, promptNone, m.prompt, "d doesn't ask to delete")
+	assert.False(t, m.entry.open, "a doesn't open the New QSO screen")
+	assert.Empty(t, m.helpModal.filter(), "typing doesn't filter until /")
+
+	m = press(t, m, enter())
+	assert.False(t, m.helpModal.open, "enter closes it")
 	assert.False(t, m.pager.open, "enter doesn't act on the index")
-	assert.Equal(t, 0, m.idx.cursor, "j filters rather than moves")
-	assert.Equal(t, "jq", m.helpModal.filter)
 }
 
 func TestHelpDrawsOverTheBody(t *testing.T) {
@@ -77,48 +84,84 @@ func TestHelpDrawsOverTheBody(t *testing.T) {
 	v := m.View()
 	assert.Equal(t, 24, lipgloss.Height(v.Content), "the view still fills the terminal")
 	screen := plain(v.Content)
-	assert.Contains(t, screen, "Navigation")
-	assert.Contains(t, screen, "type to filter")
+	assert.Contains(t, screen, "navigation")
+	assert.Regexp(t, `keybinds +esc close`, screen)
+	assert.Contains(t, screen, "/ press / to filter by command or shortcut")
+	assert.Contains(t, screen, "search / · scroll j/k/↑↓/pgup/pgdn · close esc/enter")
 	assert.Contains(t, screen, "jstlogger", "the header still shows")
 
 	lines := strings.Split(screen, "\n")
-	top := lines[1]
-	require.Contains(t, top, "╭", "the box starts below the header")
-	left := lipgloss.Width(top[:strings.Index(top, "╭")])
-	right := 80 - lipgloss.Width(top[:strings.Index(top, "╮")]) - 1
+	topY := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, "┌") })
+	require.Positive(t, topY, "the box starts below the header")
+	top := lines[topY]
+	left := lipgloss.Width(top[:strings.Index(top, "┌")])
+	right := 80 - lipgloss.Width(top[:strings.Index(top, "┐")]) - 1
 	assert.InDelta(t, right, left, 2, "the box is centered: %q", top)
-	assert.Contains(t, top, "Date", "the index shows around the box")
+	assert.GreaterOrEqual(t, 80-left-right, m.bodyWidth()*4/5, "the box takes four fifths of the body's width")
+	assert.Greater(t, topY, 1, "the box is shorter than the body")
+	assert.Contains(t, lines[1], "Date", "the index shows above the box")
+}
+
+func TestHelpScrollBar(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 80, 24)
+	m = press(t, m, keyPress('?', 0))
+	assert.Contains(t, modalText(t, m), "┃", "the rows overflow, so a bar shows")
+
+	m = press(t, m, keyPress('/', 0))
+	m = typeText(t, m, "quit")
+	assert.NotContains(t, modalText(t, m), "┃", "a filter that fits needs no bar")
 }
 
 func TestHelpGroupsHaveHeadings(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 40)
 	help := helpText(m)
-	for _, heading := range []string{"General", "Navigation", "QSOs", "View", "Search", "Marks"} {
+	for _, heading := range []string{"general", "navigation", "QSOs", "view", "search", "marks"} {
 		assert.Regexp(t, `(?m)^`+heading+`$`, help)
 	}
-	assert.NotRegexp(t, `(?m)^Rig$`, help, "no rig, so no rig keys")
+	assert.NotRegexp(t, `(?m)^rig$`, help, "no rig, so no rig keys")
 
 	m, _ = newIndexModel(t, 3, 80, 40, WithRig("test", &fakeRig{}))
-	assert.Regexp(t, `(?m)^Rig$`, helpText(m))
+	assert.Regexp(t, `(?m)^rig$`, helpText(m))
 }
 
 func TestHelpFilter(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 100, 40)
 	m = press(t, m, keyPress('?', 0))
-	m = typeText(t, m, "search")
+	m = typeText(t, m, "/search")
 
 	got := modalText(t, m)
-	assert.Contains(t, got, "filter: search")
-	assert.Contains(t, got, "Search")
+	assert.Contains(t, got, "/ search")
+	assert.Contains(t, got, "apply enter · clear esc", "the hint is for typing a filter")
 	assert.Contains(t, got, "search back")
 	assert.NotContains(t, got, "next page")
-	assert.NotContains(t, got, "Navigation", "a section with no match has no heading")
+	assert.NotContains(t, got, "navigation", "a section with no match has no heading")
+
+	m = press(t, m, enter())
+	assert.True(t, m.helpModal.open, "enter keeps the filter")
+	assert.False(t, m.helpModal.filtering)
+	assert.Equal(t, "search", m.helpModal.filter())
+	assert.NotContains(t, modalText(t, m), "next page")
+
+	m = press(t, m, keyPress('/', 0), esc())
+	assert.True(t, m.helpModal.open, "esc clears the filter")
+	assert.Empty(t, m.helpModal.filter())
+	assert.Contains(t, modalText(t, m), "press / to filter")
+}
+
+func TestHelpFilterTypesBrowsingKeys(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 100, 40)
+	m = press(t, m, keyPress('?', 0))
+	m = typeText(t, m, "/jk?")
+
+	assert.True(t, m.helpModal.open, "? is text in the filter")
+	assert.Equal(t, "jk?", m.helpModal.filter())
+	assert.Zero(t, m.helpModal.scroll)
 }
 
 func TestHelpFilterByKey(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 100, 40)
 	m = press(t, m, keyPress('?', 0))
-	m = typeText(t, m, "CTRL+T")
+	m = typeText(t, m, "/CTRL+T")
 
 	got := modalText(t, m)
 	assert.Contains(t, got, "unmark pattern", "case doesn't matter")
@@ -128,18 +171,18 @@ func TestHelpFilterByKey(t *testing.T) {
 func TestHelpFilterErase(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 100, 40)
 	m = press(t, m, keyPress('?', 0))
-	m = typeText(t, m, "zz")
+	m = typeText(t, m, "/zz")
 	m = press(t, m, backspaceKey)
-	assert.Equal(t, "z", m.helpModal.filter)
+	assert.Equal(t, "z", m.helpModal.filter())
 	m = press(t, m, backspaceKey, backspaceKey)
-	assert.Empty(t, m.helpModal.filter)
+	assert.Empty(t, m.helpModal.filter())
 	assert.True(t, m.helpModal.open, "backspace on an empty filter does nothing")
 }
 
 func TestHelpFilterNoMatches(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 100, 40)
 	m = press(t, m, keyPress('?', 0))
-	m = typeText(t, m, "xyzzy")
+	m = typeText(t, m, "/xyzzy")
 
 	assert.Contains(t, modalText(t, m), "no matches")
 }
@@ -147,10 +190,11 @@ func TestHelpFilterNoMatches(t *testing.T) {
 func TestHelpFilterResetsOnOpen(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 100, 40)
 	m = press(t, m, keyPress('?', 0))
-	m = typeText(t, m, "xyz")
-	m = press(t, m, esc(), keyPress('?', 0))
+	m = typeText(t, m, "/xyz")
+	m = press(t, m, enter(), esc(), keyPress('?', 0))
 
-	assert.Empty(t, m.helpModal.filter)
+	assert.Empty(t, m.helpModal.filter())
+	assert.False(t, m.helpModal.filtering)
 	assert.Zero(t, m.helpModal.scroll)
 }
 
@@ -158,15 +202,23 @@ func TestHelpScrolls(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 16)
 	m = press(t, m, keyPress('?', 0))
 	top := modalText(t, m)
-	require.Contains(t, top, "Navigation")
+	require.Contains(t, top, "general")
 	require.NotContains(t, top, "untag marked", "the window is too short for every key")
 
 	m = press(t, m, helpDownKey)
 	assert.Equal(t, 1, m.helpModal.scroll)
 	m = press(t, m, keyPress('n', tea.ModCtrl))
 	assert.Equal(t, 2, m.helpModal.scroll)
-	m = press(t, m, keyPress('p', tea.ModCtrl), helpUpKey, helpUpKey)
+	m = press(t, m, keyPress('j', 0))
+	assert.Equal(t, 3, m.helpModal.scroll)
+	m = press(t, m, keyPress('k', 0), keyPress('p', tea.ModCtrl), helpUpKey, helpUpKey)
 	assert.Equal(t, 0, m.helpModal.scroll, "up stops at the top")
+
+	listHeight := m.helpListHeight()
+	m = press(t, m, special(tea.KeyPgDown))
+	assert.Equal(t, listHeight, m.helpModal.scroll, "pgdn scrolls a page")
+	m = press(t, m, special(tea.KeyPgUp))
+	assert.Zero(t, m.helpModal.scroll)
 
 	for range 100 {
 		m = press(t, m, helpDownKey)
@@ -180,8 +232,13 @@ func TestHelpScrolls(t *testing.T) {
 func TestHelpFilterScrollsToTheTop(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 16)
 	m = press(t, m, keyPress('?', 0), helpDownKey, helpDownKey)
-	m = typeText(t, m, "e")
+	m = typeText(t, m, "/e")
 	assert.Zero(t, m.helpModal.scroll)
+
+	m = press(t, m, helpDownKey)
+	assert.Equal(t, 1, m.helpModal.scroll, "↓ scrolls while typing a filter")
+	m = press(t, m, keyPress('n', tea.ModCtrl))
+	assert.Equal(t, 2, m.helpModal.scroll, "and so does ctrl+n")
 }
 
 func TestHelpWheelScrolls(t *testing.T) {
@@ -224,16 +281,16 @@ func TestHelpMatchesTheIndex(t *testing.T) {
 func TestHelpMatchesThePager(t *testing.T) {
 	m := newLookupModel(t, "W1AW", 120, WithURLOpener((&fakeOpener{}).open))
 	help := helpText(m)
-	for _, want := range []string{"Lookup", "gq", "QRZ", "next tab", "page down", "ctrl+c"} {
+	for _, want := range []string{"lookup", "gq", "QRZ", "next tab", "page down", "ctrl+c"} {
 		assert.Contains(t, help, want)
 	}
 	assert.NotContains(t, help, "half page down", "the index keys aren't the pager's")
 
 	m = press(t, m, keyPress('?', 0))
-	m = typeText(t, m, "qrz")
+	m = typeText(t, m, "/qrz")
 	assert.Contains(t, modalText(t, m), "QRZ")
 	assert.True(t, m.pager.open)
-	m = press(t, m, esc())
+	m = press(t, m, esc(), esc())
 	assert.False(t, m.helpModal.open)
 	assert.True(t, m.pager.open, "esc closes help, not the pager")
 }
@@ -246,7 +303,7 @@ func TestHelpMatchesTheEntry(t *testing.T) {
 
 	got := modalText(t, m)
 	assert.Contains(t, got, "save & close")
-	assert.Contains(t, got, "Tabs")
+	assert.Contains(t, got, "tabs")
 	assert.NotContains(t, got, "show QSO")
 
 	m = press(t, m, esc())
@@ -272,7 +329,8 @@ func TestHelpEntryPasteIsNotTyped(t *testing.T) {
 
 	m, _ = update(t, m, tea.PasteMsg{Content: "save"})
 	assert.Empty(t, entryValue(m, qsoentry.Call), "the form behind gets no input")
-	assert.Equal(t, "save", m.helpModal.filter, "the paste filters")
+	assert.Equal(t, "save", m.helpModal.filter(), "the paste filters")
+	assert.True(t, m.helpModal.filtering)
 	assert.Contains(t, modalText(t, m), "save & close")
 }
 
@@ -281,7 +339,7 @@ func TestHelpMultiLinePasteStaysOnOneLine(t *testing.T) {
 	m = press(t, m, keyPress('?', 0))
 	m, _ = update(t, m, tea.PasteMsg{Content: "a\nb\r\nc"})
 
-	assert.Equal(t, "a b  c", m.helpModal.filter)
+	assert.NotContains(t, m.helpModal.filter(), "\n")
 	assert.Equal(t, 24, lipgloss.Height(m.View().Content), "the view still fills the terminal")
 }
 
@@ -302,7 +360,7 @@ func TestHelpMatchesThePickList(t *testing.T) {
 
 	m = press(t, m, f1Key)
 	got := modalText(t, m)
-	assert.Contains(t, got, "Pick list")
+	assert.Contains(t, got, "pick list")
 	assert.Regexp(t, `enter +pick`, got)
 
 	m = press(t, m, esc())
@@ -333,9 +391,16 @@ func TestHelpFooterWhileOpen(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 120, 24)
 	m = press(t, m, keyPress('?', 0))
 	footer := plain(m.footerView())
-	assert.Contains(t, footer, "esc close")
-	assert.Contains(t, footer, "type filter")
+	assert.Contains(t, footer, "esc/enter close")
+	assert.Contains(t, footer, "/ filter")
 	assert.NotContains(t, footer, "jump to QSO")
+
+	m = press(t, m, keyPress('/', 0))
+	footer = plain(m.footerView())
+	assert.Contains(t, footer, "enter apply")
+	assert.Contains(t, footer, "esc clear")
+	assert.NotContains(t, footer, "/ filter")
+	m = press(t, m, esc())
 
 	m = press(t, m, esc())
 	footer = plain(m.footerView())
@@ -350,7 +415,7 @@ func TestHelpModalWithoutLogbook(t *testing.T) {
 
 	got := modalText(t, m)
 	assert.Contains(t, got, "quit")
-	assert.NotContains(t, got, "Navigation", "the index keys are off")
+	assert.NotContains(t, got, "navigation", "the index keys are off")
 }
 
 func TestHelpCtrlCQuits(t *testing.T) {

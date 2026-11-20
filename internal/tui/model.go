@@ -317,8 +317,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		// A paste filters the open help modal, and the screen behind gets
 		// none.
 		if paste, ok := msg.(tea.PasteMsg); ok && m.helpModal.open {
-			m.helpModal.typeText(paste.Content)
-			return m, nil
+			return m, m.helpModal.paste(paste)
 		}
 		// Other input, such as pastes, goes to the open prompt, but not to
 		// a y/N question or the sort prompt, or else to the New QSO screen.
@@ -386,7 +385,7 @@ func (m Model) footerView() string {
 	var lines []string
 	var keys help.KeyMap = m.contextKeys()
 	if m.helpModal.open {
-		keys = helpModalKeys
+		keys = m.helpModal.keys()
 	}
 	switch {
 	case m.promptOpen():

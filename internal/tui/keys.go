@@ -72,8 +72,8 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 func (k keyMap) sections() []helpSection {
 	return []helpSection{
-		{"Rig", []key.Binding{k.Freq, k.Mode}},
-		{"General", []key.Binding{k.Help, k.Quit}},
+		{"rig", []key.Binding{k.Freq, k.Mode}},
+		{"general", []key.Binding{k.Help, k.Quit}},
 	}
 }
 
@@ -129,8 +129,8 @@ func (k promptKeyMap) FullHelp() [][]key.Binding {
 
 func (k promptKeyMap) sections() []helpSection {
 	return []helpSection{
-		{"Prompt", []key.Binding{k.Submit, k.Cancel, k.Help, k.Quit}},
-		{"History", []key.Binding{k.HistoryPrev, k.HistoryNext}},
+		{"prompt", []key.Binding{k.Submit, k.Cancel, k.Help, k.Quit}},
+		{"history", []key.Binding{k.HistoryPrev, k.HistoryNext}},
 	}
 }
 
@@ -357,14 +357,14 @@ func (k indexKeyMap) FullHelp() [][]key.Binding {
 
 func (k indexKeyMap) sections() []helpSection {
 	return []helpSection{
-		{"Navigation", []key.Binding{
+		{"navigation", []key.Binding{
 			k.Next, k.Prev, k.NextLine, k.PrevLine, k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp,
 			k.TopPage, k.MiddlePage, k.BottomPage, k.First, k.Last, k.Jump,
 		}},
 		{"QSOs", []key.Binding{k.Open, k.NewQSO, k.Edit, k.Delete}},
-		{"View", []key.Binding{k.Limit, k.Sort, k.SortReverse, k.Reload}},
-		{"Search", []key.Binding{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite}},
-		{"Marks", []key.Binding{
+		{"view", []key.Binding{k.Limit, k.Sort, k.SortReverse, k.Reload}},
+		{"search", []key.Binding{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite}},
+		{"marks", []key.Binding{
 			k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix,
 			k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag,
 		}},

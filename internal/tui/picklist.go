@@ -58,7 +58,7 @@ func (k pickListKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (k pickListKeyMap) sections() []helpSection {
-	return []helpSection{{"Pick list", []key.Binding{k.Up, k.Pick, k.Close, k.Filter, k.Help}}}
+	return []helpSection{{"pick list", []key.Binding{k.Up, k.Pick, k.Close, k.Filter, k.Help}}}
 }
 
 // pickList is the list a picker opens to choose from: each option with

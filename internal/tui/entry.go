@@ -272,10 +272,10 @@ func (k entryKeyMap) FullHelp() [][]key.Binding {
 
 func (k entryKeyMap) sections() []helpSection {
 	return []helpSection{
-		{"Form", []key.Binding{k.Save, k.SaveClose, k.Close, k.Help, k.Quit}},
-		{"Fields", []key.Binding{k.NextField, k.PrevField, k.Editor, k.Change, k.List}},
-		{"Tabs", []key.Binding{k.NextTab, k.PrevTab, k.GoTab}},
-		{"Rig", []key.Binding{k.Live, k.ResetTime, k.SyncRig}},
+		{"form", []key.Binding{k.Save, k.SaveClose, k.Close, k.Help, k.Quit}},
+		{"fields", []key.Binding{k.NextField, k.PrevField, k.Editor, k.Change, k.List}},
+		{"tabs", []key.Binding{k.NextTab, k.PrevTab, k.GoTab}},
+		{"rig", []key.Binding{k.Live, k.ResetTime, k.SyncRig}},
 	}
 }
 
