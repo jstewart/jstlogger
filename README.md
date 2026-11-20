@@ -339,17 +339,19 @@ press `enter` to submit or `esc` to cancel.
 ### Help
 
 The footer shows the most used keys of the screen you're on. `?` opens
-a help window over the screen that lists every key in effect there, in
-groups such as Navigation, Marks and Rig. In the New QSO screen, its
+a keybinds window over the screen that lists every key in effect there,
+in groups such as navigation, marks and rig. In the New QSO screen, its
 pick lists and prompts, where `?` is typed as text, `F1` opens it
 instead; `F1` works everywhere.
 
-Typing filters the list by key or description, so `mark` finds the mark
-keys and `ctrl+t` finds what it does; `backspace` erases. `↑`/`↓` (or
-`ctrl+p`/`ctrl+n`) and the mouse wheel scroll it. `esc`, `?` or `F1`
-closes it, returning to the screen as it was. The window only lists
-keys: `enter` does nothing, and no other key reaches the screen behind
-it, except `ctrl+c`, which quits.
+`/` starts a filter: typing narrows the list by key or description, so
+`mark` finds the mark keys and `ctrl+t` finds what it does. `enter`
+keeps the filter and `esc` clears it; `↑`/`↓` and `ctrl+p`/`ctrl+n`
+scroll while you type. Otherwise `j`/`k`, `↑`/`↓`, `ctrl+p`/`ctrl+n` and
+the mouse wheel scroll, and `PgUp`/`PgDn` move a page. `esc`, `enter`,
+`?` or `F1` closes the window, returning to the screen as it was. The
+window only lists keys: none of them runs from it, and no key reaches
+the screen behind it, except `ctrl+c`, which quits.
 
 ### New QSO tabs
 
