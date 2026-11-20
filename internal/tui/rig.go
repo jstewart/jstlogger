@@ -352,11 +352,18 @@ var freqUnits = []struct {
 // parseFreq parses a frequency typed by the user and returns it in hertz. An
 // optional hz, khz or mhz suffix sets the unit; without one, values below
 // 1000 are megahertz, values below 1,000,000 are kilohertz and larger values
-// are hertz.
+// are hertz. The dotted grouping written by formatFreq, e.g. 14.074.000, is
+// also accepted, without a suffix.
 func parseFreq(s string) (int64, error) {
 	num := strings.ToLower(strings.TrimSpace(s))
 	if num == "" {
 		return 0, errors.New("enter a frequency")
+	}
+	if hz, ok := parseDottedFreq(num); ok {
+		if hz <= 0 {
+			return 0, fmt.Errorf("frequency %q must be positive", s)
+		}
+		return hz, nil
 	}
 
 	mult := 0.0
@@ -394,6 +401,28 @@ func parseFreq(s string) (int64, error) {
 		return 0, fmt.Errorf("frequency %q is too large", s)
 	}
 	return int64(hz), nil
+}
+
+// parseDottedFreq parses formatFreq's MHz.kHz.Hz grouping, such as
+// 14.074.000, and reports whether s had that form. The last two groups must
+// be exactly three digits.
+func parseDottedFreq(s string) (int64, bool) {
+	groups := strings.Split(s, ".")
+	if len(groups) != 3 || len(groups[1]) != 3 || len(groups[2]) != 3 {
+		return 0, false
+	}
+	var hz int64
+	for _, g := range groups {
+		if g == "" || strings.Trim(g, "0123456789") != "" {
+			return 0, false
+		}
+		n, err := strconv.ParseInt(g, 10, 64)
+		if err != nil || hz > (math.MaxInt64-n)/1000 {
+			return 0, false
+		}
+		hz = hz*1000 + n
+	}
+	return hz, true
 }
 
 // parseMode parses "MODE [passband]" typed by the user. The mode is
