@@ -117,7 +117,7 @@ func New(opts ...Option) Model {
 		styles:     defaultStyles(),
 		input:      newInput(),
 		idx:        newIndex(),
-		pager:      pager{indexLines: defaultPagerIndexLines},
+		pager:      pager{indexLines: defaultPagerIndexLines, configLines: defaultPagerIndexLines},
 		entry:      newEntry(),
 		now:        time.Now,
 		tick:       tea.Tick,
@@ -433,6 +433,9 @@ func (m *Model) layout() tea.Cmd {
 	bodyHeight := m.height - lipgloss.Height(m.headerView()) - lipgloss.Height(m.footerView())
 	if m.pager.open {
 		m.idx.setHeight(pagerStripHeight(m.pager.indexLines, bodyHeight))
+		// A taller pager, after a resize or in a taller window, has less
+		// of the tab left to scroll.
+		m.pager.scroll = min(m.pager.scroll, m.pagerBottom())
 	} else {
 		m.idx.setHeight(bodyHeight - indexChrome)
 	}
