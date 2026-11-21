@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -161,13 +162,57 @@ func TestRigModalShowsFocus(t *testing.T) {
 	assert.NotRegexp(t, `▸ Freq`, rigModalText(m))
 }
 
-func TestRigModalModeListShowsOnlyWhenFocused(t *testing.T) {
+func TestRigModalModeListAlwaysShows(t *testing.T) {
 	m, _ := newTunedRigModel(t)
 	m, _ = update(t, m, rigKey)
-	assert.NotContains(t, rigModalText(m), "PKTUSB", "the mode shows compactly")
+	assert.Contains(t, rigModalText(m), "LSB", "the modes show while the freq is focused")
 
 	m, _ = update(t, m, tabKey)
-	assert.Contains(t, rigModalText(m), "LSB", "the focused mode shows the list")
+	assert.Contains(t, rigModalText(m), "LSB", "the modes show while the mode is focused")
+}
+
+func TestRigModalKeepsItsSize(t *testing.T) {
+	tests := []struct {
+		name          string
+		width, height int
+	}{
+		{"tall", 80, 24},
+		{"short", 40, 12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newRigModel(t)
+			m, _ = update(t, m, tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
+			m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Connected})
+			m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: 14074000, Mode: "USB", Passband: 2400}})
+			m, _ = update(t, m, rigKey)
+			size := func(m Model) (int, int) {
+				v := m.rigModalView(m.bodyWidth(), m.bodyHeight())
+				return lipgloss.Width(v), lipgloss.Height(v)
+			}
+			w, h := size(m)
+
+			steps := []struct {
+				name string
+				keys []tea.KeyPressMsg
+			}{
+				{"tab to the mode", []tea.KeyPressMsg{tabKey}},
+				{"filter the modes to a few", typeKeys("pkt")},
+				{"filter the modes to none", typeKeys("zzz")},
+				{"tab to the passband", []tea.KeyPressMsg{tabKey}},
+				{"a parse error", []tea.KeyPressMsg{shiftTabKey, shiftTabKey, keyPress('x', 0), enterKey}},
+				{"tab back round", []tea.KeyPressMsg{tabKey, tabKey, tabKey}},
+			}
+			for _, st := range steps {
+				for _, k := range st.keys {
+					m, _ = update(t, m, k)
+				}
+				gw, gh := size(m)
+				assert.Equal(t, w, gw, "width after %s", st.name)
+				assert.Equal(t, h, gh, "height after %s", st.name)
+			}
+		})
+	}
 }
 
 func TestRigModalApplyFreq(t *testing.T) {

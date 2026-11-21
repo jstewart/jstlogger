@@ -393,8 +393,10 @@ func wrapLines(style lipgloss.Style, s string, width int) []string {
 }
 
 // rigModeLines renders the modes, the one chosen highlighted, with a line
-// between the recent modes and the rest, in width cells.
+// between the recent modes and the rest, in width cells. While the mode is
+// not focused, the list is dimmed and the chosen mode only stands out.
 func (r rigModal) rigModeLines(st styles, width int) (lines []string, cursorLine int) {
+	focused := r.focus == rigFieldMode
 	items := r.mode.items()
 	if len(items) == 0 {
 		return []string{fit(st.muted.Render("no matches"), width)}, 0
@@ -403,12 +405,18 @@ func (r rigModal) rigModeLines(st styles, width int) (lines []string, cursorLine
 		if i == r.mode.sep() {
 			lines = append(lines, fit(st.muted.Render(strings.Repeat("─", width)), width))
 		}
-		if i == r.mode.cursor {
+		switch {
+		case i == r.mode.cursor && focused:
 			cursorLine = len(lines)
 			lines = append(lines, st.cursor.Render(fit(it.Code, width)))
-			continue
+		case i == r.mode.cursor:
+			cursorLine = len(lines)
+			lines = append(lines, fit(st.label.Render(it.Code), width))
+		case focused:
+			lines = append(lines, fit(it.Code, width))
+		default:
+			lines = append(lines, fit(st.muted.Render(it.Code), width))
 		}
-		lines = append(lines, fit(it.Code, width))
 	}
 	return lines, cursorLine
 }
@@ -416,8 +424,10 @@ func (r rigModal) rigModeLines(st styles, width int) (lines []string, cursorLine
 // rigModalView renders the rig modal in a box fitting a body width by
 // height cells: the title and badge, the connection status and why it is
 // not connected, the fields, the focused one marked, with the modes below
-// the mode while it is focused, and any error or that a change is applying.
-// In a short body the modes, the reason and the error take fewer lines.
+// the mode, and any error or that a change is applying. The box keeps its
+// size as the focus moves, the modes are filtered and a message comes and
+// goes: the modes and the message share the same rows. In a short body the
+// modes, the reason and the error take fewer lines.
 func (m Model) rigModalView(width, height int) string {
 	st, r := m.styles, m.rigModal
 	fw, fh := st.helpBox.GetHorizontalFrameSize(), st.helpBox.GetVerticalFrameSize()
@@ -437,27 +447,21 @@ func (m Model) rigModalView(width, height int) string {
 		msg = wrapLines(st.err, r.err.Error(), inner)
 	}
 
-	var modes []string
-	modesCursor := 0
 	indent := lipgloss.Width(rigFocusMark) + rigLabelWidth + 2
-	if r.focus == rigFieldMode {
-		modes, modesCursor = r.rigModeLines(st, valueWidth)
-	}
+	modes, modesCursor := r.rigModeLines(st, valueWidth)
 
-	// The title, status, fields and first line of any message always
-	// show; the rest share what room is left.
-	room := height - fh - 5 - min(len(msg), 1)
-	extraMsg := min(max(len(msg)-1, 0), max(room, 0))
-	room -= extraMsg
-	extraReason := min(len(reason), max(room, 0))
+	// The title, status, fields and the message line always show; the
+	// rest share what room is left. The modes take the same rows however
+	// many match the filter, and a message longer than a line takes its
+	// extra lines from them rather than growing the box.
+	room := max(height-fh-6, 0)
+	extraReason := min(len(reason), room)
 	room -= extraReason
-	modeRows := min(len(modes), pickListHeight, max(room, 0))
+	modeRows := min(pickListHeight, room)
 	room -= modeRows
-	gapAbove := room > 0
-	if gapAbove {
-		room--
-	}
-	gapBelow := len(msg) > 0 && room > 0
+	gapAbove, gapBelow := room > 0, room > 1
+	extraMsg := min(max(len(msg)-1, 0), modeRows)
+	modeRows -= extraMsg
 
 	row := func(f rigField, label, value string) string {
 		mark, lab := strings.Repeat(" ", lipgloss.Width(rigFocusMark)), st.muted.Render(pad(label, rigLabelWidth))
@@ -490,18 +494,23 @@ func (m Model) rigModalView(width, height int) string {
 	}
 	lines = append(lines, row(rigFieldFreq, "Freq", inputView(r.freq)), row(rigFieldMode, "Mode", modeValue))
 	if modeRows > 0 {
-		start := max(min(modesCursor-modeRows/2, len(modes)-modeRows), 0)
-		for _, l := range modes[start : start+modeRows] {
+		shown := min(len(modes), modeRows)
+		start := max(min(modesCursor-shown/2, len(modes)-shown), 0)
+		for _, l := range modes[start : start+shown] {
 			lines = append(lines, strings.Repeat(" ", indent)+l)
+		}
+		for range modeRows - shown {
+			lines = append(lines, "")
 		}
 	}
 	lines = append(lines, row(rigFieldPassband, "Passband", inputView(r.passband)))
-	if len(msg) > 0 {
-		if gapBelow {
-			lines = append(lines, "")
-		}
-		lines = append(lines, msg[:1+extraMsg]...)
+	if gapBelow {
+		lines = append(lines, "")
 	}
+	if len(msg) == 0 {
+		msg = []string{""}
+	}
+	lines = append(lines, msg[:1+extraMsg]...)
 	for i, l := range lines {
 		lines[i] = fit(l, inner)
 	}
