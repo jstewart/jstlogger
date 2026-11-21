@@ -518,6 +518,41 @@ func TestRigModalFreqHistory(t *testing.T) {
 	assert.False(t, m.rigModal.open)
 }
 
+// The modal opens on the rig's frequency, usually the newest in the
+// history, so the first ↑ skips it rather than doing nothing.
+func TestRigModalFreqHistorySkipsCurrent(t *testing.T) {
+	m, _ := newTunedRigModel(t)
+	for _, freq := range []string{"7.074", "14.074"} {
+		m, _ = update(t, m, keyPress('f', 0))
+		m = clearField(t, m)
+		m = typeText(t, m, freq)
+		m = applyRigModal(t, m)
+		hz, err := parseFreq(freq)
+		require.NoError(t, err)
+		m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: hz, Mode: "USB"}})
+	}
+
+	m, _ = update(t, m, keyPress('f', 0))
+	require.Equal(t, "14.074.000", m.rigModal.freq.Value())
+	m, _ = update(t, m, historyPrevKeys[0])
+	assert.Equal(t, "7.074.000", m.rigModal.freq.Value())
+	m, _ = update(t, m, historyNextKeys[0])
+	assert.Equal(t, "14.074.000", m.rigModal.freq.Value())
+}
+
+// A rig reporting 0 Hz fills in a frequency parseFreq rejects; left as it
+// is, it is no change, so the other fields still apply.
+func TestRigModalZeroFreqUnchanged(t *testing.T) {
+	m, f := newRigModel(t)
+	m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: 0, Mode: "USB"}})
+	m, _ = update(t, m, keyPress('m', 0))
+	m, _ = update(t, m, historyNextKeys[0]) // down to the next mode
+	m = applyRigModal(t, m)
+	assert.False(t, m.rigModal.open, "%v", m.rigModal.err)
+	assert.Empty(t, f.freqs)
+	assert.Len(t, f.modes, 1)
+}
+
 func TestRigModalHistoryKeysOnlyOnFreq(t *testing.T) {
 	m, _ := newTunedRigModel(t)
 	m, _ = update(t, m, keyPress('f', 0))

@@ -191,12 +191,16 @@ func (r rigModal) keys() rigModalKeyMap {
 }
 
 // change returns the change to the rig the fields make. A blank frequency
-// is no change when there was none to start with. A new mode takes the
-// rig's default passband unless the passband was edited too, since the one
-// filled in is the old mode's; a new passband alone is sent with the mode.
+// is no change when there was none to start with, and the frequency filled
+// in is none when left as it is, even one parseFreq rejects such as 0 Hz.
+// A new mode takes the rig's default passband unless the passband was
+// edited too, since the one filled in is the old mode's; a new passband
+// alone is sent with the mode.
 func (r rigModal) change() (rigChange, error) {
 	var ch rigChange
-	if freq := strings.TrimSpace(r.freq.Value()); freq != "" || r.haveState {
+	switch freq := strings.TrimSpace(r.freq.Value()); {
+	case r.haveState && freq == formatFreq(r.initHz):
+	case freq != "" || r.haveState:
 		hz, err := parseFreq(freq)
 		if err != nil {
 			return rigChange{}, err
