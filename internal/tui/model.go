@@ -40,6 +40,17 @@ type Model struct {
 	// rigErr is the error from the last rig command, shown until the next
 	// successful command or key press.
 	rigErr error
+	// rigModal sets the rig's frequency, mode and passband, over the body,
+	// while open.
+	rigModal rigModal
+	// rigGen numbers the changes the rig modal sends to the rig, so the
+	// result of one the modal no longer waits for is told apart.
+	rigGen int
+	// freqs is the history of the frequencies set in the rig modal, and
+	// recentModes the modes, most recent first. Neither outlives the
+	// session.
+	freqs       history
+	recentModes []string
 
 	// openURL opens a URL in the browser; nil disables the pager's lookup
 	// keys.
@@ -167,6 +178,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if m.helpModal.open {
 			return m.updateHelp(msg)
 		}
+		if m.rigModal.open {
+			return m.updateRigModal(msg)
+		}
 		if m.promptOpen() {
 			return m.updatePrompt(msg)
 		}
@@ -193,9 +207,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, keys.Help):
 			return m.openHelp(), nil
 		case key.Matches(msg, keys.Freq):
-			return m.openPrompt(promptFreq)
+			return m.openRigModal(rigFieldFreq)
 		case key.Matches(msg, keys.Mode):
-			return m.openPrompt(promptMode)
+			return m.openRigModal(rigFieldMode)
 		case m.pager.open:
 			return m.updatePager(msg)
 		default:
@@ -308,7 +322,7 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.rigState.conn = msg
 
 	case rigResultMsg:
-		m.rigErr = msg.err
+		return m.applyRigResult(msg), nil
 
 	case lookupResultMsg:
 		m.lookupErr = msg.err
@@ -318,6 +332,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		// none.
 		if paste, ok := msg.(tea.PasteMsg); ok && m.helpModal.open {
 			return m, m.helpModal.paste(paste)
+		}
+		// Other input, such as pastes, goes to the rig modal's focused
+		// field.
+		if m.rigModal.open {
+			return m, m.rigModal.input(msg)
 		}
 		// Other input, such as pastes, goes to the open prompt, but not to
 		// a y/N question or the sort prompt, or else to the New QSO screen.
@@ -347,6 +366,10 @@ func (m Model) View() tea.View {
 		content = m.pagerView(m.bodyWidth(), bodyHeight)
 	case m.logbook != nil:
 		content = m.idx.view(m.styles, m.bodyWidth(), bodyHeight, m.prompt == promptJump)
+	}
+	// The help modal opens over the rig modal.
+	if m.rigModal.open {
+		content = overlay(content, m.rigModalView(m.bodyWidth(), bodyHeight), m.bodyWidth(), bodyHeight)
 	}
 	if m.helpModal.open {
 		content = m.overlayHelp(content, m.bodyWidth(), bodyHeight)

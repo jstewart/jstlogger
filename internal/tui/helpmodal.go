@@ -349,10 +349,13 @@ func (h helpModal) view(st styles, width, height int) string {
 }
 
 // contextKeys returns the keybindings in effect, which the footer and the
-// help modal show: the open prompt's, or else the New QSO screen's or its
-// open pick list's, or else the global keys and the pager's or the
-// index's.
+// help modal show: the open rig modal's, or else the open prompt's, or
+// else the New QSO screen's or its open pick list's, or else the global
+// keys and the pager's or the index's.
 func (m Model) contextKeys() helpKeyMap {
+	if m.rigModal.open {
+		return m.rigModal.keys()
+	}
 	if m.promptOpen() {
 		if isKeyPrompt(m.prompt) {
 			// Only y answers yes, and only a field's key sorts; enter and
@@ -416,7 +419,12 @@ func (m Model) helpView(width, height int) string {
 // height cells. A body too short for the modal's frame and head shows
 // content alone.
 func (m Model) overlayHelp(content string, width, height int) string {
-	box := m.helpView(width, height)
+	return overlay(content, m.helpView(width, height), width, height)
+}
+
+// overlay draws box centered over content, a body width by height cells. A
+// box taller than the body is not drawn, leaving content alone.
+func overlay(content, box string, width, height int) string {
 	if lipgloss.Height(box) > height {
 		return content
 	}
