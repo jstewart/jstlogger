@@ -454,12 +454,15 @@ func (m Model) rigModalView(width, height int) string {
 	indent := lipgloss.Width(rigFocusMark) + rigLabelWidth + 2
 	modes, modesCursor := r.rigModeLines(st, valueWidth)
 
-	// The title, status, fields and the message line always show; the
-	// rest share what room is left. The reason line and the modes take the
-	// same rows however long the reason is and however many modes match
-	// the filter, and a reason or message longer than a line takes its
-	// extra lines from the modes rather than growing the box.
-	room := max(height-fh-6, 0)
+	// The title, status, fields and first line of any message always
+	// show; the rest share what room is left, a line for the message and
+	// then one for the reason first. The reason line and the modes take
+	// the same rows however long the reason is and however many modes
+	// match the filter, and a reason or message longer than a line takes
+	// its extra lines from the modes rather than growing the box.
+	room := max(height-fh-5, 0)
+	msgRows := min(1, room)
+	room -= msgRows
 	reasonRows := min(1, room)
 	room -= reasonRows
 	modeRows := min(pickListHeight, room)
@@ -467,7 +470,7 @@ func (m Model) rigModalView(width, height int) string {
 	gapAbove, gapBelow := room > 0, room > 1
 	extraReason := min(max(len(reason)-reasonRows, 0), modeRows)
 	modeRows -= extraReason
-	extraMsg := min(max(len(msg)-1, 0), modeRows)
+	extraMsg := min(max(len(msg)-max(msgRows, 1), 0), modeRows)
 	modeRows -= extraMsg
 	reason = reason[:min(len(reason), reasonRows+extraReason)]
 	for len(reason) < reasonRows {
@@ -518,10 +521,11 @@ func (m Model) rigModalView(width, height int) string {
 	if gapBelow {
 		lines = append(lines, "")
 	}
-	if len(msg) == 0 {
-		msg = []string{""}
+	if len(msg) > 0 {
+		lines = append(lines, msg[:max(msgRows, 1)+extraMsg]...)
+	} else if msgRows > 0 {
+		lines = append(lines, "")
 	}
-	lines = append(lines, msg[:1+extraMsg]...)
 	for i, l := range lines {
 		lines[i] = fit(l, inner)
 	}

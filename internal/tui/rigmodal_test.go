@@ -236,6 +236,20 @@ func TestRigModalKeepsItsSize(t *testing.T) {
 	}
 }
 
+func TestRigModalDrawnInShortBody(t *testing.T) {
+	// A body with room for the frame, title, status and the three fields
+	// draws the modal, kept rows for the message and the reason or not.
+	for height := 8; height <= 14; height++ {
+		m, _ := newTunedRigModel(t)
+		m, _ = update(t, m, tea.WindowSizeMsg{Width: 80, Height: height})
+		if m.bodyHeight() < m.styles.helpBox.GetVerticalFrameSize()+5 {
+			continue
+		}
+		m, _ = update(t, m, rigKey)
+		assert.Contains(t, plain(m.View().Content), "Passband", "terminal height %d", height)
+	}
+}
+
 func TestRigModalApplyFreq(t *testing.T) {
 	m, f := newTunedRigModel(t)
 	m, _ = update(t, m, rigKey)
