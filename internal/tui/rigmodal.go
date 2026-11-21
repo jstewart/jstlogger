@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -371,8 +372,10 @@ func (m Model) rigConnLines(width int) (status string, reason []string) {
 		if c.Err != nil {
 			parts = append(parts, c.Err.Error())
 		}
-		if c.RetryIn > 0 {
-			parts = append(parts, "retry in "+c.RetryIn.String())
+		// The delay is rounded so the line keeps its length, and so its
+		// wrapping, from one attempt to the next.
+		if retry := c.RetryIn.Round(time.Second); retry > 0 {
+			parts = append(parts, "retry in "+retry.String())
 		}
 		return fit(st.err.Render(m.rigName+" not connected"), width), wrapLines(st.muted, strings.Join(parts, " · "), width)
 	}
@@ -425,9 +428,10 @@ func (r rigModal) rigModeLines(st styles, width int) (lines []string, cursorLine
 // height cells: the title and badge, the connection status and why it is
 // not connected, the fields, the focused one marked, with the modes below
 // the mode, and any error or that a change is applying. The box keeps its
-// size as the focus moves, the modes are filtered and a message comes and
-// goes: the modes and the message share the same rows. In a short body the
-// modes, the reason and the error take fewer lines.
+// size as the focus moves, the modes are filtered, a message comes and goes
+// and the rig reconnects: a line is kept for the reason and one for the
+// message, and either takes any more lines it needs from the modes. In a
+// short body the modes, the reason and the error take fewer lines.
 func (m Model) rigModalView(width, height int) string {
 	st, r := m.styles, m.rigModal
 	fw, fh := st.helpBox.GetHorizontalFrameSize(), st.helpBox.GetVerticalFrameSize()
@@ -451,17 +455,24 @@ func (m Model) rigModalView(width, height int) string {
 	modes, modesCursor := r.rigModeLines(st, valueWidth)
 
 	// The title, status, fields and the message line always show; the
-	// rest share what room is left. The modes take the same rows however
-	// many match the filter, and a message longer than a line takes its
-	// extra lines from them rather than growing the box.
+	// rest share what room is left. The reason line and the modes take the
+	// same rows however long the reason is and however many modes match
+	// the filter, and a reason or message longer than a line takes its
+	// extra lines from the modes rather than growing the box.
 	room := max(height-fh-6, 0)
-	extraReason := min(len(reason), room)
-	room -= extraReason
+	reasonRows := min(1, room)
+	room -= reasonRows
 	modeRows := min(pickListHeight, room)
 	room -= modeRows
 	gapAbove, gapBelow := room > 0, room > 1
+	extraReason := min(max(len(reason)-reasonRows, 0), modeRows)
+	modeRows -= extraReason
 	extraMsg := min(max(len(msg)-1, 0), modeRows)
 	modeRows -= extraMsg
+	reason = reason[:min(len(reason), reasonRows+extraReason)]
+	for len(reason) < reasonRows {
+		reason = append(reason, "")
+	}
 
 	row := func(f rigField, label, value string) string {
 		mark, lab := strings.Repeat(" ", lipgloss.Width(rigFocusMark)), st.muted.Render(pad(label, rigLabelWidth))
@@ -488,7 +499,7 @@ func (m Model) rigModalView(width, height int) string {
 		modeValue += st.muted.Render(hint) + r.mode.filter
 	}
 
-	lines := append([]string{head, status}, reason[:extraReason]...)
+	lines := append([]string{head, status}, reason...)
 	if gapAbove {
 		lines = append(lines, "")
 	}

@@ -211,6 +211,27 @@ func TestRigModalKeepsItsSize(t *testing.T) {
 				assert.Equal(t, w, gw, "width after %s", st.name)
 				assert.Equal(t, h, gh, "height after %s", st.name)
 			}
+
+			// Reconnecting, the reason comes and goes and grows.
+			conns := []struct {
+				name string
+				conn rig.ConnectionChanged
+			}{
+				{"a short reason", rig.ConnectionChanged{Status: rig.Disconnected, Err: errors.New("refused"), RetryIn: time.Second}},
+				{"connecting", rig.ConnectionChanged{Status: rig.Connecting}},
+				{"a long reason", rig.ConnectionChanged{
+					Status:  rig.Disconnected,
+					Err:     errors.New("dial tcp 127.0.0.1:4532: connect: connection refused by the remote host"),
+					RetryIn: 4981234 * time.Microsecond,
+				}},
+				{"connected again", rig.ConnectionChanged{Status: rig.Connected}},
+			}
+			for _, st := range conns {
+				m, _ = update(t, m, st.conn)
+				gw, gh := size(m)
+				assert.Equal(t, w, gw, "width after %s", st.name)
+				assert.Equal(t, h, gh, "height after %s", st.name)
+			}
 		})
 	}
 }
@@ -674,6 +695,12 @@ func TestRigModalConnectionStatus(t *testing.T) {
 			nil,
 		},
 		{"disconnected", rig.ConnectionChanged{Status: rig.Disconnected}, []string{"ic7300 not connected"}, []string{"retry"}},
+		{
+			"retry rounded to the second",
+			rig.ConnectionChanged{Status: rig.Disconnected, RetryIn: 4981234 * time.Microsecond},
+			[]string{"retry in 5s"},
+			[]string{"4.98"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
