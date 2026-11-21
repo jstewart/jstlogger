@@ -36,17 +36,18 @@ type keyMap struct {
 	Quit key.Binding
 }
 
-// defaultKeys returns the global keybindings. The rig keys are disabled, and
-// so hidden from help, unless rigEnabled is true.
+// defaultKeys returns the global keybindings. The rig keys, which open the
+// rig modal on the frequency or the mode, are disabled, and so hidden from
+// help, unless rigEnabled is true.
 func defaultKeys(rigEnabled bool) keyMap {
 	k := keyMap{
 		Freq: key.NewBinding(
 			key.WithKeys("f"),
-			key.WithHelp("f", "freq"),
+			key.WithHelp("f", "rig: freq"),
 		),
 		Mode: key.NewBinding(
 			key.WithKeys("m"),
-			key.WithHelp("m", "mode"),
+			key.WithHelp("m", "rig: mode"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?", "f1"),

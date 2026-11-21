@@ -157,34 +157,92 @@ func TestParseFreq(t *testing.T) {
 	}
 }
 
-func TestParseMode(t *testing.T) {
+func TestParsePassband(t *testing.T) {
 	tests := []struct {
-		in           string
-		wantMode     string
-		wantPassband int
-		wantErr      bool
+		in      string
+		want    int
+		wantErr string
 	}{
-		{in: "usb", wantMode: "USB"},
-		{in: "USB 2400", wantMode: "USB", wantPassband: 2400},
-		{in: "  pktusb   3000 ", wantMode: "PKTUSB", wantPassband: 3000},
-		{in: "cw 0", wantMode: "CW"},
-		{in: "", wantErr: true},
-		{in: "   ", wantErr: true},
-		{in: "usb wide", wantErr: true},
-		{in: "usb 2400.5", wantErr: true},
-		{in: "usb -1", wantErr: true},
-		{in: "usb 2400 extra", wantErr: true},
+		{in: "", want: 0},
+		{in: "   ", want: 0},
+		{in: "2400", want: 2400},
+		{in: " 3000 ", want: 3000},
+		{in: "0", want: 0},
+		{in: "wide", wantErr: `invalid passband "wide": invalid syntax`},
+		{in: "2400.5", wantErr: `invalid passband "2400.5": invalid syntax`},
+		{in: "-1", wantErr: `invalid passband "-1": must not be negative`},
+		{in: "24 00", wantErr: `invalid passband "24 00": invalid syntax`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
-			mode, passband, err := parseMode(tt.in)
-			if tt.wantErr {
-				assert.Error(t, err)
+			got, err := parsePassband(tt.in)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantErr, err.Error())
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantMode, mode)
-			assert.Equal(t, tt.wantPassband, passband)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestRigApplyCmd(t *testing.T) {
+	boom := errors.New("boom")
+	tests := []struct {
+		name      string
+		change    rigChange
+		err       error
+		wantFreqs []int64
+		wantModes []modeCall
+		wantErr   string
+	}{
+		{
+			name:      "freq",
+			change:    rigChange{setFreq: true, hz: 7074000},
+			wantFreqs: []int64{7074000},
+		},
+		{
+			name:      "mode",
+			change:    rigChange{setMode: true, mode: "CW", passband: 500},
+			wantModes: []modeCall{{"CW", 500}},
+		},
+		{
+			name:      "freq then mode",
+			change:    rigChange{setFreq: true, hz: 14074000, setMode: true, mode: "PKTUSB"},
+			wantFreqs: []int64{14074000},
+			wantModes: []modeCall{{"PKTUSB", 0}},
+		},
+		{
+			name:      "a freq error stops the mode",
+			change:    rigChange{setFreq: true, hz: 14074000, setMode: true, mode: "USB"},
+			err:       boom,
+			wantFreqs: []int64{14074000},
+			wantErr:   "set frequency 14.074.000: boom",
+		},
+		{
+			name:      "mode error",
+			change:    rigChange{setMode: true, mode: "USB", passband: 2400},
+			err:       boom,
+			wantModes: []modeCall{{"USB", 2400}},
+			wantErr:   "set mode USB 2400: boom",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &fakeRig{err: tt.err}
+			msg := rigApplyCmd(f, 7, tt.change)()
+			res, ok := msg.(rigResultMsg)
+			require.True(t, ok, "got %T", msg)
+			assert.Equal(t, 7, res.gen)
+			assert.Equal(t, tt.wantFreqs, f.freqs)
+			assert.Equal(t, tt.wantModes, f.modes)
+			if tt.wantErr == "" {
+				assert.NoError(t, res.err)
+				return
+			}
+			require.ErrorIs(t, res.err, boom)
+			assert.Equal(t, tt.wantErr, res.err.Error())
 		})
 	}
 }
@@ -284,116 +342,11 @@ func TestNoRigHeader(t *testing.T) {
 	assert.NotContains(t, m.View().Content, "—")
 }
 
-func TestFreqPromptSubmit(t *testing.T) {
-	m, f := newRigModel(t)
-
-	m, _ = update(t, m, keyPress('f', 0))
-	require.True(t, m.promptOpen(), "f should open the prompt")
-
-	m = typeText(t, m, "7074 khz")
-	m, cmd := update(t, m, enterKey)
-	assert.False(t, m.promptOpen(), "enter should close the prompt")
-	require.NotNil(t, cmd)
-	assert.Empty(t, f.freqs, "controller should only be called when the command runs")
-
-	m = run(t, m, cmd)
-	assert.Equal(t, []int64{7074000}, f.freqs)
-	assert.Nil(t, m.rigErr)
-}
-
-func TestModePromptSubmit(t *testing.T) {
-	m, f := newRigModel(t)
-
-	m, _ = update(t, m, keyPress('m', 0))
-	require.True(t, m.promptOpen(), "m should open the prompt")
-
-	m = typeText(t, m, "usb 2400")
-	m, cmd := update(t, m, enterKey)
-	assert.False(t, m.promptOpen())
-	run(t, m, cmd)
-	assert.Equal(t, []modeCall{{"USB", 2400}}, f.modes)
-}
-
-func TestPromptCapturesKeys(t *testing.T) {
-	m, _ := newRigModel(t)
-	m, _ = update(t, m, keyPress('m', 0))
-
-	// q, ? and f are ordinary input while the prompt is open.
-	m = typeText(t, m, "q?f")
-	assert.True(t, m.promptOpen())
-	assert.False(t, m.helpModal.open, "? should not open help in the prompt")
-	assert.Equal(t, "q?f", m.input.Value())
-}
-
-func TestPromptCtrlCQuits(t *testing.T) {
-	m, _ := newRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
-	_, cmd := update(t, m, keyPress('c', tea.ModCtrl))
-	require.NotNil(t, cmd)
-	assert.IsType(t, tea.QuitMsg{}, cmd())
-}
-
-func TestPromptEscCancels(t *testing.T) {
-	m, f := newRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
-	m = typeText(t, m, "14.074")
-
-	m, cmd := update(t, m, escKey)
-	assert.False(t, m.promptOpen())
-	assert.Nil(t, cmd)
-	assert.Empty(t, f.freqs)
-
-	// Reopening starts with an empty input.
-	m, _ = update(t, m, keyPress('f', 0))
-	assert.Empty(t, m.input.Value())
-}
-
-func TestPromptParseErrorKeepsPromptOpen(t *testing.T) {
-	m, f := newRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
-	m = typeText(t, m, "abc")
-
-	m, cmd := update(t, m, enterKey)
-	assert.Nil(t, cmd)
-	assert.True(t, m.promptOpen())
-	require.Error(t, m.promptErr)
-	assert.Contains(t, m.View().Content, m.promptErr.Error())
-	assert.Empty(t, f.freqs)
-
-	// Fixing the input and resubmitting succeeds.
-	for range 3 {
-		m, _ = update(t, m, tea.KeyPressMsg{Code: tea.KeyBackspace})
-	}
-	m = typeText(t, m, "14.074")
-	m, cmd = update(t, m, enterKey)
-	assert.False(t, m.promptOpen())
-	run(t, m, cmd)
-	assert.Equal(t, []int64{14074000}, f.freqs)
-}
-
-func TestPromptHelp(t *testing.T) {
-	m, _ := newRigModel(t)
-	assert.Contains(t, m.View().Content, "freq")
-	assert.Contains(t, m.View().Content, "mode")
-
-	m, _ = update(t, m, keyPress('f', 0))
-	v := m.View().Content
-	assert.Contains(t, v, "enter")
-	assert.Contains(t, v, "esc")
-	assert.NotContains(t, v, "quit", "global help should be replaced by prompt help")
-}
-
 func TestControllerErrorShown(t *testing.T) {
-	m, f := newRigModel(t)
-	f.err = errors.New("rig busy")
+	m, _ := newRigModel(t)
 
-	m, _ = update(t, m, keyPress('f', 0))
-	m = typeText(t, m, "14.074")
-	m, cmd := update(t, m, enterKey)
-	m = run(t, m, cmd)
-
-	require.Error(t, m.rigErr)
-	assert.ErrorIs(t, m.rigErr, f.err)
+	// A rig result with the modal closed shows in the footer.
+	m, _ = update(t, m, rigResultMsg{err: errors.New("rig busy")})
 	assert.Contains(t, m.View().Content, "rig busy")
 
 	// A key press clears the error.
@@ -405,6 +358,53 @@ func TestControllerErrorShown(t *testing.T) {
 	assert.Contains(t, m.View().Content, "rig busy")
 	m, _ = update(t, m, rigResultMsg{})
 	assert.NotContains(t, m.View().Content, "rig busy")
+}
+
+// markPatternKey opens the mark-pattern prompt, a text prompt with no
+// input to start with.
+var markPatternKey = keyPress('T', 0)
+
+func TestPromptCapturesKeys(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 80, 24, WithRig("ic7300", &fakeRig{}))
+	m = press(t, m, markPatternKey)
+
+	// q, ?, f and m are ordinary input while the prompt is open.
+	m = typeText(t, m, "q?fm")
+	assert.True(t, m.promptOpen())
+	assert.False(t, m.helpModal.open, "? should not open help in the prompt")
+	assert.False(t, m.rigModal.open, "f and m should not open the rig modal in the prompt")
+	assert.Equal(t, "q?fm", m.input.Value())
+}
+
+func TestPromptCtrlCQuits(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 80, 24)
+	m = press(t, m, markPatternKey)
+	_, cmd := update(t, m, keyPress('c', tea.ModCtrl))
+	require.NotNil(t, cmd)
+	assert.IsType(t, tea.QuitMsg{}, cmd())
+}
+
+func TestPromptEscCancels(t *testing.T) {
+	m, s := newIndexModel(t, 3, 80, 24)
+	m = press(t, m, markPatternKey)
+	m = typeText(t, m, "~b 20m")
+
+	m = press(t, m, escKey)
+	assert.False(t, m.promptOpen())
+	assert.Zero(t, s.idsCalls)
+
+	// Reopening starts with an empty input.
+	m = press(t, m, markPatternKey)
+	assert.Empty(t, m.input.Value())
+}
+
+func TestPromptHelp(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 80, 24)
+	m = press(t, m, markPatternKey)
+	v := m.View().Content
+	assert.Contains(t, v, "enter")
+	assert.Contains(t, v, "esc")
+	assert.NotContains(t, v, "quit", "global help should be replaced by prompt help")
 }
 
 // Running without the rig attached is common, so the reason is left to the
@@ -423,6 +423,7 @@ func TestNoControllerRigKeysDisabled(t *testing.T) {
 	for _, r := range []rune{'f', 'm'} {
 		next, cmd := update(t, m, keyPress(r, 0))
 		assert.False(t, next.promptOpen(), "%c should not open a prompt", r)
+		assert.False(t, next.rigModal.open, "%c should not open the rig modal", r)
 		assert.Nil(t, cmd)
 	}
 	assert.NotContains(t, m.View().Content, "freq")
@@ -442,8 +443,13 @@ func TestWindowSizeWithRig(t *testing.T) {
 		{"help open", 80, 24, true, nil},
 		{"small terminal", 40, 10, false, nil},
 		{"tiny terminal", 20, 10, false, nil},
-		{"prompt open", 40, 10, false, []tea.Msg{keyPress('f', 0)}},
-		{"prompt error", 40, 10, false, []tea.Msg{keyPress('f', 0), keyPress('x', 0), enterKey}},
+		{"modal freq", 40, 10, false, []tea.Msg{keyPress('f', 0)}},
+		{"modal mode", 40, 10, false, []tea.Msg{keyPress('m', 0)}},
+		{"modal mode tall", 80, 24, false, []tea.Msg{keyPress('m', 0)}},
+		{"modal mode tiny", 20, 10, false, []tea.Msg{keyPress('m', 0)}},
+		{"modal error", 40, 10, false, []tea.Msg{keyPress('f', 0), keyPress('x', 0), enterKey}},
+		{"modal error tall", 80, 24, false, []tea.Msg{keyPress('f', 0), keyPress('x', 0), enterKey}},
+		{"modal help", 40, 10, false, []tea.Msg{keyPress('m', 0), special(tea.KeyF1)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

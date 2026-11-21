@@ -27,8 +27,8 @@ type RigController interface {
 type Option func(*Model)
 
 // WithRig connects the UI to the rig called name: it shows the rig status in
-// the header and enables the frequency and mode prompts, which send commands
-// to c.
+// the header and enables the rig modal, which sets the rig's frequency, mode
+// and passband through c.
 func WithRig(name string, c RigController) Option {
 	return func(m *Model) {
 		m.rigName = name
@@ -39,9 +39,26 @@ func WithRig(name string, c RigController) Option {
 // rigTimeout bounds each command sent to the rig controller.
 const rigTimeout = 5 * time.Second
 
-// rigResultMsg reports the outcome of a command sent to the rig controller.
+// rigResultMsg reports the outcome of the commands sent to the rig
+// controller by the rig modal's apply numbered gen.
 type rigResultMsg struct {
+	gen int
 	err error
+}
+
+// rigChange is the change the rig modal applies to the rig: the frequency
+// when setFreq is true, and then the mode and passband when setMode is true.
+type rigChange struct {
+	setFreq  bool
+	hz       int64
+	setMode  bool
+	mode     string
+	passband int
+}
+
+// changes reports whether c changes anything.
+func (c rigChange) changes() bool {
+	return c.setFreq || c.setMode
 }
 
 // promptKind identifies the open input prompt, if any.
@@ -49,8 +66,6 @@ type promptKind int
 
 const (
 	promptNone promptKind = iota
-	promptFreq
-	promptMode
 	// promptJump asks for a QSO index row number.
 	promptJump
 	// promptLimit asks for the pattern that limits the QSO index.
@@ -115,7 +130,7 @@ func (m Model) promptOpen() bool {
 	return m.prompt != promptNone
 }
 
-// newInput returns the text input used by the rig prompts.
+// newInput returns the text input used by the prompts and the rig modal.
 func newInput() textinput.Model {
 	ti := textinput.New()
 	s := textinput.DefaultDarkStyles()
@@ -135,12 +150,6 @@ func (m Model) openPrompt(kind promptKind) (Model, tea.Cmd) {
 	m.promptKeys.HistoryNext.SetEnabled(takesPattern)
 	m.patterns.reset()
 	switch kind {
-	case promptFreq:
-		m.input.Prompt = "freq> "
-		m.input.Placeholder = "14.074, 7074 kHz…"
-	case promptMode:
-		m.input.Prompt = "mode> "
-		m.input.Placeholder = "USB 2400…"
 	case promptJump:
 		m.input.Prompt = "Jump to: "
 		m.input.Placeholder = ""
@@ -229,29 +238,11 @@ func (m Model) updatePrompt(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 }
 
 // submitPrompt parses the prompt input. On success it closes the prompt and
-// returns a command that applies it, such as a rig setting or a QSO index
-// query; on failure it keeps the prompt open and records the parse error.
+// returns a command that applies it, such as a QSO index query; on failure
+// it keeps the prompt open and records the parse error.
 func (m Model) submitPrompt() (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.prompt {
-	case promptFreq:
-		hz, err := parseFreq(m.input.Value())
-		if err != nil {
-			m.promptErr = err
-			return m, nil
-		}
-		cmd = rigCmd(fmt.Sprintf("set frequency %s", formatFreq(hz)), func(ctx context.Context) error {
-			return m.rig.SetFreq(ctx, hz)
-		})
-	case promptMode:
-		mode, passband, err := parseMode(m.input.Value())
-		if err != nil {
-			m.promptErr = err
-			return m, nil
-		}
-		cmd = rigCmd(fmt.Sprintf("set mode %s", mode), func(ctx context.Context) error {
-			return m.rig.SetMode(ctx, mode, passband)
-		})
 	case promptJump:
 		if err := m.jump(m.input.Value()); err != nil {
 			m.promptErr = err
@@ -278,17 +269,38 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 	return m.closePrompt(), cmd
 }
 
-// rigCmd returns a command that runs fn with a timeout and reports the result
-// as a rigResultMsg. desc describes the command in the error.
-func rigCmd(desc string, fn func(ctx context.Context) error) tea.Cmd {
+// rigApplyCmd returns a command that applies ch to the rig through c, the
+// frequency and then the mode, stopping at the first error, and reports the
+// result as a rigResultMsg numbered gen.
+func rigApplyCmd(c RigController, gen int, ch rigChange) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), rigTimeout)
-		defer cancel()
-		if err := fn(ctx); err != nil {
-			return rigResultMsg{err: fmt.Errorf("%s: %w", desc, err)}
+		if ch.setFreq {
+			desc := "set frequency " + formatFreq(ch.hz)
+			if err := rigCall(desc, func(ctx context.Context) error { return c.SetFreq(ctx, ch.hz) }); err != nil {
+				return rigResultMsg{gen: gen, err: err}
+			}
 		}
-		return rigResultMsg{}
+		if ch.setMode {
+			desc := "set mode " + ch.mode
+			if ch.passband > 0 {
+				desc += " " + strconv.Itoa(ch.passband)
+			}
+			if err := rigCall(desc, func(ctx context.Context) error { return c.SetMode(ctx, ch.mode, ch.passband) }); err != nil {
+				return rigResultMsg{gen: gen, err: err}
+			}
+		}
+		return rigResultMsg{gen: gen}
 	}
+}
+
+// rigCall runs fn with a timeout. desc describes the command in the error.
+func rigCall(desc string, fn func(ctx context.Context) error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), rigTimeout)
+	defer cancel()
+	if err := fn(ctx); err != nil {
+		return fmt.Errorf("%s: %w", desc, err)
+	}
+	return nil
 }
 
 // promptView renders the open prompt and any parse error, or the open y/N
@@ -425,28 +437,21 @@ func parseDottedFreq(s string) (int64, bool) {
 	return hz, true
 }
 
-// parseMode parses "MODE [passband]" typed by the user. The mode is
-// upper-cased; the passband is in hertz and defaults to 0, the rig's default.
-func parseMode(s string) (mode string, passband int, err error) {
-	fields := strings.Fields(s)
-	switch len(fields) {
-	case 0:
-		return "", 0, errors.New("enter a mode")
-	case 1, 2:
-	default:
-		return "", 0, fmt.Errorf("invalid mode %q: want MODE [passband]", s)
+// parsePassband parses a passband in hertz typed by the user. A blank
+// passband is 0, the rig's default for the mode.
+func parsePassband(s string) (int, error) {
+	t := strings.TrimSpace(s)
+	if t == "" {
+		return 0, nil
 	}
-
-	if len(fields) == 2 {
-		passband, err = strconv.Atoi(fields[1])
-		if err != nil {
-			return "", 0, fmt.Errorf("invalid passband %q: %w", fields[1], numErr(err))
-		}
-		if passband < 0 {
-			return "", 0, fmt.Errorf("invalid passband %q: must not be negative", fields[1])
-		}
+	passband, err := strconv.Atoi(t)
+	if err != nil {
+		return 0, fmt.Errorf("invalid passband %q: %w", t, numErr(err))
 	}
-	return strings.ToUpper(fields[0]), passband, nil
+	if passband < 0 {
+		return 0, fmt.Errorf("invalid passband %q: must not be negative", t)
+	}
+	return passband, nil
 }
 
 // numErr strips the strconv function and input from a parse error, which the
