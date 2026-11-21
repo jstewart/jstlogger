@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	rigKey      = keyPress('r', 0)
 	tabKey      = special(tea.KeyTab)
 	shiftTabKey = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 )
@@ -36,6 +37,12 @@ func rigModalText(m Model) string {
 	return plain(m.rigModalView(m.bodyWidth(), m.bodyHeight()))
 }
 
+// openRigMode opens the rig modal and focuses the mode.
+func openRigMode(t *testing.T, m Model) Model {
+	t.Helper()
+	return press(t, m, rigKey, tabKey)
+}
+
 // clearField erases the focused text field of the rig modal.
 func clearField(t *testing.T, m Model) Model {
 	t.Helper()
@@ -55,39 +62,28 @@ func applyRigModal(t *testing.T, m Model) Model {
 }
 
 func TestRigModalOpensPrefilled(t *testing.T) {
-	tests := []struct {
-		name  string
-		key   tea.KeyPressMsg
-		focus rigField
-	}{
-		{"f focuses the freq", keyPress('f', 0), rigFieldFreq},
-		{"m focuses the mode", keyPress('m', 0), rigFieldMode},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m, f := newTunedRigModel(t)
-			m, _ = update(t, m, tt.key)
+	m, f := newTunedRigModel(t)
+	m, _ = update(t, m, rigKey)
 
-			require.True(t, m.rigModal.open)
-			assert.Equal(t, tt.focus, m.rigModal.focus)
-			assert.Equal(t, "14.074.000", m.rigModal.freq.Value())
-			assert.Equal(t, "USB", m.rigModal.modeValue())
-			assert.Equal(t, "2400", m.rigModal.passband.Value())
-			assert.Empty(t, f.freqs)
-			assert.Empty(t, f.modes)
+	require.True(t, m.rigModal.open)
+	assert.Equal(t, rigFieldFreq, m.rigModal.focus, "the modal opens on the freq")
+	assert.True(t, m.rigModal.freq.Focused())
+	assert.Equal(t, "14.074.000", m.rigModal.freq.Value())
+	assert.Equal(t, "USB", m.rigModal.modeValue())
+	assert.Equal(t, "2400", m.rigModal.passband.Value())
+	assert.Empty(t, f.freqs)
+	assert.Empty(t, f.modes)
 
-			v := rigModalText(m)
-			assert.Contains(t, v, "Freq")
-			assert.Contains(t, v, "Mode")
-			assert.Contains(t, v, "Passband")
-			assert.Contains(t, v, "14.074.000")
-		})
-	}
+	v := rigModalText(m)
+	assert.Contains(t, v, "Freq")
+	assert.Contains(t, v, "Mode")
+	assert.Contains(t, v, "Passband")
+	assert.Contains(t, v, "14.074.000")
 }
 
 func TestRigModalOpensBlankWithoutState(t *testing.T) {
 	m, _ := newRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 
 	require.True(t, m.rigModal.open)
 	assert.Empty(t, m.rigModal.freq.Value())
@@ -98,13 +94,13 @@ func TestRigModalOpensBlankWithoutState(t *testing.T) {
 func TestRigModalZeroPassbandIsBlank(t *testing.T) {
 	m, _ := newRigModel(t)
 	m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: 7074000, Mode: "PKTUSB"}})
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	assert.Empty(t, m.rigModal.passband.Value())
 }
 
 func TestRigModalEscCancels(t *testing.T) {
 	m, f := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7074")
 
@@ -115,34 +111,32 @@ func TestRigModalEscCancels(t *testing.T) {
 	assert.Empty(t, f.modes)
 
 	// Reopening starts from the rig's state again.
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	assert.Equal(t, "14.074.000", m.rigModal.freq.Value())
 }
 
 func TestRigModalCtrlCQuits(t *testing.T) {
-	for _, k := range []tea.KeyPressMsg{keyPress('f', 0), keyPress('m', 0)} {
-		m, _ := newTunedRigModel(t)
-		m, _ = update(t, m, k)
-		_, cmd := update(t, m, keyPress('c', tea.ModCtrl))
-		require.NotNil(t, cmd)
-		assert.IsType(t, tea.QuitMsg{}, cmd())
-	}
+	m, _ := newTunedRigModel(t)
+	m, _ = update(t, m, rigKey)
+	_, cmd := update(t, m, keyPress('c', tea.ModCtrl))
+	require.NotNil(t, cmd)
+	assert.IsType(t, tea.QuitMsg{}, cmd())
 }
 
 func TestRigModalCapturesKeys(t *testing.T) {
 	m, _ := newRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 
-	// q, ?, f and m are typed into the field.
-	m = typeText(t, m, "q?fm")
+	// q, ? and r are typed into the field.
+	m = typeText(t, m, "q?r")
 	assert.True(t, m.rigModal.open)
 	assert.False(t, m.helpModal.open)
-	assert.Equal(t, "q?fm", m.rigModal.freq.Value())
+	assert.Equal(t, "q?r", m.rigModal.freq.Value())
 }
 
 func TestRigModalTabCyclesFields(t *testing.T) {
 	m, _ := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 
 	for _, want := range []rigField{rigFieldMode, rigFieldPassband, rigFieldFreq} {
 		m, _ = update(t, m, tabKey)
@@ -158,7 +152,7 @@ func TestRigModalTabCyclesFields(t *testing.T) {
 
 func TestRigModalShowsFocus(t *testing.T) {
 	m, _ := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	assert.Regexp(t, `▸ Freq`, rigModalText(m))
 	assert.NotRegexp(t, `▸ Mode`, rigModalText(m))
 
@@ -169,7 +163,7 @@ func TestRigModalShowsFocus(t *testing.T) {
 
 func TestRigModalModeListShowsOnlyWhenFocused(t *testing.T) {
 	m, _ := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	assert.NotContains(t, rigModalText(m), "PKTUSB", "the mode shows compactly")
 
 	m, _ = update(t, m, tabKey)
@@ -178,7 +172,7 @@ func TestRigModalModeListShowsOnlyWhenFocused(t *testing.T) {
 
 func TestRigModalApplyFreq(t *testing.T) {
 	m, f := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7074 khz")
 
@@ -199,7 +193,7 @@ func TestRigModalApplyFreq(t *testing.T) {
 func TestRigModalApplyFromAnyField(t *testing.T) {
 	for _, field := range []rigField{rigFieldMode, rigFieldPassband} {
 		m, f := newTunedRigModel(t)
-		m, _ = update(t, m, keyPress('f', 0))
+		m, _ = update(t, m, rigKey)
 		m = clearField(t, m)
 		m = typeText(t, m, "7.074")
 		for m.rigModal.focus != field {
@@ -256,7 +250,7 @@ func TestRigModalApplyMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m, f := newTunedRigModel(t)
-			m, _ = update(t, m, keyPress('m', 0))
+			m = openRigMode(t, m)
 			for _, k := range tt.keys {
 				m, _ = update(t, m, k)
 			}
@@ -270,7 +264,7 @@ func TestRigModalApplyMode(t *testing.T) {
 
 func TestRigModalApplyFreqAndMode(t *testing.T) {
 	m, f := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "10.136")
 	m, _ = update(t, m, tabKey)
@@ -285,7 +279,7 @@ func TestRigModalApplyFreqAndMode(t *testing.T) {
 
 func TestRigModalNoChangeCloses(t *testing.T) {
 	m, f := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	// The same frequency written another way is no change.
 	m = clearField(t, m)
 	m = typeText(t, m, "14074")
@@ -300,7 +294,7 @@ func TestRigModalNoChangeCloses(t *testing.T) {
 func TestRigModalWithoutState(t *testing.T) {
 	t.Run("nothing entered closes", func(t *testing.T) {
 		m, f := newRigModel(t)
-		m, _ = update(t, m, keyPress('f', 0))
+		m, _ = update(t, m, rigKey)
 		m, cmd := update(t, m, enterKey)
 		assert.False(t, m.rigModal.open)
 		assert.Nil(t, cmd)
@@ -309,7 +303,7 @@ func TestRigModalWithoutState(t *testing.T) {
 	})
 	t.Run("freq alone", func(t *testing.T) {
 		m, f := newRigModel(t)
-		m, _ = update(t, m, keyPress('f', 0))
+		m, _ = update(t, m, rigKey)
 		m = typeText(t, m, "14.074")
 		m = applyRigModal(t, m)
 		assert.False(t, m.rigModal.open)
@@ -318,7 +312,7 @@ func TestRigModalWithoutState(t *testing.T) {
 	})
 	t.Run("a picked mode", func(t *testing.T) {
 		m, f := newRigModel(t)
-		m, _ = update(t, m, keyPress('m', 0))
+		m = openRigMode(t, m)
 		m = typeText(t, m, "fm")
 		m = applyRigModal(t, m)
 		assert.False(t, m.rigModal.open)
@@ -326,7 +320,7 @@ func TestRigModalWithoutState(t *testing.T) {
 	})
 	t.Run("a passband needs a mode", func(t *testing.T) {
 		m, f := newRigModel(t)
-		m, _ = update(t, m, keyPress('m', 0))
+		m = openRigMode(t, m)
 		m, _ = update(t, m, tabKey)
 		m = typeText(t, m, "2400")
 		m, cmd := update(t, m, enterKey)
@@ -373,7 +367,7 @@ func TestRigModalParseErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m, f := newTunedRigModel(t)
-			m, _ = update(t, m, keyPress('f', 0))
+			m, _ = update(t, m, rigKey)
 			for _, k := range tt.keys {
 				m, _ = update(t, m, k)
 			}
@@ -390,7 +384,7 @@ func TestRigModalParseErrors(t *testing.T) {
 
 func TestRigModalParseErrorFixed(t *testing.T) {
 	m, f := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "abc")
 	m, _ = update(t, m, enterKey)
@@ -406,7 +400,7 @@ func TestRigModalParseErrorFixed(t *testing.T) {
 func TestRigModalRigError(t *testing.T) {
 	m, f := newTunedRigModel(t)
 	f.err = errors.New("rig busy")
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7.074")
 	m = applyRigModal(t, m)
@@ -428,7 +422,7 @@ func TestRigModalRigError(t *testing.T) {
 
 func TestRigModalPendingIgnoresKeys(t *testing.T) {
 	m, _ := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7.074")
 	m, cmd := update(t, m, enterKey)
@@ -448,7 +442,7 @@ func TestRigModalPendingIgnoresKeys(t *testing.T) {
 func TestRigModalEscWhilePending(t *testing.T) {
 	m, f := newTunedRigModel(t)
 	f.err = errors.New("rig busy")
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7.074")
 	m, cmd := update(t, m, enterKey)
@@ -467,14 +461,14 @@ func TestRigModalEscWhilePending(t *testing.T) {
 func TestRigModalStaleResultIgnored(t *testing.T) {
 	m, f := newTunedRigModel(t)
 	f.err = errors.New("rig busy")
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7.074")
 	m, cmd := update(t, m, enterKey)
 	require.NotNil(t, cmd)
 
 	m, _ = update(t, m, escKey)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = run(t, m, cmd)
 	assert.True(t, m.rigModal.open)
 	assert.NoError(t, m.rigModal.err, "the reopened modal ignores the earlier result")
@@ -484,7 +478,7 @@ func TestRigModalStaleResultIgnored(t *testing.T) {
 func TestRigModalFreqHistory(t *testing.T) {
 	m, _ := newTunedRigModel(t)
 	for _, freq := range []string{"7074", "14.074", "14074", "10.136"} {
-		m, _ = update(t, m, keyPress('f', 0))
+		m, _ = update(t, m, rigKey)
 		m = clearField(t, m)
 		m = typeText(t, m, freq)
 		m = applyRigModal(t, m)
@@ -497,7 +491,7 @@ func TestRigModalFreqHistory(t *testing.T) {
 	assert.Equal(t, []string{"7.074.000", "14.074.000", "10.136.000"}, m.freqs.entries,
 		"each is recorded once, the same written either way, and the unchanged frequency not again")
 
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "21")
 	for _, want := range []string{"10.136.000", "14.074.000", "7.074.000", "7.074.000"} {
@@ -523,7 +517,7 @@ func TestRigModalFreqHistory(t *testing.T) {
 func TestRigModalFreqHistorySkipsCurrent(t *testing.T) {
 	m, _ := newTunedRigModel(t)
 	for _, freq := range []string{"7.074", "14.074"} {
-		m, _ = update(t, m, keyPress('f', 0))
+		m, _ = update(t, m, rigKey)
 		m = clearField(t, m)
 		m = typeText(t, m, freq)
 		m = applyRigModal(t, m)
@@ -532,7 +526,7 @@ func TestRigModalFreqHistorySkipsCurrent(t *testing.T) {
 		m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: hz, Mode: "USB"}})
 	}
 
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	require.Equal(t, "14.074.000", m.rigModal.freq.Value())
 	m, _ = update(t, m, historyPrevKeys[0])
 	assert.Equal(t, "7.074.000", m.rigModal.freq.Value())
@@ -545,7 +539,7 @@ func TestRigModalFreqHistorySkipsCurrent(t *testing.T) {
 func TestRigModalZeroFreqUnchanged(t *testing.T) {
 	m, f := newRigModel(t)
 	m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: 0, Mode: "USB"}})
-	m, _ = update(t, m, keyPress('m', 0))
+	m = openRigMode(t, m)
 	m, _ = update(t, m, historyNextKeys[0]) // down to the next mode
 	m = applyRigModal(t, m)
 	assert.False(t, m.rigModal.open, "%v", m.rigModal.err)
@@ -555,12 +549,12 @@ func TestRigModalZeroFreqUnchanged(t *testing.T) {
 
 func TestRigModalHistoryKeysOnlyOnFreq(t *testing.T) {
 	m, _ := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m = typeText(t, m, "7.074")
 	m = applyRigModal(t, m)
 
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m, _ = update(t, m, tabKey)
 	m, _ = update(t, m, tabKey)
 	m, _ = update(t, m, special(tea.KeyUp))
@@ -579,7 +573,7 @@ func TestFreqHistoryKeptApartFromPatterns(t *testing.T) {
 	assert.Equal(t, "~b 20m", m.input.Value(), "no frequency in the pattern history")
 	m = press(t, m, escKey)
 
-	m = press(t, m, keyPress('f', 0), special(tea.KeyUp))
+	m = press(t, m, rigKey, special(tea.KeyUp))
 	assert.Equal(t, "7.074.000", m.rigModal.freq.Value())
 	m = press(t, m, special(tea.KeyUp))
 	assert.Equal(t, "7.074.000", m.rigModal.freq.Value(), "no pattern in the frequency history")
@@ -588,7 +582,7 @@ func TestFreqHistoryKeptApartFromPatterns(t *testing.T) {
 func TestRigModalRecentModesFirst(t *testing.T) {
 	m, _ := newTunedRigModel(t)
 	for _, mode := range []string{"cw", "fm", "pktu"} {
-		m, _ = update(t, m, keyPress('m', 0))
+		m = openRigMode(t, m)
 		m = typeText(t, m, mode)
 		m = applyRigModal(t, m)
 		require.False(t, m.rigModal.open)
@@ -596,12 +590,12 @@ func TestRigModalRecentModesFirst(t *testing.T) {
 	assert.Equal(t, []string{"PKTUSB", "FM", "CW"}, m.recentModes)
 
 	// A mode used again moves to the front, once.
-	m, _ = update(t, m, keyPress('m', 0))
+	m = openRigMode(t, m)
 	m = typeText(t, m, "cw")
 	m = applyRigModal(t, m)
 	assert.Equal(t, []string{"CW", "PKTUSB", "FM"}, m.recentModes)
 
-	m, _ = update(t, m, keyPress('m', 0))
+	m = openRigMode(t, m)
 	items := m.rigModal.mode.items()
 	require.GreaterOrEqual(t, len(items), 3)
 	assert.Equal(t, []string{"CW", "PKTUSB", "FM"}, []string{items[0].Code, items[1].Code, items[2].Code})
@@ -641,7 +635,7 @@ func TestRigModalConnectionStatus(t *testing.T) {
 			m, _ := newRigModel(t)
 			m, _ = update(t, m, tt.conn)
 			header := m.headerView()
-			m, _ = update(t, m, keyPress('f', 0))
+			m, _ = update(t, m, rigKey)
 			v := rigModalText(m)
 			for _, w := range tt.want {
 				assert.Contains(t, v, w)
@@ -659,7 +653,7 @@ func TestRigModalConnectionStatus(t *testing.T) {
 func TestRigModalDisconnectedStillApplies(t *testing.T) {
 	m, f := newRigModel(t)
 	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Disconnected, Err: errors.New("refused")})
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = typeText(t, m, "7.074")
 	m = applyRigModal(t, m)
 	assert.False(t, m.rigModal.open)
@@ -668,7 +662,7 @@ func TestRigModalDisconnectedStillApplies(t *testing.T) {
 
 func TestRigModalHelp(t *testing.T) {
 	m, _ := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 
 	v := m.View().Content
 	assert.Contains(t, v, "enter")
@@ -696,7 +690,7 @@ func TestRigModalHelp(t *testing.T) {
 
 func TestRigModalPaste(t *testing.T) {
 	m, f := newTunedRigModel(t)
-	m, _ = update(t, m, keyPress('f', 0))
+	m, _ = update(t, m, rigKey)
 	m = clearField(t, m)
 	m, _ = update(t, m, tea.PasteMsg{Content: "3.573"})
 	assert.Equal(t, "3.573", m.rigModal.freq.Value())
@@ -712,7 +706,7 @@ func TestRigModalPaste(t *testing.T) {
 
 func TestRigModalMouseDoesNothing(t *testing.T) {
 	m, _ := newIndexModel(t, 5, 80, 24, WithRig("ic7300", &fakeRig{}))
-	m = press(t, m, keyPress('f', 0))
+	m = press(t, m, rigKey)
 	require.True(t, m.rigModal.open)
 	cursor := m.idx.cursor
 
@@ -725,7 +719,7 @@ func TestRigModalMouseDoesNothing(t *testing.T) {
 
 func TestRigModalWithLogbook(t *testing.T) {
 	m, _ := newIndexModel(t, 5, 80, 24, WithRig("ic7300", &fakeRig{}))
-	m = press(t, m, keyPress('m', 0))
+	m = openRigMode(t, m)
 	require.True(t, m.rigModal.open)
 	// j filters the mode list, not the index behind.
 	cursor := m.idx.cursor

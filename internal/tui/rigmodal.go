@@ -266,12 +266,12 @@ func addRecentMode(recent []string, mode string) []string {
 	return out
 }
 
-// openRigModal opens the rig modal filled in from the rig's state, with
-// field focus focused.
-func (m Model) openRigModal(focus rigField) (Model, tea.Cmd) {
+// openRigModal opens the rig modal filled in from the rig's state, with the
+// frequency focused.
+func (m Model) openRigModal() (Model, tea.Cmd) {
 	m.freqs.reset()
 	m.rigModal = newRigModal(m.rigState, m.recentModes)
-	return m, m.rigModal.setFocus(focus)
+	return m, m.rigModal.setFocus(rigFieldFreq)
 }
 
 // updateRigModal handles a key press while the rig modal is open. Esc

@@ -206,10 +206,8 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, keys.Help):
 			return m.openHelp(), nil
-		case key.Matches(msg, keys.Freq):
-			return m.openRigModal(rigFieldFreq)
-		case key.Matches(msg, keys.Mode):
-			return m.openRigModal(rigFieldMode)
+		case key.Matches(msg, keys.Rig):
+			return m.openRigModal()
 		case m.pager.open:
 			return m.updatePager(msg)
 		default:

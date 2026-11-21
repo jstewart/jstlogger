@@ -443,13 +443,13 @@ func TestWindowSizeWithRig(t *testing.T) {
 		{"help open", 80, 24, true, nil},
 		{"small terminal", 40, 10, false, nil},
 		{"tiny terminal", 20, 10, false, nil},
-		{"modal freq", 40, 10, false, []tea.Msg{keyPress('f', 0)}},
-		{"modal mode", 40, 10, false, []tea.Msg{keyPress('m', 0)}},
-		{"modal mode tall", 80, 24, false, []tea.Msg{keyPress('m', 0)}},
-		{"modal mode tiny", 20, 10, false, []tea.Msg{keyPress('m', 0)}},
-		{"modal error", 40, 10, false, []tea.Msg{keyPress('f', 0), keyPress('x', 0), enterKey}},
-		{"modal error tall", 80, 24, false, []tea.Msg{keyPress('f', 0), keyPress('x', 0), enterKey}},
-		{"modal help", 40, 10, false, []tea.Msg{keyPress('m', 0), special(tea.KeyF1)}},
+		{"modal", 40, 10, false, []tea.Msg{rigKey}},
+		{"modal mode", 40, 10, false, []tea.Msg{rigKey, tabKey}},
+		{"modal mode tall", 80, 24, false, []tea.Msg{rigKey, tabKey}},
+		{"modal mode tiny", 20, 10, false, []tea.Msg{rigKey, tabKey}},
+		{"modal error", 40, 10, false, []tea.Msg{rigKey, keyPress('x', 0), enterKey}},
+		{"modal error tall", 80, 24, false, []tea.Msg{rigKey, keyPress('x', 0), enterKey}},
+		{"modal help", 40, 10, false, []tea.Msg{rigKey, tabKey, special(tea.KeyF1)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

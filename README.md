@@ -332,15 +332,14 @@ The index keys follow NeoMutt's generic menu.
 | `ctrl+l`                  | Reload the index and redraw the screen             |
 | `enter`                   | [Show the QSO](#showing-a-qso) in the pager        |
 | `e`                       | [Edit the QSO](#editing-a-qso)                     |
-| `f` / `m`                 | [Set the rig](#rig-control) frequency / mode       |
+| `r`                       | [Set the rig](#rig-control)                        |
 | `?` / `F1`                | [Show every key](#help)                            |
 | `q` / `ctrl+c`            | Quit                                               |
 
-Keys are case-sensitive: `M` is the middle of the page and `m` opens the
-rig window on the mode. `ctrl+l` keeps the cursor on the same QSO if it
+Keys are case-sensitive. `ctrl+l` keeps the cursor on the same QSO if it
 still exists, and redraws the whole screen, which fixes a display the
-terminal has drawn wrong. `f` and `m` are only available when rig control
-is on. In a prompt, press `enter` to submit or `esc` to cancel.
+terminal has drawn wrong. `r` is only available when rig control is on. In
+a prompt, press `enter` to submit or `esc` to cancel.
 
 ### Help
 
@@ -494,8 +493,8 @@ If the profile has a `spawn` table, jstlogger starts rigctld itself and
 stops it on exit. Otherwise it connects to a rigctld that is already
 running.
 
-`f` and `m` open the rig window, focused on the frequency or the mode. It
-starts with the rig's current settings filled in and shows the connection
+`r` opens the rig window, focused on the frequency. It starts with the
+rig's current settings filled in and shows the connection
 status; when the rig is disconnected, it also shows why. Press `tab` or
 `shift+tab` to move between fields, `enter` to apply, or `esc` to close the
 window without changing anything. Only the fields you changed are sent to
