@@ -485,10 +485,19 @@ never marks its call as new.
 ### Rig control
 
 jstlogger talks to your radio through Hamlib's `rigctld`. It shows the
-rig's frequency, mode and connection status in the header, and keeps
+rig's frequency, mode, name and connection status in the header, and keeps
 retrying if rigctld goes away. Pick a rig profile in the config file (run
 `jstlogger --print-default-config` for a commented example), or choose one
 with `--rig <profile>`. Use `--no-rig` to turn rig control off for a session.
+
+The header names the rig by its profile, such as `ic7300`. Set `name` in
+the profile to show something else:
+
+```toml
+[rig.profiles.ic7300]
+name    = "IC-7300"
+backend = "rigctld"
+```
 
 If the profile has a `spawn` table, jstlogger starts rigctld itself and
 stops it on exit. Otherwise it connects to a rigctld that is already

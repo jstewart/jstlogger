@@ -596,6 +596,27 @@ func TestRigOptions(t *testing.T) {
 	}
 }
 
+func TestRigName(t *testing.T) {
+	base := config.Config{Rig: config.Rig{Profiles: map[string]config.RigProfile{
+		"ic7300":   {Name: "IC-7300"},
+		"portable": {},
+	}}}
+	tests := []struct {
+		name    string
+		profile string
+		want    string
+	}{
+		{name: "named", profile: "ic7300", want: "IC-7300"},
+		{name: "unnamed shows the profile name", profile: "portable", want: "portable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := config.Session{RigEnabled: true, RigProfileName: tt.profile, Config: base}
+			assert.Equal(t, tt.want, rigName(session))
+		})
+	}
+}
+
 func TestParseFlagsSyncEQSL(t *testing.T) {
 	var stderr strings.Builder
 	opts, _, ok := parseFlags([]string{"--sync-eqsl"}, &stderr)
