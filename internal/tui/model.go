@@ -141,6 +141,7 @@ func New(opts ...Option) Model {
 		tick:       tea.Tick,
 		getenv:     os.Getenv,
 	}
+	m.help.Styles = m.styles.footerHelp()
 	for _, opt := range opts {
 		opt(&m)
 	}

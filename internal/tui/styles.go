@@ -169,6 +169,20 @@ func bandStyles(dark bool) map[string]lipgloss.Style {
 	return out
 }
 
+// footerHelp returns the styles of the footer's key help: its keys look
+// like the help modal's, and its descriptions and separators are muted.
+func (st styles) footerHelp() help.Styles {
+	return help.Styles{
+		Ellipsis:       st.muted,
+		ShortKey:       st.helpKey,
+		ShortDesc:      st.muted,
+		ShortSeparator: st.muted,
+		FullKey:        st.helpKey,
+		FullDesc:       st.muted,
+		FullSeparator:  st.muted,
+	}
+}
+
 // withoutColor returns st for a terminal that shows no colors, such as
 // under NO_COLOR. The cursor bar would lose its background there, so the
 // cursor is reverse video instead.
@@ -193,7 +207,7 @@ func (m Model) setBackground(dark bool) Model {
 	if m.colorless {
 		m.styles = m.styles.withoutColor()
 	}
-	m.help.Styles = help.DefaultStyles(dark)
+	m.help.Styles = m.styles.footerHelp()
 	m.input.SetStyles(inputStyles(dark))
 	m.entry.setDark(dark)
 	if m.helpModal.open {
