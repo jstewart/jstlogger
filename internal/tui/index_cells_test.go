@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,12 +52,7 @@ func TestCellStyle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cells := f.Values(q, tt.row, indexfmt.Km)
-			j := -1
-			for i, it := range f.Items {
-				if it.Field == tt.field {
-					j = i
-				}
-			}
+			j := slices.IndexFunc(f.Items, func(it indexfmt.Item) bool { return it.Field == tt.field })
 			require.GreaterOrEqual(t, j, 0, "the format has the field")
 			s, ok := cellStyle(st, f.Items[j], cells[j], tt.row, tt.recent)
 			assert.Equal(t, tt.styled, ok)

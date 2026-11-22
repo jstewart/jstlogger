@@ -34,27 +34,20 @@ var (
 	lightAmber  = lipgloss.Color("166")
 )
 
-// bandColors are the palette colors of the index's band cells. Bands left
-// out keep the default foreground.
-var bandColors = map[string]string{
-	"160m": "9",
-	"80m":  "1",
-	"40m":  "3",
-	"30m":  "11",
-	"20m":  "2",
-	"17m":  "14",
-	"15m":  "4",
-	"12m":  "13",
-	"10m":  "5",
-	"6m":   "12",
-}
-
-// lightBandColors replace the band colors that are pale on a light
-// background.
-var lightBandColors = map[string]string{
-	"3":  "136",
-	"11": "172",
-	"14": "30",
+// bandColors are the colors of the index's band cells: a palette color,
+// and for the bands whose color is pale on a light background, a darker
+// stand-in. Bands left out keep the default foreground.
+var bandColors = map[string]struct{ dark, light string }{
+	"160m": {dark: "9"},
+	"80m":  {dark: "1"},
+	"40m":  {dark: "3", light: "136"},
+	"30m":  {dark: "11", light: "172"},
+	"20m":  {dark: "2"},
+	"17m":  {dark: "14", light: "30"},
+	"15m":  {dark: "4"},
+	"12m":  {dark: "13"},
+	"10m":  {dark: "5"},
+	"6m":   {dark: "12"},
 }
 
 type styles struct {
@@ -166,10 +159,11 @@ func defaultStyles(dark bool) styles {
 func bandStyles(dark bool) map[string]lipgloss.Style {
 	out := make(map[string]lipgloss.Style, len(bandColors))
 	for band, c := range bandColors {
-		if light, ok := lightBandColors[c]; ok && !dark {
-			c = light
+		color := c.dark
+		if !dark && c.light != "" {
+			color = c.light
 		}
-		out[band] = lipgloss.NewStyle().Foreground(lipgloss.Color(c))
+		out[band] = lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 	}
 	return out
 }
