@@ -97,6 +97,9 @@ format            = "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C
 pager_index_lines = 10   # Index rows kept above the QSO pager
 sort              = "reverse-date"   # date | call | band | mode | country | state | continent, oldest or A to Z first; a "reverse-" prefix flips it
 
+[ui]
+background = "auto"   # "auto" | "dark" | "light"; auto asks the terminal and assumes dark if it doesn't answer
+
 # [callbook]
 # services  = ["qrz", "hamqth"]   # Tried in order until one finds the call; empty disables lookups
 # cache_ttl = "168h"              # How long to keep a found call; "0" keeps it for the session only
@@ -172,6 +175,7 @@ func TestFullExampleLoads(t *testing.T) {
 			},
 		},
 		Logbook:  Logbook{DistanceUnit: DistanceUnitMi},
+		UI:       UI{Background: BackgroundAuto},
 		Index:    Index{Format: indexfmt.Default, PagerIndexLines: 10, Sort: "reverse-date"},
 		Callbook: Callbook{CacheTTL: DefaultCallbookCacheTTL},
 	}, c)

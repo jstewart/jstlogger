@@ -185,6 +185,21 @@ func TestValidate(t *testing.T) {
 			wantKeys: []string{"logbook.distance_unit"},
 		},
 		{
+			name:     "background light is valid",
+			mutate:   func(c *Config) { c.UI.Background = BackgroundLight },
+			wantKeys: nil,
+		},
+		{
+			name:     "background must be auto, dark or light",
+			mutate:   func(c *Config) { c.UI.Background = "sepia" },
+			wantKeys: []string{"ui.background"},
+		},
+		{
+			name:     "background must not be empty",
+			mutate:   func(c *Config) { c.UI.Background = "" },
+			wantKeys: []string{"ui.background"},
+		},
+		{
 			name:     "custom index format is valid",
 			mutate:   func(c *Config) { c.Index.Format = "%-10c %-*C" },
 			wantKeys: nil,

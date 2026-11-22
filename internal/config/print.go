@@ -19,6 +19,7 @@ type tomlConfig struct {
 	Logbook        tomlLogbook            `toml:"logbook"`
 	Index          Index                  `toml:"index"`
 	Callbook       tomlCallbook           `toml:"callbook"`
+	UI             UI                     `toml:"ui"`
 }
 
 // tomlCallbook mirrors Callbook for encoding, with cache_ttl as a duration
@@ -80,6 +81,7 @@ func WriteTOML(w io.Writer, c Config) error {
 		},
 		Logbook: tomlLogbook(c.Logbook),
 		Index:   c.Index,
+		UI:      c.UI,
 		Callbook: tomlCallbook{
 			Services: c.Callbook.Services,
 			CacheTTL: c.Callbook.CacheTTL.String(),
