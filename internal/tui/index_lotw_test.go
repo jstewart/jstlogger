@@ -79,18 +79,42 @@ func TestIndexLoTWColumn(t *testing.T) {
 	assert.Contains(t, plain(rowLine(t, m, "P/QRP/7")), "  P/QRP/7")
 }
 
-func TestIndexLoTWCursorRowIsPlain(t *testing.T) {
+// cursorRow returns the index row that shows call, without the body's
+// padding around it.
+func cursorRow(t *testing.T, m Model, call string) string {
+	t.Helper()
+	line := rowLine(t, m, call)
+	require.True(t, strings.HasPrefix(line, " ") && strings.HasSuffix(line, " "), "the body pads %q", line)
+	return line[1 : len(line)-1]
+}
+
+func TestIndexLoTWCursorRowKeepsColor(t *testing.T) {
 	st := defaultStyles(true)
 	f := &fakeLoTW{users: lotwUsers()}
 	m := newIndexLoTWModel(t, f, lotwIndexFormat, lotwQSO(2, "W1AW"), lotwQSO(1, "K1ABC"))
 
-	line := rowLine(t, m, "W1AW")
-	assert.NotContains(t, line, st.lotwRecent.Render("L"), "the cursor row's L is not colored")
-	assert.Contains(t, line, st.cursor.Render(pad("L W1AW", m.bodyWidth())), "the highlight is unbroken")
+	line := cursorRow(t, m, "W1AW")
+	assert.Contains(t, line, onBar(st.cursor, st.lotwRecent).Render("L"), "the cursor row's L keeps its color")
+	assert.Empty(t, offStyle(line, barBg), "the bar is unbroken")
+	assert.Equal(t, m.bodyWidth(), lipgloss.Width(line))
 
 	m = pressPager(t, m, keyPress('j', 0))
 	assert.Contains(t, rowLine(t, m, "W1AW"), st.lotwRecent.Render("L"), "off the cursor it is colored")
-	assert.NotContains(t, rowLine(t, m, "K1ABC"), st.lotwActive.Render("L"))
+	assert.Contains(t, rowLine(t, m, "K1ABC"), onBar(st.cursor, st.lotwActive).Render("L"))
+}
+
+func TestOnBar(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		st := defaultStyles(dark)
+		s := onBar(st.cursor, st.lotwRecent)
+		assert.Equal(t, st.lotwRecent.GetForeground(), s.GetForeground(), "a cell keeps its color")
+		assert.Equal(t, st.cursor.GetBackground(), s.GetBackground(), "on the bar")
+
+		s = onBar(st.cursor, st.lotwInactive)
+		assert.Equal(t, st.cursor.GetForeground(), s.GetForeground(), "a color the bar would hide is the bar's text color")
+		assert.True(t, s.GetFaint(), "it is still dim")
+		assert.False(t, s.GetBold(), "and not bold")
+	}
 }
 
 func TestIndexLoTWPagerStrip(t *testing.T) {
@@ -103,7 +127,8 @@ func TestIndexLoTWPagerStrip(t *testing.T) {
 	lines := strings.Split(m.View().Content, "\n")
 	strip := strings.Join(lines[1:1+m.idx.height], "\n")
 	assert.Contains(t, plain(strip), "L W1AW")
-	assert.NotContains(t, strip, st.lotwRecent.Render("L"), "the cursor row's L is not colored")
+	assert.Contains(t, strip, onBar(st.cursor, st.lotwRecent).Render("L"), "the strip's cursor row keeps its color")
+	assert.Empty(t, offStyle(cursorRow(t, m, "W1AW"), barBg), "the strip uses the bar")
 	assert.Contains(t, strip, st.lotwActive.Render("L"))
 }
 

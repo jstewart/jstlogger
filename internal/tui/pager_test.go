@@ -78,7 +78,7 @@ func TestPagerKeepsIndexLinesAboveIt(t *testing.T) {
 	assert.Equal(t, defaultPagerIndexLines, m.idx.height, "the index is cut to the strip")
 
 	raw := strings.Split(m.View().Content, "\n")
-	assert.Contains(t, raw[1+cursor[0]], "\x1b[7m", "the strip highlights the cursor")
+	assert.Equal(t, "  ", offStyle(raw[1+cursor[0]], barBg), "the strip highlights the cursor, inside the body's padding")
 }
 
 func TestPagerIndexLinesOption(t *testing.T) {

@@ -39,8 +39,21 @@ func TestDefaultStylesForTheBackground(t *testing.T) {
 			assert.Equal(t, lipgloss.Color(tt.light), tt.style(defaultStyles(false)).GetForeground(), "light")
 		})
 	}
-	assert.True(t, defaultStyles(true).cursor.GetReverse(), "the cursor row shows without colors")
-	assert.True(t, defaultStyles(false).cursor.GetReverse())
+}
+
+func TestCursorBar(t *testing.T) {
+	for _, tt := range []struct {
+		dark bool
+		bg   string
+	}{{true, "8"}, {false, "244"}} {
+		t.Run(fmt.Sprintf("dark=%t", tt.dark), func(t *testing.T) {
+			c := defaultStyles(tt.dark).cursor
+			assert.Equal(t, lipgloss.Color(tt.bg), c.GetBackground(), "the bar is the muted gray")
+			assert.Equal(t, barText, c.GetForeground())
+			assert.True(t, c.GetBold())
+			assert.False(t, c.GetReverse())
+		})
+	}
 }
 
 // assertBackground checks that m's styles, and those of its inputs and

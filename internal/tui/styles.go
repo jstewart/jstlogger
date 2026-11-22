@@ -19,6 +19,8 @@ var (
 	brightPurple = lipgloss.Color("13")
 	// amber is distinct from yellow, which HamQTH's badge uses.
 	amber = lipgloss.Color("214")
+	// barText is the bright white of the text on the cursor bar.
+	barText = lipgloss.Color("15")
 )
 
 // On a light background, fixed 256-color stand-ins replace the palette
@@ -43,7 +45,7 @@ type styles struct {
 	err    lipgloss.Style
 
 	// indexHeader renders the index column header and cursor the bar
-	// across the row under the cursor.
+	// across the row under the cursor, which keeps the row's cell colors.
 	indexHeader lipgloss.Style
 	cursor      lipgloss.Style
 
@@ -101,7 +103,7 @@ func defaultStyles(dark bool) styles {
 		muted:        lipgloss.NewStyle().Foreground(muted),
 		err:          lipgloss.NewStyle().Foreground(bad),
 		indexHeader:  lipgloss.NewStyle().Bold(true),
-		cursor:       lipgloss.NewStyle().Reverse(true),
+		cursor:       lipgloss.NewStyle().Background(muted).Foreground(barText).Bold(true),
 		tab:          lipgloss.NewStyle().Bold(true).Reverse(true),
 		label:        lipgloss.NewStyle().Bold(true),
 		rigFreq:      lipgloss.NewStyle().Bold(true),
