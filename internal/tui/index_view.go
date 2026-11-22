@@ -185,24 +185,72 @@ func (x index) rowView(st styles, i, width, nw int) string {
 	}
 	last, user := x.lotw.lastUpload(q.Call)
 	cells := x.format.Values(q, indexfmt.Row{Marked: x.marks[q.ID], LoTW: user}, x.unit)
-	if i == x.cursor {
-		// Colors inside the cursor's reverse video would break it up.
-		return st.cursor.Render(numberLine(num, nw, width, func(w int) string {
-			return formatLine(x.format, cells, w)
-		}))
+	lotwCell, colored := lotwStyle(st, lotw.RecencyOf(last, x.lotw.now()))
+	cellStyle := func(j int) (lipgloss.Style, bool) {
+		return lotwCell, colored && x.format.Items[j].Field == indexfmt.FieldLoTW
 	}
 	var style func(int, string) string
-	if s, ok := lotwStyle(st, lotw.RecencyOf(last, x.lotw.now())); ok {
-		style = func(i int, v string) string {
-			if x.format.Items[i].Field != indexfmt.FieldLoTW {
-				return v
+	switch {
+	case i == x.cursor:
+		style = func(j int, v string) string {
+			if s, ok := cellStyle(j); ok {
+				return onBar(st.cursor, s).Render(v)
 			}
-			return s.Render(v)
+			return v
+		}
+	case colored:
+		style = func(j int, v string) string {
+			if s, ok := cellStyle(j); ok {
+				return s.Render(v)
+			}
+			return v
 		}
 	}
-	return numberLine(num, nw, width, func(w int) string {
+	line := numberLine(num, nw, width, func(w int) string {
 		return formatStyledLine(x.format, cells, w, style)
 	})
+	if i == x.cursor {
+		return fillBar(st.cursor, line)
+	}
+	return line
+}
+
+// onBar returns cell style s for a cell on the cursor bar: s with the
+// bar's background and whatever else of the bar s leaves unset. A
+// foreground that matches the bar would hide the cell, so it gives way to
+// the bar's, and a faint cell stays faint rather than taking the bar's
+// bold.
+func onBar(bar, s lipgloss.Style) lipgloss.Style {
+	if s.GetForeground() == bar.GetBackground() {
+		s = s.UnsetForeground()
+	}
+	if s.GetFaint() {
+		s = s.Bold(false)
+	}
+	return s.Inherit(bar)
+}
+
+// fillBar puts the unstyled runs of line, such as the number column, the
+// plain cells and the padding, on the cursor bar, so the bar spans the line
+// unbroken around the cells styled with onBar. Each styled cell is one SGR
+// sequence ended by a reset, as Style.Render writes it.
+func fillBar(bar lipgloss.Style, line string) string {
+	const reset = "\x1b[m"
+	var b strings.Builder
+	parts := strings.Split(line, reset)
+	for i, p := range parts {
+		text, styled, ok := strings.Cut(p, "\x1b[")
+		if text != "" {
+			b.WriteString(bar.Render(text))
+		}
+		if ok {
+			b.WriteString("\x1b[" + styled)
+			if i < len(parts)-1 {
+				b.WriteString(reset)
+			}
+		}
+	}
+	return b.String()
 }
 
 // statusView renders the position, the sort unless it is the default, the

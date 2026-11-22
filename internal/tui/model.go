@@ -34,6 +34,9 @@ type Model struct {
 	// a dark or a light background. Otherwise the terminal is asked, and
 	// the styles are for a dark one until it answers.
 	fixedBackground bool
+	// colorless reports whether the terminal shows no colors, such as
+	// under NO_COLOR, which the styles make up for.
+	colorless bool
 	// helpModal lists the keybindings in effect, over the body, while open.
 	helpModal helpModal
 
@@ -329,6 +332,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if !m.fixedBackground {
 			m = m.setBackground(msg.IsDark())
 		}
+
+	case tea.ColorProfileMsg:
+		m = m.setColorProfile(msg.Profile)
 
 	case rig.ConnectionChanged:
 		m.rigState.conn = msg

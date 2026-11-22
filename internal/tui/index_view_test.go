@@ -3,9 +3,11 @@ package tui
 import (
 	"database/sql"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
@@ -25,6 +27,63 @@ var osc8 = regexp.MustCompile("\x1b]8;[^;]*;[^\x07\x1b]*(?:\x07|\x1b\\\\)")
 // plain strips styling and hyperlinks from s.
 func plain(s string) string {
 	return osc8.ReplaceAllString(sgr.ReplaceAllString(s, ""), "")
+}
+
+// barBg is the SGR parameter for the dark cursor bar's background, ANSI 8.
+const barBg = "100"
+
+// offStyle returns the text of line that is not styled with the SGR
+// parameter param, such as barBg, so an unbroken bar leaves none.
+func offStyle(line, param string) string {
+	var b strings.Builder
+	on := false
+	for line != "" {
+		if loc := sgr.FindStringIndex(line); loc != nil && loc[0] == 0 {
+			on = slices.Contains(strings.Split(line[2:loc[1]-1], ";"), param)
+			line = line[loc[1]:]
+			continue
+		}
+		r, n := utf8.DecodeRuneInString(line)
+		if !on {
+			b.WriteRune(r)
+		}
+		line = line[n:]
+	}
+	return b.String()
+}
+
+func TestFillBar(t *testing.T) {
+	bar := defaultStyles(true).cursor
+	cell := onBar(bar, lipgloss.NewStyle().Foreground(good)).Render("L")
+	tests := []struct {
+		name, line, want string
+	}{
+		{"plain", "  W1AW  ", bar.Render("  W1AW  ")},
+		{"a styled cell", "1 " + cell + " W1AW  ", bar.Render("1 ") + cell + bar.Render(" W1AW  ")},
+		{"styled cells side by side", cell + cell, cell + cell},
+		{"an unclosed style", "1 \x1b[32mL", bar.Render("1 ") + "\x1b[32mL"},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, fillBar(bar, tt.line))
+		})
+	}
+}
+
+func TestIndexViewPlaceholderCursor(t *testing.T) {
+	x := newIndex()
+	x.applyLoad(indexLoadedMsg{total: 1000, rows: testQSOs(indexBlockSize)})
+	x.setHeight(5)
+	x.last()
+
+	for _, numbered := range []bool{false, true} {
+		lines := strings.Split(x.view(defaultStyles(true), 78, 7, numbered), "\n")
+		row := lines[len(lines)-2]
+		assert.Contains(t, plain(row), "  …")
+		assert.Empty(t, offStyle(row, barBg), "the placeholder under the cursor is on the bar")
+		assert.Equal(t, 78, lipgloss.Width(row))
+	}
 }
 
 func TestIndexCells(t *testing.T) {
@@ -235,8 +294,8 @@ func TestIndexView(t *testing.T) {
 	assert.True(t, strings.HasPrefix(lines[2], "* "), "row 10 is marked")
 	assert.True(t, strings.HasPrefix(plain(lines[4]), "* "), "the cursor row can be marked too")
 	assert.Contains(t, lines[4], "K4556A")
-	assert.NotEqual(t, lines[4], plain(lines[4]), "the cursor row is highlighted")
-	assert.Equal(t, 78, lipgloss.Width(lines[4]), "the cursor bar spans the row")
+	assert.Empty(t, offStyle(lines[4], barBg), "the cursor bar spans the row")
+	assert.Equal(t, 78, lipgloss.Width(lines[4]))
 	assert.Equal(t, "QSO 12/4,567 · 3 marked", lines[6])
 }
 
@@ -253,7 +312,7 @@ func TestIndexViewNumbered(t *testing.T) {
 	assert.True(t, strings.HasPrefix(lines[1], "   9   "), "row 8 is QSO 9")
 	assert.True(t, strings.HasPrefix(lines[2], "  10 * "), "the mark follows the number")
 	assert.True(t, strings.HasPrefix(plain(lines[4]), "  12 "), "the cursor row is numbered too")
-	assert.NotEqual(t, lines[4], plain(lines[4]), "the cursor row is highlighted")
+	assert.Empty(t, offStyle(lines[4], barBg), "the bar spans the number column too")
 	for _, l := range lines[:6] {
 		assert.Equal(t, 78, lipgloss.Width(l), "each line spans the width")
 	}

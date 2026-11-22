@@ -3,6 +3,7 @@ package tui
 import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 // ANSI palette indexes keep colors consistent with the user's terminal theme.
@@ -19,6 +20,8 @@ var (
 	brightPurple = lipgloss.Color("13")
 	// amber is distinct from yellow, which HamQTH's badge uses.
 	amber = lipgloss.Color("214")
+	// barText is the bright white of the text on the cursor bar.
+	barText = lipgloss.Color("15")
 )
 
 // On a light background, fixed 256-color stand-ins replace the palette
@@ -43,7 +46,7 @@ type styles struct {
 	err    lipgloss.Style
 
 	// indexHeader renders the index column header and cursor the bar
-	// across the row under the cursor.
+	// across the row under the cursor, which keeps the row's cell colors.
 	indexHeader lipgloss.Style
 	cursor      lipgloss.Style
 
@@ -101,7 +104,7 @@ func defaultStyles(dark bool) styles {
 		muted:        lipgloss.NewStyle().Foreground(muted),
 		err:          lipgloss.NewStyle().Foreground(bad),
 		indexHeader:  lipgloss.NewStyle().Bold(true),
-		cursor:       lipgloss.NewStyle().Reverse(true),
+		cursor:       lipgloss.NewStyle().Background(muted).Foreground(barText).Bold(true),
 		tab:          lipgloss.NewStyle().Bold(true).Reverse(true),
 		label:        lipgloss.NewStyle().Bold(true),
 		rigFreq:      lipgloss.NewStyle().Bold(true),
@@ -123,6 +126,14 @@ func defaultStyles(dark bool) styles {
 	}
 }
 
+// withoutColor returns st for a terminal that shows no colors, such as
+// under NO_COLOR. The cursor bar would lose its background there, so the
+// cursor is reverse video instead.
+func (st styles) withoutColor() styles {
+	st.cursor = lipgloss.NewStyle().Reverse(true)
+	return st
+}
+
 // WithBackground fixes the styles for a dark or a light background, rather
 // than asking the terminal for its background color.
 func WithBackground(dark bool) Option {
@@ -133,9 +144,12 @@ func WithBackground(dark bool) Option {
 }
 
 // setBackground restyles m, with its help and text inputs, for a dark or a
-// light background.
+// light background, and for a terminal without colors when it is one.
 func (m Model) setBackground(dark bool) Model {
 	m.styles = defaultStyles(dark)
+	if m.colorless {
+		m.styles = m.styles.withoutColor()
+	}
 	m.help.Styles = help.DefaultStyles(dark)
 	m.input.SetStyles(inputStyles(dark))
 	m.entry.setDark(dark)
@@ -147,4 +161,11 @@ func (m Model) setBackground(dark bool) Model {
 		m.rigModal.passband.SetStyles(inputStyles(dark))
 	}
 	return m
+}
+
+// setColorProfile restyles m for the terminal's color profile p: without
+// colors, the cursor is reverse video.
+func (m Model) setColorProfile(p colorprofile.Profile) Model {
+	m.colorless = p == colorprofile.ASCII || p == colorprofile.NoTTY
+	return m.setBackground(m.styles.dark)
 }
