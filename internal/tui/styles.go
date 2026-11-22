@@ -34,6 +34,29 @@ var (
 	lightAmber  = lipgloss.Color("166")
 )
 
+// bandColors are the palette colors of the index's band cells. Bands left
+// out keep the default foreground.
+var bandColors = map[string]string{
+	"160m": "9",
+	"80m":  "1",
+	"40m":  "3",
+	"30m":  "11",
+	"20m":  "2",
+	"17m":  "14",
+	"15m":  "4",
+	"12m":  "13",
+	"10m":  "5",
+	"6m":   "12",
+}
+
+// lightBandColors replace the band colors that are pale on a light
+// background.
+var lightBandColors = map[string]string{
+	"3":  "136",
+	"11": "172",
+	"14": "30",
+}
+
 type styles struct {
 	// dark reports whether the styles are for a dark background.
 	dark bool
@@ -49,6 +72,14 @@ type styles struct {
 	// across the row under the cursor, which keeps the row's cell colors.
 	indexHeader lipgloss.Style
 	cursor      lipgloss.Style
+
+	// indexCall, indexDim and indexMark render the index's call cells, its
+	// date, time and RST cells, and the mark of a marked row; bands holds
+	// the style of each colored band's cell, keyed by band name.
+	indexCall lipgloss.Style
+	indexDim  lipgloss.Style
+	indexMark lipgloss.Style
+	bands     map[string]lipgloss.Style
 
 	// tab renders the open pager tab and label a field's label.
 	tab   lipgloss.Style
@@ -105,6 +136,10 @@ func defaultStyles(dark bool) styles {
 		err:          lipgloss.NewStyle().Foreground(bad),
 		indexHeader:  lipgloss.NewStyle().Bold(true),
 		cursor:       lipgloss.NewStyle().Background(muted).Foreground(barText).Bold(true),
+		indexCall:    lipgloss.NewStyle().Bold(true).Foreground(accent),
+		indexDim:     lipgloss.NewStyle().Foreground(muted),
+		indexMark:    lipgloss.NewStyle().Bold(true).Foreground(yellow),
+		bands:        bandStyles(dark),
 		tab:          lipgloss.NewStyle().Bold(true).Reverse(true),
 		label:        lipgloss.NewStyle().Bold(true),
 		rigFreq:      lipgloss.NewStyle().Bold(true),
@@ -124,6 +159,19 @@ func defaultStyles(dark bool) styles {
 		helpHeading:  lipgloss.NewStyle().Bold(true).Foreground(blue),
 		helpKey:      lipgloss.NewStyle().Bold(true).Foreground(purple),
 	}
+}
+
+// bandStyles returns the styles of the index's band cells for a dark or a
+// light background.
+func bandStyles(dark bool) map[string]lipgloss.Style {
+	out := make(map[string]lipgloss.Style, len(bandColors))
+	for band, c := range bandColors {
+		if light, ok := lightBandColors[c]; ok && !dark {
+			c = light
+		}
+		out[band] = lipgloss.NewStyle().Foreground(lipgloss.Color(c))
+	}
+	return out
 }
 
 // withoutColor returns st for a terminal that shows no colors, such as
