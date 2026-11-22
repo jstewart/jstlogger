@@ -387,13 +387,13 @@ func TestEntrySave(t *testing.T) {
 	assert.True(t, m.entry.open, "ctrl+s leaves the screen open for the next QSO")
 	for f, want := range map[qsoentry.Field]string{
 		qsoentry.Date: "2026-11-09", qsoentry.Mode: "CW", qsoentry.Freq: "7030", qsoentry.Band: "40m",
-		qsoentry.RSTSent: "599", qsoentry.RSTRcvd: "599",
-		qsoentry.TimeOn: "", qsoentry.Call: "", qsoentry.Name: "", qsoentry.Gridsquare: "",
+		qsoentry.RSTSent: "599", qsoentry.RSTRcvd: "599", qsoentry.TimeOn: "14:05",
+		qsoentry.Call: "", qsoentry.Name: "", qsoentry.Gridsquare: "",
 		qsoentry.Comment: "", qsoentry.Tags: "",
 	} {
 		assert.Equal(t, want, entryValue(m, f), "%s after saving", f)
 	}
-	assert.Equal(t, qsoentry.TimeOn, m.entry.focus, "the next QSO starts at its time")
+	assert.Equal(t, qsoentry.Call, m.entry.focus, "the next QSO starts at the call")
 	assert.Contains(t, bodyText(m), "Saved QSO with K1ABC.")
 	assert.Equal(t, 3, m.idx.total, "the index reloads")
 
