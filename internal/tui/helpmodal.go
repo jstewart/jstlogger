@@ -94,9 +94,10 @@ type helpRow struct {
 	binding key.Binding
 }
 
-// newHelpModal returns an open help modal listing the sections of keys.
-func newHelpModal(keys helpKeyMap) helpModal {
-	in := newInput()
+// newHelpModal returns an open help modal listing the sections of keys,
+// its filter styled for a dark or a light background.
+func newHelpModal(keys helpKeyMap, dark bool) helpModal {
+	in := newInput(dark)
 	in.Prompt = ""
 	return helpModal{open: true, sections: keys.sections(), input: in}
 }
@@ -391,7 +392,7 @@ func (m Model) contextKeys() helpKeyMap {
 
 // openHelp opens the help modal on the keybindings in effect.
 func (m Model) openHelp() Model {
-	m.helpModal = newHelpModal(m.contextKeys())
+	m.helpModal = newHelpModal(m.contextKeys(), m.styles.dark)
 	return m
 }
 

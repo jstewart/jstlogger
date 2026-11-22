@@ -175,7 +175,7 @@ func TestIndexViewCustomFormat(t *testing.T) {
 			x.applyLoad(indexLoadedMsg{total: 1, rows: []logbook.QSO{q}})
 			x.setHeight(1)
 
-			lines := strings.Split(x.view(defaultStyles(), 30, 3, false), "\n")
+			lines := strings.Split(x.view(defaultStyles(true), 30, 3, false), "\n")
 
 			require.Len(t, lines, 3)
 			assert.Equal(t, "Call    | Band Dist"+strings.Repeat(" ", 11), plain(lines[0]), "the header titles follow the format")
@@ -227,7 +227,7 @@ func TestIndexView(t *testing.T) {
 	x.marks[x.blocks[0][11].ID] = true
 	x.marks[42] = true
 
-	lines := strings.Split(x.view(defaultStyles(), 78, 7, false), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
 
 	require.Len(t, lines, 7, "header, five rows and the status line")
 	assert.True(t, strings.HasPrefix(plain(lines[0]), "  Date       Time  Call       Mode   RST S RST R Band  Country      Station"))
@@ -245,7 +245,7 @@ func TestIndexViewNumbered(t *testing.T) {
 	x.cursor, x.top = 11, 8
 	x.marks[x.blocks[0][9].ID] = true
 
-	lines := strings.Split(x.view(defaultStyles(), 78, 7, true), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 78, 7, true), "\n")
 
 	require.Len(t, lines, 7, "header, five rows and the status line")
 	header := plain(lines[0])
@@ -260,7 +260,7 @@ func TestIndexViewNumbered(t *testing.T) {
 	assert.Equal(t, strings.Index(header, "Call"), strings.Index(lines[1], "K4559A"), "the columns line up")
 	assert.Equal(t, "QSO 12/4,567 · 1 marked", lines[6])
 
-	unnumbered := strings.Split(x.view(defaultStyles(), 78, 7, false), "\n")
+	unnumbered := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
 	assert.True(t, strings.HasPrefix(plain(unnumbered[0]), "  Date"), "no number column when not numbered")
 }
 
@@ -269,7 +269,7 @@ func TestIndexViewNumberedPlaceholder(t *testing.T) {
 	delete(x.blocks, 1)
 	x.last()
 
-	lines := strings.Split(x.view(defaultStyles(), 40, 7, true), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 40, 7, true), "\n")
 
 	require.Len(t, lines, 7)
 	for i, want := range []string{" 996   …", " 997   …", " 998   …", " 999   …", "1000   …"} {
@@ -282,7 +282,7 @@ func TestIndexViewStatusMessage(t *testing.T) {
 	x := loadedIndex(3, 5)
 	x.msg = msgFirstQSO
 
-	lines := strings.Split(x.view(defaultStyles(), 78, 7, false), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
 
 	require.Len(t, lines, 7, "the status line stays at the bottom")
 	assert.Equal(t, "QSO 1/3 · You are on the first QSO.", lines[6])
@@ -293,7 +293,7 @@ func TestIndexViewPlaceholder(t *testing.T) {
 	delete(x.blocks, 1)
 	x.last()
 
-	lines := strings.Split(x.view(defaultStyles(), 40, 7, false), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 40, 7, false), "\n")
 
 	require.Len(t, lines, 7)
 	for _, l := range lines[1:6] {
@@ -302,7 +302,7 @@ func TestIndexViewPlaceholder(t *testing.T) {
 }
 
 func TestIndexViewStates(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 
 	assert.Equal(t, "Loading…", plain(newIndex().view(st, 78, 10, false)))
 	assert.Equal(t, "No QSOs yet.", plain(loadedIndex(0, 8).view(st, 78, 10, false)))
@@ -317,7 +317,7 @@ func TestIndexViewStates(t *testing.T) {
 }
 
 func TestIndexStatusSort(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	x := loadedIndex(1234, 8)
 	assert.Equal(t, "QSO 1/1,234", plain(x.statusView(st, 80)), "the default sort is not shown")
 
@@ -332,7 +332,7 @@ func TestIndexStatusSort(t *testing.T) {
 }
 
 func TestIndexStatusLimit(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	x := loadedIndex(1234, 8)
 	x.marks[1] = true
 	x.msg = "No QSOs match the pattern."

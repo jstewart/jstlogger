@@ -27,7 +27,7 @@ func update(t *testing.T, m Model, msg tea.Msg) (Model, tea.Cmd) {
 }
 
 func TestInit(t *testing.T) {
-	assert.Nil(t, New().Init())
+	assert.Nil(t, New(WithBackground(true)).Init(), "nothing to load or ask for")
 }
 
 func TestQuitKeys(t *testing.T) {

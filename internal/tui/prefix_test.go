@@ -183,7 +183,7 @@ func TestPrefixHelpWithoutLogbook(t *testing.T) {
 }
 
 func TestStatusViewPrefixWithLimit(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	x := loadedIndex(1234, 8)
 	x.marks[1] = true
 	x.prefix = true

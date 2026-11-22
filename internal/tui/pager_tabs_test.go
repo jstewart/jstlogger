@@ -137,7 +137,7 @@ func TestPagerTabPersistsAcrossQSOs(t *testing.T) {
 }
 
 func TestTabBarMarksActiveTab(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	for tb := range pagerTabCount {
 		bar := tabBar(st, pagerTabNames[:], int(tb), 80)
 		assert.Equal(t, 80, lipgloss.Width(bar))
@@ -161,7 +161,7 @@ func TestPagerTabBarFollowsTab(t *testing.T) {
 }
 
 func TestStationTab(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	tab := plain(stationTab(st, stationQSO(), "Home QTH", 80))
 	lines := strings.Split(tab, "\n")
 	for _, want := range []string{
@@ -226,7 +226,7 @@ func TestQSLTab(t *testing.T) {
 		{Service: logbook.ServiceClubLog, Rcvd: "R"},
 		{Service: logbook.ServiceCard, Sent: "R"},
 	}}
-	tab := plain(qslTab(defaultStyles(), q, 80))
+	tab := plain(qslTab(defaultStyles(true), q, 80))
 	lines := strings.Split(tab, "\n")
 
 	assert.Contains(t, lines, "LoTW sent          Yes 2024-01-02")
@@ -246,17 +246,17 @@ func TestQSLTab(t *testing.T) {
 	}
 	assert.Equal(t, []string{"Card", "LoTW", "eQSL", "Club Log", "qrz"}, order)
 
-	none := plain(qslTab(defaultStyles(), logbook.QSO{}, 80))
+	none := plain(qslTab(defaultStyles(true), logbook.QSO{}, 80))
 	assert.Equal(t, "No confirmations", none)
 
-	for _, line := range strings.Split(plain(qslTab(defaultStyles(), q, 15)), "\n") {
+	for _, line := range strings.Split(plain(qslTab(defaultStyles(true), q, 15)), "\n") {
 		assert.LessOrEqual(t, lipgloss.Width(line), 15, "lines fit the width: %q", line)
 	}
 }
 
 func TestADIFTab(t *testing.T) {
 	q := stationQSO()
-	tab := plain(adifTab(defaultStyles(), q, 80))
+	tab := plain(adifTab(defaultStyles(true), q, 80))
 	lines := strings.Split(tab, "\n")
 
 	var names []string
@@ -270,7 +270,7 @@ func TestADIFTab(t *testing.T) {
 	callRow := lines[slices.Index(names, "CALL")]
 	assert.True(t, strings.HasSuffix(callRow, " JA1ABC"), "%q", callRow)
 
-	for _, line := range strings.Split(plain(adifTab(defaultStyles(), q, 12)), "\n") {
+	for _, line := range strings.Split(plain(adifTab(defaultStyles(true), q, 12)), "\n") {
 		assert.LessOrEqual(t, lipgloss.Width(line), 12, "lines fit the width: %q", line)
 	}
 }

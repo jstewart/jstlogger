@@ -80,7 +80,7 @@ func eqslValue(t *testing.T, m Model) string {
 }
 
 func TestEQSLBadgeStylesDiffer(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	ag, notAG, plainE := st.eQSLAG.Render("[E]"), st.eQSLNotAG.Render("[E]"), st.eQSL.Render("[E]")
 	assert.NotEqual(t, ag, notAG)
 	assert.NotEqual(t, ag, plainE, "a member's badge differs from today's")
@@ -88,7 +88,7 @@ func TestEQSLBadgeStylesDiffer(t *testing.T) {
 }
 
 func TestEQSLBadgeByMembership(t *testing.T) {
-	st, url := defaultStyles(), callsign.EQSLURL("W1AW")
+	st, url := defaultStyles(true), callsign.EQSLURL("W1AW")
 	ag := st.eQSLAG.Hyperlink(url).Render("[E]")
 	notAG := st.eQSLNotAG.Hyperlink(url).Render("[E]")
 	today := st.eQSL.Hyperlink(url).Render("[E]")
@@ -127,7 +127,7 @@ func TestEQSLWithoutLookup(t *testing.T) {
 	m := newLookupModel(t, "W1AW", 80)
 
 	url := callsign.EQSLURL("W1AW")
-	assert.Contains(t, m.View().Content, defaultStyles().eQSL.Hyperlink(url).Render("[E]"), "[E] is as before")
+	assert.Contains(t, m.View().Content, defaultStyles(true).eQSL.Hyperlink(url).Render("[E]"), "[E] is as before")
 	_, ok := eqslLine(m)
 	assert.False(t, ok, "no eQSL AG row without a lookup")
 }
@@ -142,7 +142,7 @@ func TestEQSLPendingShowsTodaysBadge(t *testing.T) {
 	m, _ = update(t, m, enter())
 
 	url := callsign.EQSLURL("W1AW")
-	assert.Contains(t, m.View().Content, defaultStyles().eQSL.Hyperlink(url).Render("[E]"))
+	assert.Contains(t, m.View().Content, defaultStyles(true).eQSL.Hyperlink(url).Render("[E]"))
 	assert.Equal(t, pagerEmpty, eqslValue(t, m), "pending shows the empty-field dash")
 }
 

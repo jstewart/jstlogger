@@ -1,6 +1,9 @@
 package tui
 
-import "charm.land/lipgloss/v2"
+import (
+	"charm.land/bubbles/v2/help"
+	"charm.land/lipgloss/v2"
+)
 
 // ANSI palette indexes keep colors consistent with the user's terminal theme.
 var (
@@ -18,7 +21,20 @@ var (
 	amber = lipgloss.Color("214")
 )
 
+// On a light background, fixed 256-color stand-ins replace the palette
+// colors that light themes get wrong: themes map ANSI 8 to anything from a
+// light gray to their darkest color, and yellow and amber are pale on
+// white.
+var (
+	lightMuted  = lipgloss.Color("244")
+	lightYellow = lipgloss.Color("136")
+	lightAmber  = lipgloss.Color("166")
+)
+
 type styles struct {
+	// dark reports whether the styles are for a dark background.
+	dark bool
+
 	header lipgloss.Style
 	title  lipgloss.Style
 	body   lipgloss.Style
@@ -72,8 +88,12 @@ type styles struct {
 	helpKey     lipgloss.Style
 }
 
-func defaultStyles() styles {
+// defaultStyles returns the styles for a dark or a light background.
+func defaultStyles(dark bool) styles {
+	ld := lipgloss.LightDark(dark)
+	muted, yellow, amber := ld(lightMuted, muted), ld(lightYellow, yellow), ld(lightAmber, amber)
 	return styles{
+		dark:         dark,
 		header:       lipgloss.NewStyle().Padding(0, 1),
 		title:        lipgloss.NewStyle().Bold(true).Foreground(accent),
 		body:         lipgloss.NewStyle().Padding(0, 1),
@@ -101,4 +121,30 @@ func defaultStyles() styles {
 		helpHeading:  lipgloss.NewStyle().Bold(true).Foreground(blue),
 		helpKey:      lipgloss.NewStyle().Bold(true).Foreground(purple),
 	}
+}
+
+// WithBackground fixes the styles for a dark or a light background, rather
+// than asking the terminal for its background color.
+func WithBackground(dark bool) Option {
+	return func(m *Model) {
+		*m = m.setBackground(dark)
+		m.fixedBackground = true
+	}
+}
+
+// setBackground restyles m, with its help and text inputs, for a dark or a
+// light background.
+func (m Model) setBackground(dark bool) Model {
+	m.styles = defaultStyles(dark)
+	m.help.Styles = help.DefaultStyles(dark)
+	m.input.SetStyles(inputStyles(dark))
+	m.entry.setDark(dark)
+	if m.helpModal.open {
+		m.helpModal.input.SetStyles(inputStyles(dark))
+	}
+	if m.rigModal.open {
+		m.rigModal.freq.SetStyles(inputStyles(dark))
+		m.rigModal.passband.SetStyles(inputStyles(dark))
+	}
+	return m
 }

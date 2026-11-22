@@ -108,7 +108,7 @@ func TestPickerSetOptions(t *testing.T) {
 }
 
 func TestPickerView(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	p := newPicker(codeOptions(pickerOptions))
 
 	assert.Equal(t, pagerEmpty, plain(p.view(st, false, 40)))
@@ -119,7 +119,7 @@ func TestPickerView(t *testing.T) {
 }
 
 func TestPickerViewDescribes(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	p := newPicker([]adif.Enum{{}, {Code: "TEP", Description: "trans-equatorial"}})
 	p.set("TEP")
 

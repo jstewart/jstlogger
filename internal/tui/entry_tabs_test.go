@@ -385,7 +385,7 @@ func TestEntryQSLMsgIsMultiLine(t *testing.T) {
 }
 
 func TestEntrySetValueKeepsNewlines(t *testing.T) {
-	e := newEntry()
+	e := newEntry(true)
 	for _, f := range []qsoentry.Field{qsoentry.Notes, qsoentry.QSLMsg} {
 		e.setValue(f, "one\ntwo\nthree")
 		assert.Equal(t, "one\ntwo\nthree", e.value(f), "%s keeps its newlines", entryLabels[f])

@@ -63,7 +63,7 @@ func lotwUsers() map[string]lotwUser {
 }
 
 func TestIndexLoTWColumn(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	f := &fakeLoTW{users: lotwUsers()}
 	m := newIndexLoTWModel(t, f, lotwIndexFormat,
 		lotwQSO(5, "K9XYZ"), lotwQSO(4, "W1AW"), lotwQSO(3, "K1ABC"), lotwQSO(2, "N0OLD"), lotwQSO(1, "P/QRP/7"))
@@ -80,7 +80,7 @@ func TestIndexLoTWColumn(t *testing.T) {
 }
 
 func TestIndexLoTWCursorRowIsPlain(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	f := &fakeLoTW{users: lotwUsers()}
 	m := newIndexLoTWModel(t, f, lotwIndexFormat, lotwQSO(2, "W1AW"), lotwQSO(1, "K1ABC"))
 
@@ -94,7 +94,7 @@ func TestIndexLoTWCursorRowIsPlain(t *testing.T) {
 }
 
 func TestIndexLoTWPagerStrip(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	f := &fakeLoTW{users: lotwUsers()}
 	m := newIndexLoTWModel(t, f, lotwIndexFormat, lotwQSO(2, "W1AW"), lotwQSO(1, "K1ABC"))
 
@@ -246,7 +246,7 @@ func TestIndexLoTWStaleReplyDropped(t *testing.T) {
 }
 
 func TestFormatStyledLine(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	f, err := indexfmt.Parse("%-3L|%-*c")
 	require.NoError(t, err)
 	cells := []string{"L", "|", "W1AW"}

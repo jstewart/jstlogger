@@ -118,7 +118,7 @@ func TestPagerClickOnCutOffTab(t *testing.T) {
 }
 
 func TestPagerTabBarLayoutMatchesClicks(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	names := pagerTabNames[:]
 	// Cutting the bar short only drops cells from its end, so each tab
 	// starts where it does in a wide bar.

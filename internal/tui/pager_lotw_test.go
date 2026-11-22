@@ -118,7 +118,7 @@ func lotwLine(m Model) (string, bool) {
 }
 
 func TestLoTWBadgeByRecency(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	tests := []struct {
 		name  string
 		days  int
@@ -146,7 +146,7 @@ func TestLoTWBadgeByRecency(t *testing.T) {
 }
 
 func TestLoTWBadgeStylesDiffer(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	recent, active, inactive := st.lotwRecent.Render("[L]"), st.lotwActive.Render("[L]"), st.lotwInactive.Render("[L]")
 	assert.NotEqual(t, recent, active)
 	assert.NotEqual(t, active, inactive)
