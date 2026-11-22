@@ -409,8 +409,9 @@ MFSK.
 
 Dates and times are UTC. In post mode, the New QSO screen opens with the
 date set to today; the time on is left blank, so a QSO is never saved at
-a time nobody entered. After a save, the date stays for the next QSO, as
-when typing in a paper log.
+a time nobody entered. After a `ctrl+s` save, the date and time on stay
+for the next QSO, as when typing in a paper log, and the cursor moves to
+Call.
 
 Besides `YYYY-MM-DD` and `YYYYMMDD`, dates take short forms:
 

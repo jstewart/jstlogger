@@ -1313,19 +1313,24 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 		e.msg = saved
 		return m, reload
 	}
-	next := e.form().Carry()
+	form := e.form()
+	next := form.Carry()
+	if !e.live {
+		// A batch from a paper log is often logged at one time, so the time
+		// on stays for the next QSO. In live mode the clock sets it.
+		next[qsoentry.TimeOn] = form[qsoentry.TimeOn]
+	}
 	e.setForm(next)
 	e.base = next
 	e.defaultDate()
 	e.msg = saved
 	e.tab = entryTabQSO
-	focus := qsoentry.TimeOn
 	if e.live {
 		// The next QSO's clock starts now.
-		focus, e.onLocked = qsoentry.Call, false
+		e.onLocked = false
 		e.tickClock(m.now())
 	}
-	return m, tea.Batch(e.focusField(focus), reload)
+	return m, tea.Batch(e.focusField(qsoentry.Call), reload)
 }
 
 // entryView renders the New QSO screen in width by height cells: the tab

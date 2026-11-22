@@ -36,8 +36,30 @@ func TestEntryDateCarriesAfterSave(t *testing.T) {
 	m = press(t, m, saveKey)
 	require.Len(t, s.added, 1)
 	assert.Equal(t, "2026-11-09", entryValue(m, qsoentry.Date), "a paper log's date carries, as typed")
-	assert.Empty(t, entryValue(m, qsoentry.TimeOn))
+	assert.Equal(t, "14:30", entryValue(m, qsoentry.TimeOn), "and so does its time on")
 	assert.False(t, m.entry.unsaved())
+}
+
+func TestEntryPostSaveKeepsTimeOnButNotTimeOff(t *testing.T) {
+	s := newEntryStore(t, nil)
+	s.expectAdd()
+	s.expectAdd()
+	m := newEntryModel(t, s)
+	m = fill(t, m, map[qsoentry.Field]string{qsoentry.TimeOn: "1430", qsoentry.TimeOff: "1445", qsoentry.Call: "W1AW"})
+
+	m = press(t, m, saveKey)
+
+	require.Len(t, s.added, 1)
+	assert.Equal(t, "14:30", entryValue(m, qsoentry.TimeOn))
+	assert.Empty(t, entryValue(m, qsoentry.TimeOff), "a typed time off does not carry")
+	assert.Contains(t, entryLine(m, "Time off"), "14:30", "time off copies the kept time on")
+	assert.Equal(t, qsoentry.Call, m.entry.focus, "the next QSO starts at the call")
+
+	m = typeText(t, m, "k1abc")
+	m = press(t, m, saveKey)
+
+	require.Len(t, s.added, 2)
+	assert.Equal(t, time.Date(2026, 11, 10, 14, 30, 0, 0, time.UTC), s.added[1].StartUTC, "the next QSO saves with the kept time on")
 }
 
 func TestEntryEmptyDateIsTodayAfterLiveToggle(t *testing.T) {
