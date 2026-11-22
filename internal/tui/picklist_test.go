@@ -112,7 +112,7 @@ func TestPickListCancels(t *testing.T) {
 }
 
 func TestPickListView(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	common := []adif.Enum{{Code: "FT4", Description: "MFSK submode"}}
 	l := newPickList(common, listOptions, "D")
 
@@ -132,7 +132,7 @@ func TestPickListView(t *testing.T) {
 }
 
 func TestPickListViewScrolls(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	var options []adif.Enum
 	for _, c := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
 		options = append(options, adif.Enum{Code: string(c)})
@@ -145,7 +145,7 @@ func TestPickListViewScrolls(t *testing.T) {
 }
 
 func TestPickListViewFitsNarrowWidths(t *testing.T) {
-	st := defaultStyles()
+	st := defaultStyles(true)
 	for _, width := range []int{0, 1, 5, 12} {
 		for _, line := range newPickList(nil, listOptions, "MS").view(st, width) {
 			assert.LessOrEqual(t, lipgloss.Width(line), width, "%q", plain(line))

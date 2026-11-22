@@ -30,6 +30,10 @@ type Model struct {
 	entryKeys  entryKeyMap
 	help       help.Model
 	styles     styles
+	// fixedBackground reports whether WithBackground fixed the styles for
+	// a dark or a light background. Otherwise the terminal is asked, and
+	// the styles are for a dark one until it answers.
+	fixedBackground bool
 	// helpModal lists the keybindings in effect, over the body, while open.
 	helpModal helpModal
 
@@ -125,11 +129,11 @@ func New(opts ...Option) Model {
 		promptKeys: defaultPromptKeys(),
 		entryKeys:  defaultEntryKeys(),
 		help:       help.New(),
-		styles:     defaultStyles(),
-		input:      newInput(),
+		styles:     defaultStyles(true),
+		input:      newInput(true),
 		idx:        newIndex(),
 		pager:      pager{indexLines: defaultPagerIndexLines, configLines: defaultPagerIndexLines},
-		entry:      newEntry(),
+		entry:      newEntry(true),
 		now:        time.Now,
 		tick:       tea.Tick,
 		getenv:     os.Getenv,
@@ -154,12 +158,17 @@ func WithVersion(v string) Option {
 	}
 }
 
-// Init loads the QSO index when a logbook is open.
+// Init asks the terminal for its background color, unless WithBackground
+// fixed it, and loads the QSO index when a logbook is open.
 func (m Model) Init() tea.Cmd {
-	if m.logbook == nil {
-		return nil
+	var cmds []tea.Cmd
+	if !m.fixedBackground {
+		cmds = append(cmds, tea.RequestBackgroundColor)
 	}
-	return loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, 0, 0)
+	if m.logbook != nil {
+		cmds = append(cmds, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, 0, 0))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -315,6 +324,11 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		m.rigState.state = msg.State
 		m.rigState.haveState = true
 		m.applyRigState(msg.State)
+
+	case tea.BackgroundColorMsg:
+		if !m.fixedBackground {
+			m = m.setBackground(msg.IsDark())
+		}
 
 	case rig.ConnectionChanged:
 		m.rigState.conn = msg

@@ -24,7 +24,7 @@ var (
 // helpText returns every line the help modal lists for the context m is
 // in, unfiltered and unwindowed, as plain text.
 func helpText(m Model) string {
-	h := newHelpModal(m.contextKeys())
+	h := newHelpModal(m.contextKeys(), true)
 	lines := h.lines(m.styles, 200)
 	for i, l := range lines {
 		lines[i] = strings.TrimRight(plain(l), " ")

@@ -41,6 +41,7 @@ func (c Config) Validate(station string) error {
 	errs = append(errs, c.validateStations()...)
 	errs = append(errs, c.validateRig()...)
 	errs = append(errs, c.validateLogbook()...)
+	errs = append(errs, c.validateUI()...)
 	errs = append(errs, c.validateIndex()...)
 	errs = append(errs, c.validateCallbook()...)
 	return errors.Join(errs...)
@@ -140,6 +141,16 @@ func (c Config) validateLogbook() []error {
 		return nil
 	default:
 		return []error{invalid("logbook.distance_unit", "must be %q or %q, got %q", DistanceUnitKm, DistanceUnitMi, c.Logbook.DistanceUnit)}
+	}
+}
+
+// validateUI checks the [ui] table.
+func (c Config) validateUI() []error {
+	switch c.UI.Background {
+	case BackgroundAuto, BackgroundDark, BackgroundLight:
+		return nil
+	default:
+		return []error{invalid("ui.background", "must be %q, %q or %q, got %q", BackgroundAuto, BackgroundDark, BackgroundLight, c.UI.Background)}
 	}
 }
 

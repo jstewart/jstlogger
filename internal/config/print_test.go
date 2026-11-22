@@ -33,6 +33,11 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 			c.Logbook = Logbook{Path: "/data/log.db", DistanceUnit: DistanceUnitMi}
 			return c
 		}},
+		{name: "background set", config: func(t *testing.T) Config {
+			c := fullConfig(t)
+			c.UI = UI{Background: BackgroundLight}
+			return c
+		}},
 		{name: "custom index format with significant spacing", config: func(t *testing.T) Config {
 			c := fullConfig(t)
 			c.Index = Index{Format: "  %-10c  %-*C 'x' ", PagerIndexLines: DefaultPagerIndexLines, Sort: DefaultIndexSort}

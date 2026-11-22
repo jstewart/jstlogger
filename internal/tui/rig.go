@@ -133,14 +133,20 @@ func (m Model) promptOpen() bool {
 	return m.prompt != promptNone
 }
 
-// newInput returns the text input used by the prompts and the rig modal.
-func newInput() textinput.Model {
+// newInput returns the text input used by the prompts and the rig modal,
+// styled for a dark or a light background.
+func newInput(dark bool) textinput.Model {
 	ti := textinput.New()
-	s := textinput.DefaultDarkStyles()
-	// A static cursor keeps the prompt from scheduling blink ticks.
-	s.Cursor.Blink = false
-	ti.SetStyles(s)
+	ti.SetStyles(inputStyles(dark))
 	return ti
+}
+
+// inputStyles returns the text input styles for a dark or a light
+// background. A static cursor keeps the prompt from scheduling blink ticks.
+func inputStyles(dark bool) textinput.Styles {
+	s := textinput.DefaultStyles(dark)
+	s.Cursor.Blink = false
+	return s
 }
 
 // openPrompt resets the input and opens the prompt of the given kind.

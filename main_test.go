@@ -764,3 +764,22 @@ func TestRunPrintConfigMasksCallbookPasswords(t *testing.T) {
 	assert.NotContains(t, r.stdout, "env-hamqth")
 	assert.Equal(t, 2, strings.Count(r.stdout, "password = '********'"))
 }
+
+func TestFixedBackground(t *testing.T) {
+	tests := []struct {
+		background string
+		wantDark   bool
+		wantFixed  bool
+	}{
+		{background: config.BackgroundAuto},
+		{background: config.BackgroundDark, wantDark: true, wantFixed: true},
+		{background: config.BackgroundLight, wantFixed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.background, func(t *testing.T) {
+			dark, fixed := fixedBackground(config.UI{Background: tt.background})
+			assert.Equal(t, tt.wantDark, dark)
+			assert.Equal(t, tt.wantFixed, fixed)
+		})
+	}
+}

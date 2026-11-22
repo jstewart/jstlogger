@@ -20,7 +20,7 @@ func TestModelCopyIsSmall(t *testing.T) {
 }
 
 func TestEntryWidgetOfTheWrongKind(t *testing.T) {
-	e := newEntry()
+	e := newEntry(true)
 	assert.PanicsWithValue(t, "tui: Notes has no text input", func() { e.input(qsoentry.Notes) })
 	assert.PanicsWithValue(t, "tui: Call has no text area", func() { e.area(qsoentry.Call) })
 	assert.PanicsWithValue(t, "tui: Call has no picker", func() { e.picker(qsoentry.Call) })

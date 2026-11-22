@@ -1,0 +1,125 @@
+package tui
+
+import (
+	"fmt"
+	"image/color"
+	"testing"
+
+	"charm.land/bubbles/v2/help"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"jstlogger/internal/qsoentry"
+)
+
+var (
+	black = color.RGBA{A: 0xff}
+	white = color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+)
+
+func TestDefaultStylesForTheBackground(t *testing.T) {
+	tests := []struct {
+		name  string
+		style func(styles) lipgloss.Style
+		dark  string
+		light string
+	}{
+		{"muted", func(st styles) lipgloss.Style { return st.muted }, "8", "244"},
+		{"stale", func(st styles) lipgloss.Style { return st.stale }, "8", "244"},
+		{"hamQTH", func(st styles) lipgloss.Style { return st.hamQTH }, "3", "136"},
+		{"lotwActive", func(st styles) lipgloss.Style { return st.lotwActive }, "214", "166"},
+		{"lotwInactive", func(st styles) lipgloss.Style { return st.lotwInactive }, "8", "244"},
+		{"connected", func(st styles) lipgloss.Style { return st.connected }, "2", "2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, lipgloss.Color(tt.dark), tt.style(defaultStyles(true)).GetForeground(), "dark")
+			assert.Equal(t, lipgloss.Color(tt.light), tt.style(defaultStyles(false)).GetForeground(), "light")
+		})
+	}
+	assert.True(t, defaultStyles(true).cursor.GetReverse(), "the cursor row shows without colors")
+	assert.True(t, defaultStyles(false).cursor.GetReverse())
+}
+
+// assertBackground checks that m's styles, and those of its inputs and
+// help, are the ones for a dark or light background.
+func assertBackground(t *testing.T, m Model, dark bool) {
+	t.Helper()
+	assert.Equal(t, dark, m.styles.dark)
+	assert.Equal(t, defaultStyles(dark).muted.GetForeground(), m.styles.muted.GetForeground())
+	assert.Equal(t, help.DefaultStyles(dark), m.help.Styles)
+	assert.Equal(t, inputStyles(dark), m.input.Styles())
+	assert.Equal(t, inputStyles(dark), m.entry.input(qsoentry.Call).Styles())
+	assert.Equal(t, areaStyles(dark), m.entry.area(qsoentry.Notes).Styles())
+}
+
+// requestsBackground reports whether cmd asks the terminal for its
+// background color.
+func requestsBackground(cmd tea.Cmd) bool {
+	want := fmt.Sprintf("%T", tea.RequestBackgroundColor())
+	for _, msg := range collectMsgs(cmd) {
+		if fmt.Sprintf("%T", msg) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBackgroundDetected(t *testing.T) {
+	m := New()
+	assert.True(t, requestsBackground(m.Init()), "the terminal is asked for its background")
+	assertBackground(t, m, true)
+
+	m, _ = update(t, m, tea.BackgroundColorMsg{Color: white})
+	assertBackground(t, m, false)
+
+	m, _ = update(t, m, tea.BackgroundColorMsg{Color: black})
+	assertBackground(t, m, true)
+}
+
+func TestBackgroundDetectedWithALogbook(t *testing.T) {
+	m := New(WithLogbook(&fakeIndexStore{}))
+	assert.True(t, requestsBackground(m.Init()))
+}
+
+func TestBackgroundFixed(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		t.Run(fmt.Sprintf("dark=%t", dark), func(t *testing.T) {
+			m := New(WithBackground(dark))
+			assert.False(t, requestsBackground(m.Init()), "a fixed background is not asked for")
+			assertBackground(t, m, dark)
+
+			m, _ = update(t, m, tea.BackgroundColorMsg{Color: white})
+			m, _ = update(t, m, tea.BackgroundColorMsg{Color: black})
+			assertBackground(t, m, dark)
+		})
+	}
+}
+
+func TestBackgroundStylesLaterWidgets(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 80, 24, WithRig("ic7300", &fakeRig{}))
+	m, _ = update(t, m, tea.BackgroundColorMsg{Color: white})
+
+	m, _ = update(t, m, keyPress('?', 0))
+	require.True(t, m.helpModal.open)
+	assert.Equal(t, inputStyles(false), m.helpModal.input.Styles(), "the help modal opened after the reply")
+	m, _ = update(t, m, keyPress('?', 0))
+
+	m, _ = update(t, m, rigKey)
+	require.True(t, m.rigModal.open)
+	assert.Equal(t, inputStyles(false), m.rigModal.freq.Styles(), "the rig modal opened after the reply")
+	assert.Equal(t, inputStyles(false), m.rigModal.passband.Styles())
+}
+
+func TestBackgroundRestylesOpenModals(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 80, 24, WithRig("ic7300", &fakeRig{}))
+	m, _ = update(t, m, rigKey)
+	require.True(t, m.rigModal.open)
+
+	m, _ = update(t, m, tea.BackgroundColorMsg{Color: white})
+
+	assert.Equal(t, inputStyles(false), m.rigModal.freq.Styles())
+	assert.Equal(t, inputStyles(false), m.rigModal.passband.Styles())
+}

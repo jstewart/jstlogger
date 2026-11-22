@@ -331,8 +331,8 @@ func (e *entry) picker(f qsoentry.Field) *picker {
 }
 
 // newEntry returns the New QSO screen, closed, with an empty form and a
-// fresh set of widgets.
-func newEntry() entry {
+// fresh set of widgets styled for a dark or a light background.
+func newEntry(dark bool) entry {
 	e := entry{now: time.Now, w: &entryWidgets{
 		inputs:  make([]textinput.Model, int(qsoentry.FieldCount)-len(entryMultiLine)-len(entryPicked)),
 		areas:   make([]textarea.Model, len(entryMultiLine)),
@@ -349,14 +349,14 @@ func newEntry() entry {
 		*e.picker(f) = newPicker(none(adif.QSLSentStatuses()))
 	}
 	for _, f := range entryMultiLine {
-		*e.area(f) = newArea()
+		*e.area(f) = newArea(dark)
 	}
 	e.area(qsoentry.QSLMsg).SetHeight(entryQSLMsgHeight)
 	for f := range qsoentry.FieldCount {
 		if isMultiLine(f) || isPicked(f) {
 			continue
 		}
-		in := newInput()
+		in := newInput(dark)
 		in.Prompt = ""
 		in.Placeholder = entryPlaceholders[f]
 		*e.input(f) = in
@@ -385,18 +385,34 @@ func isMultiLine(f qsoentry.Field) bool {
 }
 
 // newArea returns a multi-line field: lines of text with no prompt or line
-// numbers.
-func newArea() textarea.Model {
+// numbers, styled for a dark or a light background.
+func newArea(dark bool) textarea.Model {
 	ta := textarea.New()
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
-	s := textarea.DefaultDarkStyles()
-	// A static cursor schedules no blink ticks, and the line with the
-	// cursor looks like the others.
+	ta.SetStyles(areaStyles(dark))
+	return ta
+}
+
+// areaStyles returns the text area styles for a dark or a light
+// background. A static cursor schedules no blink ticks, and the line with
+// the cursor looks like the others.
+func areaStyles(dark bool) textarea.Styles {
+	s := textarea.DefaultStyles(dark)
 	s.Cursor.Blink = false
 	s.Focused.CursorLine = s.Focused.Text
-	ta.SetStyles(s)
-	return ta
+	return s
+}
+
+// setDark restyles the screen's text inputs and areas for a dark or a
+// light background.
+func (e *entry) setDark(dark bool) {
+	for i := range e.w.inputs {
+		e.w.inputs[i].SetStyles(inputStyles(dark))
+	}
+	for i := range e.w.areas {
+		e.w.areas[i].SetStyles(areaStyles(dark))
+	}
 }
 
 // value returns the value of field f: its text, or the option picked.
@@ -684,7 +700,7 @@ func (e *entry) focusField(f qsoentry.Field) tea.Cmd {
 // the logbook's tags. The screen opens in live mode when the rig is
 // connected, and in post mode otherwise.
 func (m Model) openEntry() (Model, tea.Cmd) {
-	e := newEntry()
+	e := newEntry(m.styles.dark)
 	e.now = m.now
 	e.dxccLookup = m.dxcc
 	e.setStations(m.stations)
@@ -715,7 +731,7 @@ func (m Model) openEntry() (Model, tea.Cmd) {
 func (m Model) closeEntry() Model {
 	old := m.entry
 	old.callbook.stop()
-	m.entry = newEntry()
+	m.entry = newEntry(m.styles.dark)
 	m.entry.gen, m.entry.tags = old.gen, old.tags
 	m.entry.dataMode, m.entry.dataSubmode = old.dataMode, old.dataSubmode
 	return m
@@ -765,7 +781,7 @@ func (m Model) applyEditLoaded(msg editLoadedMsg) (Model, tea.Cmd) {
 // q's own values rather than a profile's, though picking a profile still
 // fills them in. The rig is never applied, and the clock does not run.
 func (m Model) openEdit(q logbook.QSO) (Model, tea.Cmd) {
-	e := newEntry()
+	e := newEntry(m.styles.dark)
 	e.now = m.now
 	e.dxccLookup = m.dxcc
 	e.setStations(m.stations)

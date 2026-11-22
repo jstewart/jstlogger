@@ -124,9 +124,9 @@ type rigModal struct {
 }
 
 // newRigModal returns an open rig modal filled in from s, listing the
-// recent modes first.
-func newRigModal(s rigState, recent []string) rigModal {
-	r := rigModal{open: true, freq: newInput(), passband: newInput()}
+// recent modes first, its fields styled for a dark or a light background.
+func newRigModal(s rigState, recent []string, dark bool) rigModal {
+	r := rigModal{open: true, freq: newInput(dark), passband: newInput(dark)}
 	r.freq.Prompt, r.freq.Placeholder = "", "14.074, 7074 kHz…"
 	r.passband.Prompt, r.passband.Placeholder = "", "rig default"
 	if s.haveState {
@@ -271,7 +271,7 @@ func addRecentMode(recent []string, mode string) []string {
 // frequency focused.
 func (m Model) openRigModal() (Model, tea.Cmd) {
 	m.freqs.reset()
-	m.rigModal = newRigModal(m.rigState, m.recentModes)
+	m.rigModal = newRigModal(m.rigState, m.recentModes, m.styles.dark)
 	return m, m.rigModal.setFocus(rigFieldFreq)
 }
 

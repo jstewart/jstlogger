@@ -37,6 +37,8 @@ const (
 	DefaultPagerIndexLines = 10
 	// DefaultIndexSort is the default index.sort: date, newest first.
 	DefaultIndexSort = "reverse-date"
+	// DefaultBackground is the default ui.background: ask the terminal.
+	DefaultBackground = BackgroundAuto
 	// DefaultCallbookCacheTTL is the default callbook.cache_ttl.
 	DefaultCallbookCacheTTL = 168 * time.Hour
 )
@@ -57,6 +59,17 @@ const (
 	DistanceUnitMi = "mi"
 )
 
+// Terminal backgrounds accepted in ui.background.
+const (
+	// BackgroundAuto asks the terminal for its background color, and
+	// assumes a dark background until, or unless, it answers.
+	BackgroundAuto = "auto"
+	// BackgroundDark uses the colors for a dark background.
+	BackgroundDark = "dark"
+	// BackgroundLight uses the colors for a light background.
+	BackgroundLight = "light"
+)
+
 // Config is the merged jstlogger configuration (defaults + file).
 type Config struct {
 	// DefaultStation names the station used when --station is not given.
@@ -71,6 +84,15 @@ type Config struct {
 	Index Index `mapstructure:"index" toml:"index"`
 	// Callbook is the [callbook] table.
 	Callbook Callbook `mapstructure:"callbook" toml:"callbook"`
+	// UI is the [ui] table.
+	UI UI `mapstructure:"ui" toml:"ui"`
+}
+
+// UI is the [ui] table, which configures how the TUI looks.
+type UI struct {
+	// Background is the terminal's background, which picks the colors:
+	// BackgroundAuto, BackgroundDark or BackgroundLight. Load lowercases it.
+	Background string `mapstructure:"background" toml:"background"`
 }
 
 // Callbook is the [callbook] table, which configures looking up the call

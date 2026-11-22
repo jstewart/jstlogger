@@ -61,6 +61,7 @@ func Load(path string, explicit bool) (Config, LoadResult, error) {
 	v.SetDefault("index.pager_index_lines", DefaultPagerIndexLines)
 	v.SetDefault("index.sort", DefaultIndexSort)
 	v.SetDefault("callbook.cache_ttl", DefaultCallbookCacheTTL)
+	v.SetDefault("ui.background", DefaultBackground)
 
 	if err := v.ReadInConfig(); err != nil {
 		return Config{}, res, fmt.Errorf("reading config %s: %w", path, err)
@@ -173,11 +174,12 @@ func parsePagerIndexLines(raw any) (int, error) {
 // applyEntryDefaults fills per-entry defaults that viper cannot express
 // (the table key is dynamic), recovers empty tables that viper drops from
 // Unmarshal, lowercases values that refer to station or profile names, and
-// normalizes logbook.distance_unit and callbook.services.
+// normalizes logbook.distance_unit, callbook.services and ui.background.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)
 	c.Logbook.DistanceUnit = strings.ToLower(strings.TrimSpace(c.Logbook.DistanceUnit))
+	c.UI.Background = strings.ToLower(strings.TrimSpace(c.UI.Background))
 	for i, s := range c.Callbook.Services {
 		c.Callbook.Services[i] = strings.ToLower(strings.TrimSpace(s))
 	}

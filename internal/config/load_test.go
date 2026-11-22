@@ -92,6 +92,7 @@ func TestLoadDefaultsInCode(t *testing.T) {
 	assert.Empty(t, c.Rig.Profile)
 	assert.Empty(t, c.Rig.Profiles)
 	assert.Equal(t, Logbook{DistanceUnit: DefaultDistanceUnit}, c.Logbook)
+	assert.Equal(t, UI{Background: DefaultBackground}, c.UI)
 	assert.Equal(t, Index{Format: DefaultIndexFormat, PagerIndexLines: DefaultPagerIndexLines, Sort: DefaultIndexSort}, c.Index)
 }
 
@@ -153,6 +154,37 @@ func TestLoadLogbook(t *testing.T) {
 			c, res := load(t, tt.content)
 			assert.Empty(t, res.Warnings)
 			assert.Equal(t, tt.want, c.Logbook)
+		})
+	}
+}
+
+func TestLoadUI(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    UI
+	}{
+		{
+			name:    "section absent detects the background",
+			content: "",
+			want:    UI{Background: BackgroundAuto},
+		},
+		{
+			name:    "background set",
+			content: "[ui]\nbackground = \"light\"\n",
+			want:    UI{Background: BackgroundLight},
+		},
+		{
+			name:    "background is lowercased and trimmed",
+			content: "[ui]\nbackground = \" Dark \"\n",
+			want:    UI{Background: BackgroundDark},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, res := load(t, tt.content)
+			assert.Empty(t, res.Warnings)
+			assert.Equal(t, tt.want, c.UI)
 		})
 	}
 }
