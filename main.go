@@ -2,6 +2,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -86,7 +87,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	var r *rig.Rig
 	if opts, ok := rigOptions(session); ok {
 		r = rig.New(opts)
-		tuiOpts = append(tuiOpts, tui.WithRig(session.RigProfileName, r))
+		tuiOpts = append(tuiOpts, tui.WithRig(rigName(session), r))
 	}
 
 	p := tea.NewProgram(tui.New(tuiOpts...), tea.WithContext(ctx))
@@ -168,6 +169,12 @@ func rigOptions(session config.Session) (rig.Options, bool) {
 		opts.Spawn = &rig.Spawn{Model: p.Spawn.Model, Device: p.Spawn.Device, Baud: p.Spawn.Baud}
 	}
 	return opts, true
+}
+
+// rigName returns the name the header shows for the session's rig: its
+// profile's name, or else the profile's key.
+func rigName(session config.Session) string {
+	return cmp.Or(session.Config.Rig.Profiles[session.RigProfileName].Name, session.RigProfileName)
 }
 
 // Exit codes returned by run.

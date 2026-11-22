@@ -258,17 +258,18 @@ func TestRigStatus(t *testing.T) {
 	}{
 		{
 			name: "before any state",
-			want: []string{"—", "connecting"},
+			want: []string{"—", "ic7300 connecting"},
 		},
 		{
 			name: "connecting with state",
 			msgs: []tea.Msg{state},
-			want: []string{"14.074.000 USB", "connecting"},
+			want: []string{"14.074.000 USB", "ic7300 connecting"},
 		},
 		{
-			name: "connected",
-			msgs: []tea.Msg{rig.ConnectionChanged{Status: rig.Connected}, state},
-			want: []string{"14.074.000 USB", "connected"},
+			name:    "connected",
+			msgs:    []tea.Msg{rig.ConnectionChanged{Status: rig.Connected}, state},
+			want:    []string{"14.074.000 USB", "ic7300 connected"},
+			wantNot: []string{"not connected"},
 		},
 		{
 			name: "passband is not shown",

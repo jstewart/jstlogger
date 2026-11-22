@@ -319,10 +319,10 @@ func (m Model) promptView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, lines...)
 }
 
-// rigStatusView renders the rig frequency, mode and connection status. The
-// frequency and mode are shown stale unless the rig is connected. The
-// passband is not shown: many Hamlib backends report a nominal width for
-// the selected filter rather than the rig's real setting.
+// rigStatusView renders the rig frequency, mode, name and connection
+// status. The frequency and mode are shown stale unless the rig is
+// connected. The passband is not shown: many Hamlib backends report a
+// nominal width for the selected filter rather than the rig's real setting.
 func (m Model) rigStatusView() string {
 	s := m.rigState
 	setting := "—"
@@ -334,13 +334,13 @@ func (m Model) rigStatusView() string {
 	switch s.conn.Status {
 	case rig.Connected:
 		setting = m.styles.rigFreq.Render(setting)
-		status = m.styles.connected.Render(s.conn.Status.String())
+		status = m.styles.connected.Render(m.rigName + " " + s.conn.Status.String())
 	case rig.Disconnected:
 		setting = m.styles.stale.Render(setting)
 		status = m.styles.err.Render(m.rigName + " not connected")
 	default:
 		setting = m.styles.stale.Render(setting)
-		status = m.styles.muted.Render(s.conn.Status.String())
+		status = m.styles.muted.Render(m.rigName + " " + s.conn.Status.String())
 	}
 	return setting + m.styles.muted.Render(" · ") + status
 }
