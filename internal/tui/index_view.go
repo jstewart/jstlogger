@@ -186,21 +186,21 @@ func (x index) rowView(st styles, i, width, nw int) string {
 	last, user := x.lotw.lastUpload(q.Call)
 	cells := x.format.Values(q, indexfmt.Row{Marked: x.marks[q.ID], LoTW: user}, x.unit)
 	lotwCell, colored := lotwStyle(st, lotw.RecencyOf(last, x.lotw.now()))
-	cellStyle := func(i int) (lipgloss.Style, bool) {
-		return lotwCell, colored && x.format.Items[i].Field == indexfmt.FieldLoTW
+	cellStyle := func(j int) (lipgloss.Style, bool) {
+		return lotwCell, colored && x.format.Items[j].Field == indexfmt.FieldLoTW
 	}
 	var style func(int, string) string
 	switch {
 	case i == x.cursor:
-		style = func(i int, v string) string {
-			if s, ok := cellStyle(i); ok {
+		style = func(j int, v string) string {
+			if s, ok := cellStyle(j); ok {
 				return onBar(st.cursor, s).Render(v)
 			}
 			return v
 		}
 	case colored:
-		style = func(i int, v string) string {
-			if s, ok := cellStyle(i); ok {
+		style = func(j int, v string) string {
+			if s, ok := cellStyle(j); ok {
 				return s.Render(v)
 			}
 			return v
