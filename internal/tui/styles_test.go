@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -52,8 +53,34 @@ func TestCursorBar(t *testing.T) {
 			assert.Equal(t, barText, c.GetForeground())
 			assert.True(t, c.GetBold())
 			assert.False(t, c.GetReverse())
+
+			st := defaultStyles(tt.dark).withoutColor()
+			assert.True(t, st.cursor.GetReverse(), "without colors the cursor is reverse video")
+			assert.Equal(t, lipgloss.Color(tt.bg), st.lotwInactive.GetForeground(), "only the cursor changes")
 		})
 	}
+}
+
+func TestCursorWithoutColors(t *testing.T) {
+	for _, p := range []colorprofile.Profile{colorprofile.ASCII, colorprofile.NoTTY} {
+		t.Run(p.String(), func(t *testing.T) {
+			m := New()
+			m, _ = update(t, m, tea.ColorProfileMsg{Profile: p})
+			assert.True(t, m.styles.cursor.GetReverse(), "the cursor stays visible without colors")
+
+			m, _ = update(t, m, tea.BackgroundColorMsg{Color: white})
+			assert.False(t, m.styles.dark)
+			assert.True(t, m.styles.cursor.GetReverse(), "a background reply keeps it")
+
+			m, _ = update(t, m, tea.ColorProfileMsg{Profile: colorprofile.ANSI})
+			assert.Equal(t, defaultStyles(false).cursor, m.styles.cursor, "with colors it is the bar")
+		})
+	}
+
+	m := New(WithBackground(false))
+	m, _ = update(t, m, tea.ColorProfileMsg{Profile: colorprofile.ASCII})
+	assert.True(t, m.styles.cursor.GetReverse())
+	assert.False(t, m.styles.dark, "a fixed background stays fixed")
 }
 
 // assertBackground checks that m's styles, and those of its inputs and

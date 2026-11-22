@@ -74,8 +74,9 @@ config:
 background = "light"   # "auto" (the default) | "dark" | "light"
 ```
 
-The row under the cursor is shown in reverse video, so it stays visible
-with colors turned off (for example with `NO_COLOR` set).
+The row under the cursor is a gray bar that keeps the row's colors, such
+as the LoTW column's. With colors turned off (for example with `NO_COLOR`
+set), it is shown in reverse video instead, so it stays visible.
 
 ### QSO index
 

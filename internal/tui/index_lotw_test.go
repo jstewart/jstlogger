@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -114,7 +115,20 @@ func TestOnBar(t *testing.T) {
 		assert.Equal(t, st.cursor.GetForeground(), s.GetForeground(), "a color the bar would hide is the bar's text color")
 		assert.True(t, s.GetFaint(), "it is still dim")
 		assert.False(t, s.GetBold(), "and not bold")
+
+		s = onBar(st.withoutColor().cursor, st.lotwRecent)
+		assert.True(t, s.GetReverse(), "without colors the cell is reversed with the rest of the row")
 	}
+}
+
+func TestIndexLoTWCursorRowWithoutColors(t *testing.T) {
+	f := &fakeLoTW{users: lotwUsers()}
+	m := newIndexLoTWModel(t, f, lotwIndexFormat, lotwQSO(2, "W1AW"), lotwQSO(1, "K1ABC"))
+	m, _ = update(t, m, tea.ColorProfileMsg{Profile: colorprofile.ASCII})
+
+	line := cursorRow(t, m, "W1AW")
+	assert.Contains(t, plain(line), "L W1AW")
+	assert.Empty(t, offStyle(line, "7"), "the reverse video is unbroken")
 }
 
 func TestIndexLoTWPagerStrip(t *testing.T) {
