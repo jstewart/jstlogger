@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,26 +251,24 @@ func TestRigApplyCmd(t *testing.T) {
 func TestRigStatus(t *testing.T) {
 	state := rig.StateChanged{State: rig.State{Freq: 14074000, Mode: "USB", Passband: 2400}}
 	tests := []struct {
-		name     string
-		msgs     []tea.Msg
-		want     []string
-		wantNot  []string
-		wantMute bool
+		name    string
+		msgs    []tea.Msg
+		want    string
+		wantNot []string
 	}{
 		{
 			name: "before any state",
-			want: []string{"—", "ic7300 connecting"},
+			want: "◌ ic7300  —",
 		},
 		{
 			name: "connecting with state",
 			msgs: []tea.Msg{state},
-			want: []string{"14.074.000 USB", "ic7300 connecting"},
+			want: "◌ ic7300  14.074.000 USB",
 		},
 		{
-			name:    "connected",
-			msgs:    []tea.Msg{rig.ConnectionChanged{Status: rig.Connected}, state},
-			want:    []string{"14.074.000 USB", "ic7300 connected"},
-			wantNot: []string{"not connected"},
+			name: "connected",
+			msgs: []tea.Msg{rig.ConnectionChanged{Status: rig.Connected}, state},
+			want: "● ic7300  14.074.000 USB",
 		},
 		{
 			name: "passband is not shown",
@@ -277,7 +276,7 @@ func TestRigStatus(t *testing.T) {
 				rig.ConnectionChanged{Status: rig.Connected},
 				rig.StateChanged{State: rig.State{Freq: 7074000, Mode: "PKTUSB", Passband: 3000}},
 			},
-			want:    []string{"7.074.000 PKTUSB", "connected"},
+			want:    "● ic7300  7.074.000 PKTUSB",
 			wantNot: []string{"3000"},
 		},
 		{
@@ -286,13 +285,13 @@ func TestRigStatus(t *testing.T) {
 				state,
 				rig.ConnectionChanged{Status: rig.Disconnected, Err: errors.New("refused"), RetryIn: 4 * time.Second},
 			},
-			want:    []string{"14.074.000 USB", "ic7300 not connected"},
+			want:    "○ ic7300  14.074.000 USB",
 			wantNot: []string{"retry", "refused"},
 		},
 		{
 			name: "disconnected",
 			msgs: []tea.Msg{rig.ConnectionChanged{Status: rig.Disconnected}},
-			want: []string{"—", "ic7300 not connected"},
+			want: "○ ic7300  —",
 		},
 		{
 			name: "command results are ignored",
@@ -301,7 +300,7 @@ func TestRigStatus(t *testing.T) {
 				state,
 				rig.CommandResult{Command: "set_freq 1", Err: errors.New("boom")},
 			},
-			want:    []string{"14.074.000 USB", "connected"},
+			want:    "● ic7300  14.074.000 USB",
 			wantNot: []string{"boom"},
 		},
 	}
@@ -311,15 +310,34 @@ func TestRigStatus(t *testing.T) {
 			for _, msg := range tt.msgs {
 				m, _ = update(t, m, msg)
 			}
-			header := m.headerView()
-			for _, w := range tt.want {
-				assert.Contains(t, header, w)
-			}
-			for _, w := range tt.wantNot {
-				assert.NotContains(t, header, w)
+			header := plain(m.headerView())
+			assert.True(t, strings.HasSuffix(strings.TrimRight(header, " "), tt.want), "%q should end with %q", header, tt.want)
+			for _, w := range append(tt.wantNot, "connected", "connecting", "disconnected") {
+				assert.NotContains(t, header, w, "the header shows no status words")
 			}
 		})
 	}
+}
+
+func TestRigStatusIndicator(t *testing.T) {
+	m, _ := newRigModel(t)
+	m, _ = update(t, m, rig.StateChanged{State: rig.State{Freq: 14074000, Mode: "USB"}})
+	tests := []struct {
+		status rig.ConnStatus
+		want   string
+	}{
+		{rig.Connected, m.styles.connected.Render("●")},
+		{rig.Connecting, m.styles.muted.Render("◌")},
+		{rig.Disconnected, m.styles.err.Render("○")},
+	}
+	var widths []int
+	for _, tt := range tests {
+		m, _ = update(t, m, rig.ConnectionChanged{Status: tt.status})
+		v := m.rigStatusView()
+		assert.True(t, strings.HasPrefix(v, tt.want), "%s: %q should start with %q", tt.status, v, tt.want)
+		widths = append(widths, lipgloss.Width(v))
+	}
+	assert.Equal(t, []int{widths[0], widths[0], widths[0]}, widths, "the status is as wide in every state")
 }
 
 func TestRigStatusStaleStyle(t *testing.T) {
@@ -415,7 +433,7 @@ func TestConnectionErrorHidden(t *testing.T) {
 	reason := errors.New("connect to rigctld at localhost:4532: connection refused")
 
 	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Disconnected, Err: reason})
-	assert.Contains(t, m.View().Content, "ic7300 not connected")
+	assert.Contains(t, plain(m.View().Content), "○ ic7300")
 	assert.NotContains(t, m.View().Content, "connection refused")
 }
 

@@ -136,8 +136,7 @@ func TestEntryLiveKeepsValuesWhenRigDisconnects(t *testing.T) {
 	assertRigFields(t, m, "14.074", "20m", "SSB", "USB")
 	assert.True(t, m.entry.live)
 	header := plain(m.headerView())
-	assert.Contains(t, header, "14.074.000 USB")
-	assert.Contains(t, header, "ic7300 not connected", "the rig indicator shows the values are stale")
+	assert.Contains(t, header, "○ ic7300  14.074.000 USB", "the rig indicator shows the values are stale")
 }
 
 func TestEntryPostIgnoresRig(t *testing.T) {
