@@ -360,26 +360,46 @@ func (m Model) applyRigResult(msg rigResultMsg) Model {
 	return m
 }
 
+// rigRetryWidest is as long as the longest retry text: the backoff tops
+// out at 30s, and "retrying now" is as long.
+const rigRetryWidest = "retry in 30s"
+
 // rigConnLines renders the rig's connection status and, while it is not
-// connected, the reason and when it retries, wrapped to width cells.
+// connected, the reason and when it retries, wrapped to width cells. Each
+// retry connects and disconnects again, so the reason stays while the rig
+// reconnects, and it takes as many lines whatever the retry text; otherwise
+// the lines below would jump on every attempt.
 func (m Model) rigConnLines(width int) (status string, reason []string) {
-	st, c := m.styles, m.rigState.conn
-	switch c.Status {
+	st, s := m.styles, m.rigState
+	var retry string
+	switch s.conn.Status {
 	case rig.Connected:
-		return fit(st.connected.Render(c.Status.String()), width), nil
+		return fit(st.connected.Render(s.conn.Status.String()), width), nil
 	case rig.Disconnected:
-		var parts []string
-		if c.Err != nil {
-			parts = append(parts, c.Err.Error())
-		}
+		status = st.err.Render(m.rigName + " not connected")
 		// The delay is rounded so the line keeps its length, and so its
 		// wrapping, from one attempt to the next.
-		if retry := c.RetryIn.Round(time.Second); retry > 0 {
-			parts = append(parts, "retry in "+retry.String())
+		if d := s.conn.RetryIn.Round(time.Second); d > 0 {
+			retry = "retry in " + d.String()
 		}
-		return fit(st.err.Render(m.rigName+" not connected"), width), wrapLines(st.muted, strings.Join(parts, " · "), width)
+	default:
+		status = st.muted.Render(s.conn.Status.String())
+		if s.downErr != nil {
+			retry = "retrying now"
+		}
 	}
-	return fit(st.muted.Render(c.Status.String()), width), nil
+	if s.downErr == nil {
+		return fit(status, width), wrapLines(st.muted, retry, width)
+	}
+	text := s.downErr.Error()
+	if retry != "" {
+		text += " · " + retry
+	}
+	reason = wrapLines(st.muted, text, width)
+	for range len(wrapLines(st.muted, s.downErr.Error()+" · "+rigRetryWidest, width)) - len(reason) {
+		reason = append(reason, "")
+	}
+	return fit(status, width), reason
 }
 
 // wrapLines wraps s to width cells, each line rendered in style, or returns

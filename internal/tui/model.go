@@ -318,6 +318,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case rig.ConnectionChanged:
 		m.rigState.conn = msg
+		switch msg.Status {
+		case rig.Connected:
+			m.rigState.downErr = nil
+		case rig.Disconnected:
+			m.rigState.downErr = msg.Err
+		}
 
 	case rigResultMsg:
 		return m.applyRigResult(msg), nil
