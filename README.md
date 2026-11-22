@@ -332,16 +332,14 @@ The index keys follow NeoMutt's generic menu.
 | `ctrl+l`                  | Reload the index and redraw the screen             |
 | `enter`                   | [Show the QSO](#showing-a-qso) in the pager        |
 | `e`                       | [Edit the QSO](#editing-a-qso)                     |
-| `f`                       | Set the rig frequency                              |
-| `m`                       | Set the rig mode                                   |
+| `r`                       | [Set the rig](#rig-control)                        |
 | `?` / `F1`                | [Show every key](#help)                            |
 | `q` / `ctrl+c`            | Quit                                               |
 
-Keys are case-sensitive: `M` is the middle of the page and `m` sets the
-mode. `ctrl+l` keeps the cursor on the same QSO if it still exists, and
-redraws the whole screen, which fixes a display the terminal has drawn
-wrong. `f` and `m` are only available when rig control is on. In a prompt,
-press `enter` to submit or `esc` to cancel.
+Keys are case-sensitive. `ctrl+l` keeps the cursor on the same QSO if it
+still exists, and redraws the whole screen, which fixes a display the
+terminal has drawn wrong. `r` is only available when rig control is on. In
+a prompt, press `enter` to submit or `esc` to cancel.
 
 ### Help
 
@@ -495,10 +493,21 @@ If the profile has a `spawn` table, jstlogger starts rigctld itself and
 stops it on exit. Otherwise it connects to a rigctld that is already
 running.
 
-- **Frequency:** type it in MHz (`14.074`), kHz (`14074`) or Hz
-  (`14074000`), or add a unit (`7074 khz`).
-- **Mode:** type a Hamlib mode name with an optional passband in Hz, such as
-  `USB` or `PKTUSB 3000`. Leave the passband out to use the rig's default.
+`r` opens the rig window, focused on the frequency. It starts with the
+rig's current settings filled in and shows the connection
+status; when the rig is disconnected, it also shows why. Press `tab` or
+`shift+tab` to move between fields, `enter` to apply, or `esc` to close the
+window without changing anything. Only the fields you changed are sent to
+the rig. If the rig reports an error, the window stays open and shows it.
+
+- **Frequency:** type it in MHz (`14.074` or `14.074.000`), kHz (`14074`)
+  or Hz (`14074000`), or add a unit (`7074 khz`). `↑` and `↓` recall
+  frequencies you set earlier in the session; the history isn't saved.
+- **Mode:** type to filter the Hamlib modes, then pick one with `↑` and `↓`.
+  Modes you used earlier in the session are listed first.
+- **Passband:** optional, in Hz. Leave it blank to use the rig's normal
+  passband. When you change the mode without touching the passband, the
+  new mode gets its normal passband.
 
 **Using WSJT-X at the same time:** only one program can own the radio's
 serial port. Let rigctld own it, and point both jstlogger and WSJT-X at the

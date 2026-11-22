@@ -30,23 +30,19 @@ func sectionKeys(sections []helpSection) [][]key.Binding {
 // keyMap holds the global keybindings. It implements help.KeyMap so the
 // footer and the help modal stay in sync with the actual bindings.
 type keyMap struct {
-	Freq key.Binding
-	Mode key.Binding
+	Rig  key.Binding
 	Help key.Binding
 	Quit key.Binding
 }
 
-// defaultKeys returns the global keybindings. The rig keys are disabled, and
-// so hidden from help, unless rigEnabled is true.
+// defaultKeys returns the global keybindings. The rig key, which opens the
+// rig modal, is disabled, and so hidden from help, unless rigEnabled is
+// true.
 func defaultKeys(rigEnabled bool) keyMap {
 	k := keyMap{
-		Freq: key.NewBinding(
-			key.WithKeys("f"),
-			key.WithHelp("f", "freq"),
-		),
-		Mode: key.NewBinding(
-			key.WithKeys("m"),
-			key.WithHelp("m", "mode"),
+		Rig: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "rig"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?", "f1"),
@@ -57,13 +53,12 @@ func defaultKeys(rigEnabled bool) keyMap {
 			key.WithHelp("q", "quit"),
 		),
 	}
-	k.Freq.SetEnabled(rigEnabled)
-	k.Mode.SetEnabled(rigEnabled)
+	k.Rig.SetEnabled(rigEnabled)
 	return k
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Freq, k.Mode, k.Help, k.Quit}
+	return []key.Binding{k.Rig, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -72,7 +67,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 func (k keyMap) sections() []helpSection {
 	return []helpSection{
-		{"rig", []key.Binding{k.Freq, k.Mode}},
+		{"rig", []key.Binding{k.Rig}},
 		{"general", []key.Binding{k.Help, k.Quit}},
 	}
 }
