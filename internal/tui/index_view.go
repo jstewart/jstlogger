@@ -184,26 +184,18 @@ func (x index) rowView(st styles, i, width, nw int) string {
 		return st.muted.Render(line)
 	}
 	last, user := x.lotw.lastUpload(q.Call)
-	cells := x.format.Values(q, indexfmt.Row{Marked: x.marks[q.ID], LoTW: user}, x.unit)
-	lotwCell, colored := lotwStyle(st, lotw.RecencyOf(last, x.lotw.now()))
-	cellStyle := func(j int) (lipgloss.Style, bool) {
-		return lotwCell, colored && x.format.Items[j].Field == indexfmt.FieldLoTW
-	}
-	var style func(int, string) string
-	switch {
-	case i == x.cursor:
-		style = func(j int, v string) string {
-			if s, ok := cellStyle(j); ok {
-				return onBar(st.cursor, s).Render(v)
-			}
+	row := indexfmt.Row{Marked: x.marks[q.ID], LoTW: user}
+	cells := x.format.Values(q, row, x.unit)
+	recency := lotw.RecencyOf(last, x.lotw.now())
+	style := func(j int, v string) string {
+		s, ok := cellStyle(st, x.format.Items[j], cells[j], row, recency)
+		switch {
+		case !ok:
 			return v
-		}
-	case colored:
-		style = func(j int, v string) string {
-			if s, ok := cellStyle(j); ok {
-				return s.Render(v)
-			}
-			return v
+		case i == x.cursor:
+			return onBar(st.cursor, s).Render(v)
+		default:
+			return s.Render(v)
 		}
 	}
 	line := numberLine(num, nw, width, func(w int) string {
@@ -213,6 +205,30 @@ func (x index) rowView(st styles, i, width, nw int) string {
 		return fillBar(st.cursor, line)
 	}
 	return line
+}
+
+// cellStyle returns the style of the cell of item it whose value is v, in
+// a row with the marks and LoTW status of row and a last LoTW upload of
+// recency r, and reports whether the cell is styled. The style follows the
+// item's field, so custom formats get it too: the call is bold accent, the
+// date, time and RST are muted, a marked row's mark is bold yellow, a band
+// has its own color and the LoTW cell shows the upload's recency.
+func cellStyle(st styles, it indexfmt.Item, v string, row indexfmt.Row, r lotw.Recency) (lipgloss.Style, bool) {
+	switch it.Field {
+	case 'c':
+		return st.indexCall, true
+	case indexfmt.FieldTime, 's', 'r':
+		return st.indexDim, true
+	case 'Z':
+		return st.indexMark, row.Marked
+	case 'b':
+		s, ok := st.bands[strings.ToLower(v)]
+		return s, ok
+	case indexfmt.FieldLoTW:
+		return lotwStyle(st, r)
+	default:
+		return lipgloss.Style{}, false
+	}
 }
 
 // onBar returns cell style s for a cell on the cursor bar: s with the

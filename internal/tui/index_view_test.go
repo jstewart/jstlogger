@@ -291,7 +291,8 @@ func TestIndexView(t *testing.T) {
 	require.Len(t, lines, 7, "header, five rows and the status line")
 	assert.True(t, strings.HasPrefix(plain(lines[0]), "  Date       Time  Call       Mode   RST S RST R Band  Country      Station"))
 	assert.Contains(t, lines[1], "K4559A", "row 9 is the first visible")
-	assert.True(t, strings.HasPrefix(lines[2], "* "), "row 10 is marked")
+	assert.True(t, strings.HasPrefix(plain(lines[2]), "* "), "row 10 is marked")
+	assert.True(t, strings.HasPrefix(lines[2], defaultStyles(true).indexMark.Render("*")), "the mark is colored")
 	assert.True(t, strings.HasPrefix(plain(lines[4]), "* "), "the cursor row can be marked too")
 	assert.Contains(t, lines[4], "K4556A")
 	assert.Empty(t, offStyle(lines[4], barBg), "the cursor bar spans the row")
@@ -310,13 +311,13 @@ func TestIndexViewNumbered(t *testing.T) {
 	header := plain(lines[0])
 	assert.True(t, strings.HasPrefix(header, "   #   Date       Time  Call"), "the number column is as wide as 4,567")
 	assert.True(t, strings.HasPrefix(lines[1], "   9   "), "row 8 is QSO 9")
-	assert.True(t, strings.HasPrefix(lines[2], "  10 * "), "the mark follows the number")
+	assert.True(t, strings.HasPrefix(plain(lines[2]), "  10 * "), "the mark follows the number")
 	assert.True(t, strings.HasPrefix(plain(lines[4]), "  12 "), "the cursor row is numbered too")
 	assert.Empty(t, offStyle(lines[4], barBg), "the bar spans the number column too")
 	for _, l := range lines[:6] {
 		assert.Equal(t, 78, lipgloss.Width(l), "each line spans the width")
 	}
-	assert.Equal(t, strings.Index(header, "Call"), strings.Index(lines[1], "K4559A"), "the columns line up")
+	assert.Equal(t, strings.Index(header, "Call"), strings.Index(plain(lines[1]), "K4559A"), "the columns line up")
 	assert.Equal(t, "QSO 12/4,567 · 1 marked", lines[6])
 
 	unnumbered := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
