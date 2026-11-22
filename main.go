@@ -84,6 +84,9 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		dxccSyncer = newDXCCSyncer(countries)
 		tuiOpts = append(tuiOpts, tui.WithLoTW(users), tui.WithEQSL(members), tui.WithDXCC(table))
 	}
+	if dark, fixed := fixedBackground(session.Config.UI); fixed {
+		tuiOpts = append(tuiOpts, tui.WithBackground(dark))
+	}
 	var r *rig.Rig
 	if opts, ok := rigOptions(session); ok {
 		r = rig.New(opts)
@@ -169,6 +172,18 @@ func rigOptions(session config.Session) (rig.Options, bool) {
 		opts.Spawn = &rig.Spawn{Model: p.Spawn.Model, Device: p.Spawn.Device, Baud: p.Spawn.Baud}
 	}
 	return opts, true
+}
+
+// fixedBackground reports whether ui fixes the terminal background rather
+// than leaving the TUI to ask the terminal, and whether it is dark.
+func fixedBackground(ui config.UI) (dark, fixed bool) {
+	switch ui.Background {
+	case config.BackgroundDark:
+		return true, true
+	case config.BackgroundLight:
+		return false, true
+	}
+	return false, false
 }
 
 // rigName returns the name the header shows for the session's rig: its

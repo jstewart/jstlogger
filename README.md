@@ -57,6 +57,26 @@ go run .
 
 The app opens full-screen in the terminal's alternate screen.
 
+### Colors
+
+jstlogger takes most of its colors from your terminal's theme. On
+startup it asks the terminal whether the background is light or dark,
+and on a light background it swaps the grays, yellows and oranges for
+darker ones that read well on white. Until the terminal answers, or if
+it never does (some tmux and ssh setups don't pass the question on),
+jstlogger uses the colors for a dark background.
+
+If the colors are wrong for your terminal, set the background in the
+config:
+
+```toml
+[ui]
+background = "light"   # "auto" (the default) | "dark" | "light"
+```
+
+The row under the cursor is shown in reverse video, so it stays visible
+with colors turned off (for example with `NO_COLOR` set).
+
 ### QSO index
 
 jstlogger opens on the QSO index: every QSO in the logbook, newest first
