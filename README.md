@@ -17,12 +17,10 @@ Some of the features that I envision for jstlogger. These are the ones that are 
 ### Offline Features
 
 - A [mutt-like](http://www.mutt.org/) interface for logging QSOs
-- Offline mode will store qsos in an outbox until online, then sync with your logging services
 
 ### Online Features
 
 - Receive UDP messages from other apps (WSJTX, GridTracker, etc)
-- Forward logged QSOs to Wavelog
 
 ## Requirements
 
