@@ -490,6 +490,12 @@ retrying if rigctld goes away. Pick a rig profile in the config file (run
 `jstlogger --print-default-config` for a commented example), or choose one
 with `--rig <profile>`. Use `--no-rig` to turn rig control off for a session.
 
+A dot in front of the rig's name shows the connection: a green `●` when
+connected, a grey `◌` while connecting and a red `○` when disconnected.
+Unless the rig is connected, the frequency and mode are greyed out, as
+they may be out of date. The rig window (`r`) shows why the rig is
+disconnected.
+
 The header names the rig by its profile, such as `ic7300`. Set `name` in
 the profile to show something else:
 
