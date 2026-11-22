@@ -70,6 +70,7 @@ profile       = "ic7300"   # Used when the station sets no rig_profile
 poll_interval = "1s"
 
 [rig.profiles.ic7300]
+name    = "IC-7300"        # Shown in the header; defaults to the profile name
 backend = "rigctld"        # "none" | "rigctld"  (later: "flrig")
 host    = "localhost"
 port    = 4532
@@ -161,6 +162,7 @@ func TestFullExampleLoads(t *testing.T) {
 			PollInterval: time.Second,
 			Profiles: map[string]RigProfile{
 				"ic7300": {
+					Name:    "IC-7300",
 					Backend: BackendRigctld,
 					Host:    "localhost",
 					Port:    4532,

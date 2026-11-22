@@ -165,6 +165,9 @@ type Rig struct {
 
 // RigProfile describes how to reach one rig.
 type RigProfile struct {
+	// Name is the rig's name as shown in the header. Empty means the
+	// profile's name is shown instead.
+	Name    string `mapstructure:"name" toml:"name"`
 	Backend string `mapstructure:"backend" toml:"backend"`
 	Host    string `mapstructure:"host" toml:"host"`
 	Port    int    `mapstructure:"port" toml:"port"`
