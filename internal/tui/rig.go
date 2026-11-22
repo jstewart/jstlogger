@@ -103,6 +103,9 @@ type rigState struct {
 	state     rig.State
 	haveState bool
 	conn      rig.ConnectionChanged
+	// downErr is why the rig last disconnected, kept while it reconnects
+	// and cleared once it connects.
+	downErr error
 }
 
 // isPatternPrompt reports whether the prompt of the given kind takes a

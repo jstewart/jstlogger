@@ -2,6 +2,8 @@ package tui
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -734,6 +736,36 @@ func TestRigModalConnectionStatus(t *testing.T) {
 			assert.NotContains(t, m.headerView(), "connection refused")
 		})
 	}
+}
+
+// Each retry sends connecting and then disconnected again. A refused
+// connection is over in moments, so anything that moves in between
+// flickers.
+func TestRigModalSteadyWhileReconnecting(t *testing.T) {
+	m, _ := newIndexModel(t, 3, 100, 30, WithRig("ic7300", &fakeRig{}))
+	m, _ = update(t, m, rigKey)
+	refused := errors.New("connect to rigctld at localhost:4532: dial tcp [::1]:4532: connect: connection refused")
+	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Disconnected, Err: refused, RetryIn: time.Second})
+	first := strings.Split(rigModalText(m), "\n")
+	fields := slices.IndexFunc(first, func(l string) bool { return strings.Contains(l, "Freq") })
+	require.Positive(t, fields)
+
+	for _, retry := range []time.Duration{2, 4, 8, 16, 30} {
+		m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Connecting})
+		v := rigModalText(m)
+		assert.Contains(t, v, "connecting")
+		assert.Contains(t, v, "connection refused", "the last reason stays while reconnecting")
+		assert.Contains(t, v, "retrying now")
+		assert.Equal(t, first[fields:], strings.Split(v, "\n")[fields:], "connecting before a %s retry moves the fields", retry*time.Second)
+
+		m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Disconnected, Err: refused, RetryIn: retry * time.Second})
+		assert.Equal(t, first[fields:], strings.Split(rigModalText(m), "\n")[fields:], "a %s retry moves the fields", retry*time.Second)
+	}
+
+	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Connected})
+	assert.NotContains(t, rigModalText(m), "connection refused", "a connection clears the reason")
+	m, _ = update(t, m, rig.ConnectionChanged{Status: rig.Connecting})
+	assert.NotContains(t, rigModalText(m), "connection refused", "and it stays cleared")
 }
 
 func TestRigModalDisconnectedStillApplies(t *testing.T) {
