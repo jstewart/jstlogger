@@ -61,8 +61,9 @@ type styles struct {
 	muted  lipgloss.Style
 	err    lipgloss.Style
 
-	// indexHeader renders the index column header and cursor the bar
-	// across the row under the cursor, which keeps the row's cell colors.
+	// indexHeader renders the index column header, in the title's bold
+	// accent, and cursor the bar across the row under the cursor, which
+	// keeps the row's cell colors.
 	indexHeader lipgloss.Style
 	cursor      lipgloss.Style
 
@@ -127,7 +128,7 @@ func defaultStyles(dark bool) styles {
 		footer:       lipgloss.NewStyle().Padding(0, 1),
 		muted:        lipgloss.NewStyle().Foreground(muted),
 		err:          lipgloss.NewStyle().Foreground(bad),
-		indexHeader:  lipgloss.NewStyle().Bold(true),
+		indexHeader:  lipgloss.NewStyle().Bold(true).Foreground(accent),
 		cursor:       lipgloss.NewStyle().Background(muted).Foreground(barText).Bold(true),
 		indexCall:    lipgloss.NewStyle().Bold(true).Foreground(accent),
 		indexDim:     lipgloss.NewStyle().Foreground(muted),

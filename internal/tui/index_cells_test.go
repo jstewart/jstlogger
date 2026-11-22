@@ -109,6 +109,21 @@ func TestIndexCellStyles(t *testing.T) {
 	assert.Equal(t, m.bodyWidth(), lipgloss.Width(cursor))
 }
 
+func TestIndexHeaderStyle(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		h := defaultStyles(dark).indexHeader
+		assert.True(t, h.GetBold(), "dark=%t: the header is bold", dark)
+		assert.Equal(t, accent, h.GetForeground(), "dark=%t: the header is the accent color, as the title is", dark)
+	}
+
+	st := defaultStyles(true)
+	f, err := indexfmt.Parse(indexfmt.Default)
+	require.NoError(t, err)
+	m := newIndexLoTWModel(t, nil, indexfmt.Default, cellQSO(1, "W1AW", "20m"))
+	header := rowLine(t, m, "Call")
+	assert.Contains(t, header, st.indexHeader.Render(formatLine(f, f.Titles(), m.bodyWidth())), "the header renders in its style")
+}
+
 func TestIndexMarkStyle(t *testing.T) {
 	st := defaultStyles(true)
 	m := newIndexLoTWModel(t, nil, indexfmt.Default, cellQSO(2, "K1ABC", "40m"), cellQSO(1, "W1AW", "20m"))
