@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"image/color"
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/help"
@@ -201,4 +202,18 @@ func TestBackgroundRestylesOpenModals(t *testing.T) {
 
 	assert.Equal(t, inputStyles(false), m.rigModal.freq.Styles())
 	assert.Equal(t, inputStyles(false), m.rigModal.passband.Styles())
+}
+
+func TestTitleBadge(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		b := defaultStyles(dark).titleBadge
+		assert.True(t, b.GetBold(), "dark=%t: the badge is bold", dark)
+		assert.True(t, b.GetReverse(), "dark=%t: the badge is reverse video", dark)
+		assert.Equal(t, accent, b.GetForeground(), "dark=%t: the badge is the accent color", dark)
+	}
+
+	m, _ := newIndexModel(t, 1, 80, 24)
+	header := m.headerView()
+	assert.Contains(t, header, m.styles.titleBadge.Render(" jstlogger "), "the title is a padded badge")
+	assert.True(t, strings.HasPrefix(plain(header), "  jstlogger  "), "the badge follows the header's padding: %q", plain(header))
 }

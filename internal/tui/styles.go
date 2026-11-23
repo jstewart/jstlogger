@@ -56,10 +56,13 @@ type styles struct {
 
 	header lipgloss.Style
 	title  lipgloss.Style
-	body   lipgloss.Style
-	footer lipgloss.Style
-	muted  lipgloss.Style
-	err    lipgloss.Style
+	// titleBadge renders the app name in the header as a reverse accent
+	// pill.
+	titleBadge lipgloss.Style
+	body       lipgloss.Style
+	footer     lipgloss.Style
+	muted      lipgloss.Style
+	err        lipgloss.Style
 
 	// indexHeader renders the index column header, in the title's bold
 	// accent, and cursor the bar across the row under the cursor, which
@@ -124,6 +127,7 @@ func defaultStyles(dark bool) styles {
 		dark:         dark,
 		header:       lipgloss.NewStyle().Padding(0, 1),
 		title:        lipgloss.NewStyle().Bold(true).Foreground(accent),
+		titleBadge:   lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(accent),
 		body:         lipgloss.NewStyle().Padding(0, 1),
 		footer:       lipgloss.NewStyle().Padding(0, 1),
 		muted:        lipgloss.NewStyle().Foreground(muted),
