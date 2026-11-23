@@ -112,6 +112,12 @@ background = "auto"   # "auto" | "dark" | "light"; auto asks the terminal and as
 # [callbook.hamqth]
 # username = "w1aw"
 # password = "..."                # Or set JSTLOGGER_HAMQTH_PASSWORD
+
+# [listeners.wsjtx]                # Log the QSOs WSJT-X sends over UDP
+# protocol  = "wsjtx"              # "wsjtx"
+# address   = "224.0.0.1:2237"     # WSJT-X's UDP Server; loopback or multicast IP:port, default "127.0.0.1:2237"
+# interface = "lo0"                # Multicast only: the interface to join the group on
+# tags      = ["wsjtx"]            # Added to each logged QSO
 `
 
 func TestDefaultTemplateMatchesIssue(t *testing.T) {

@@ -465,3 +465,61 @@ password = "other"
 		})
 	}
 }
+
+func TestLoadListeners(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    map[string]Listener
+	}{
+		{
+			name:    "section absent",
+			content: "",
+			want:    nil,
+		},
+		{
+			name: "all keys",
+			content: `[listeners.wsjtx]
+protocol  = "wsjtx"
+address   = "224.0.0.1:2237"
+interface = "lo0"
+tags      = ["wsjtx", "ft8"]
+`,
+			want: map[string]Listener{
+				"wsjtx": {Protocol: ProtocolWSJTX, Address: "224.0.0.1:2237", Interface: "lo0", Tags: []string{"wsjtx", "ft8"}},
+			},
+		},
+		{
+			name:    "unset address gets the default",
+			content: "[listeners.wsjtx]\nprotocol = \"wsjtx\"\n",
+			want:    map[string]Listener{"wsjtx": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress}},
+		},
+		{
+			name:    "empty table still produces an entry",
+			content: "[listeners.wsjtx]\n",
+			want:    map[string]Listener{"wsjtx": {Address: DefaultListenerAddress}},
+		},
+		{
+			name:    "explicit empty address is kept so validation can reject it",
+			content: "[listeners.wsjtx]\naddress = \"\"\n",
+			want:    map[string]Listener{"wsjtx": {}},
+		},
+		{
+			name:    "names are lowercased",
+			content: "[listeners.WSJTX]\nprotocol = \"wsjtx\"\n",
+			want:    map[string]Listener{"wsjtx": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, res := load(t, tt.content)
+			assert.Empty(t, res.Warnings)
+			assert.Equal(t, tt.want, c.Listeners)
+		})
+	}
+}
+
+func TestLoadListenerUnknownKeyWarning(t *testing.T) {
+	_, res := load(t, "[listeners.wsjtx]\nprotocl = \"wsjtx\"\n")
+	assert.Equal(t, []string{`unknown key "listeners.wsjtx.protocl"`}, res.Warnings)
+}

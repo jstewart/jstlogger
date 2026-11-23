@@ -386,3 +386,145 @@ func setProfile(c *Config, name string, f func(p *RigProfile)) {
 	f(&p)
 	c.Rig.Profiles[name] = p
 }
+
+func TestValidateListeners(t *testing.T) {
+	tests := []struct {
+		name     string
+		listener Listener
+		wantKeys []string
+	}{
+		{
+			name:     "loopback IPv4",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:2237"},
+		},
+		{
+			name:     "loopback IPv6",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "[::1]:2237"},
+		},
+		{
+			name:     "multicast with interface",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "224.0.0.1:2237", Interface: "lo0"},
+		},
+		{
+			name:     "multicast without interface",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "239.255.0.1:2237", Tags: []string{"wsjtx"}},
+		},
+		{
+			name:     "unknown protocol",
+			listener: Listener{Protocol: "js8call", Address: "127.0.0.1:2237"},
+			wantKeys: []string{"listeners.wsjtx.protocol"},
+		},
+		{
+			name:     "empty protocol",
+			listener: Listener{Address: "127.0.0.1:2237"},
+			wantKeys: []string{"listeners.wsjtx.protocol"},
+		},
+		{
+			name:     "hostname",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "localhost:2237"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "unspecified IPv4",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "0.0.0.0:2237"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "unspecified IPv6",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "[::]:2237"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "LAN unicast",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "192.168.1.5:2237"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "missing port",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "empty address",
+			listener: Listener{Protocol: ProtocolWSJTX},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "port zero",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:0"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "port too large",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:70000"},
+			wantKeys: []string{"listeners.wsjtx.address"},
+		},
+		{
+			name:     "interface with unicast address",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:2237", Interface: "lo0"},
+			wantKeys: []string{"listeners.wsjtx.interface"},
+		},
+		{
+			name:     "every rule fails",
+			listener: Listener{Protocol: "bogus", Address: "10.0.0.1:2237", Interface: "en0"},
+			wantKeys: []string{"listeners.wsjtx.protocol", "listeners.wsjtx.address", "listeners.wsjtx.interface"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := fullConfig(t)
+			c.Listeners = map[string]Listener{"wsjtx": tt.listener}
+			err := c.Validate("")
+			if tt.wantKeys == nil {
+				assert.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Equal(t, tt.wantKeys, validationKeys(t, err))
+		})
+	}
+}
+
+func TestValidateListenersSortedByName(t *testing.T) {
+	c := fullConfig(t)
+	c.Listeners = map[string]Listener{
+		"zeta":  {Protocol: "bogus", Address: "127.0.0.1:2237"},
+		"alpha": {Protocol: "bogus", Address: "127.0.0.1:2237"},
+	}
+	err := c.Validate("")
+	require.Error(t, err)
+	assert.Equal(t, []string{"listeners.alpha.protocol", "listeners.zeta.protocol"}, validationKeys(t, err))
+}
+
+func TestValidateListenerMessages(t *testing.T) {
+	tests := []struct {
+		name     string
+		listener Listener
+		want     string
+	}{
+		{
+			name:     "protocol lists the allowed protocols",
+			listener: Listener{Protocol: "js8call", Address: "127.0.0.1:2237"},
+			want:     `listeners.wsjtx.protocol: must be "wsjtx", got "js8call"`,
+		},
+		{
+			name:     "address must be loopback or multicast",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "0.0.0.0:2237"},
+			want:     "must be a loopback or multicast address",
+		},
+		{
+			name:     "interface needs multicast",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:2237", Interface: "lo0"},
+			want:     "listeners.wsjtx.interface: only allowed with a multicast address",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := fullConfig(t)
+			c.Listeners = map[string]Listener{"wsjtx": tt.listener}
+			err := c.Validate("")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
