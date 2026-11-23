@@ -238,15 +238,18 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		// prompt or the New QSO screen's fields.
 
 	case indexLoadedMsg:
+		stale := m.idx.settle(msg.gen)
 		before, _ := m.idx.current()
+		var cmd tea.Cmd
 		if m.idx.applyLoad(msg) {
 			// A reload after a delete can leave the cursor's row on
 			// another QSO, which starts at the top, as after j.
 			if after, _ := m.idx.current(); m.pager.open && after.ID != before.ID {
 				m.pager.scroll = 0
 			}
-			return m, m.lookupIndexLoTW(msg.rows)
+			cmd = m.lookupIndexLoTW(msg.rows)
 		}
+		return m.refreshStale(stale, cmd)
 
 	case indexBlockMsg:
 		if m.idx.applyBlock(msg) {
@@ -254,9 +257,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 
 	case indexLimitMsg:
+		stale := m.idx.settle(msg.gen)
+		var cmd tea.Cmd
 		if m.idx.applyLimit(msg) {
-			return m, m.lookupIndexLoTW(msg.rows)
+			cmd = m.lookupIndexLoTW(msg.rows)
 		}
+		return m.refreshStale(stale, cmd)
 
 	case indexMarksMsg:
 		m.idx.applyMarks(msg)
@@ -314,6 +320,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case LoTWSynced:
 		return m, m.applyLoTWSynced(msg)
+
+	case LogbookChanged:
+		return m.refreshIndex()
 
 	case eqslLookupMsg:
 		q, _ := m.idx.current()

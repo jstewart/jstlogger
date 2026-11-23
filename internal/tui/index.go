@@ -68,6 +68,14 @@ type index struct {
 	// gen counts reloads; results of a load started before the latest
 	// reload are dropped.
 	gen int
+	// settling reports that a load under a new limit or sort is under
+	// way. A background change to the logbook waits for it, marking the
+	// index stale, rather than restarting: restarting would drop the new
+	// limit, or lose the cursor's QSO, whose row a new sort drops.
+	settling bool
+	// stale reports that the logbook changed while settling, so the index
+	// reloads once the load lands.
+	stale bool
 
 	// limit restricts the rows to the QSOs matching a pattern; the zero
 	// limit shows every QSO.
@@ -317,10 +325,25 @@ func (x *index) replace(msg indexLoadedMsg) {
 func (x *index) restart() int64 {
 	x.gen++
 	x.pending = map[int]bool{}
+	// Every restart is followed by a full load, which sees any change to
+	// the logbook made so far.
+	x.settling, x.stale = false, false
 	if q, ok := x.current(); ok {
 		return q.ID
 	}
 	return 0
+}
+
+// settle ends the settling of a new limit or sort when msg, of the given
+// gen, is its load, whether or not it is applied. It reports whether the
+// logbook changed meanwhile, so the index must reload.
+func (x *index) settle(gen int) bool {
+	if !x.settling || gen != x.gen {
+		return false
+	}
+	stale := x.stale
+	x.settling, x.stale = false, false
+	return stale
 }
 
 // applyBlock caches a loaded block. It reports whether the block was kept.
@@ -692,6 +715,7 @@ func (m *Model) limitIndex(s string) (tea.Cmd, error) {
 		return nil, nil
 	}
 	id := m.idx.restart()
+	m.idx.settling = true
 	return limitIndexCmd(m.logbook, m.idx.gen, limit, m.idx.sort, id), nil
 }
 
