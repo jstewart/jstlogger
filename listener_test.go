@@ -178,6 +178,21 @@ func TestRunListenerLogsSetupErrors(t *testing.T) {
 	}
 }
 
+func TestHandleListenerEventStoresAfterCancel(t *testing.T) {
+	store := openTestLogbook(t)
+	send, sent := recordSends()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
+	handleListenerEvent(ctx, slog.New(slog.DiscardHandler), store, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
+
+	n, err := store.Count(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "a QSO that arrives as the app quits is stored")
+	assert.Equal(t, []tea.Msg{tui.LogbookChanged{}}, sent())
+}
+
 func TestHandleListenerEventImportError(t *testing.T) {
 	store, err := logbook.Open(t.Context(), filepath.Join(t.TempDir(), "logbook.db"), logbook.Options{})
 	require.NoError(t, err)

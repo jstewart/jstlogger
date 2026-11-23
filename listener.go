@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -11,6 +12,9 @@ import (
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/tui"
 )
+
+// listenerImportTimeout bounds storing one QSO a listener received.
+const listenerImportTimeout = 10 * time.Second
 
 // runListener runs the listener configured as [listeners.<name>] until ctx
 // is canceled. Each QSO it receives is imported into store with the
@@ -49,7 +53,11 @@ func handleListenerEvent(ctx context.Context, logger *slog.Logger, store logbook
 	case listener.QSOReceived:
 		q := ev.QSO
 		attrs := []any{"source", ev.Source, "call", q.Call, "start", q.StartUTC, "band", q.Band, "mode", q.Mode}
-		res, err := store.Import(ctx, []logbook.QSO{q}, tags)
+		// The sender already counts the QSO as logged, so a QSO that
+		// arrives as the app quits is still stored.
+		importCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), listenerImportTimeout)
+		res, err := store.Import(importCtx, []logbook.QSO{q}, tags)
+		cancel()
 		switch {
 		case err != nil:
 			logger.Error("listener qso not stored", append(attrs, "err", err)...)
