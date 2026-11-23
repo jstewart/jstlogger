@@ -419,7 +419,7 @@ func TestStatusSegmentStyles(t *testing.T) {
 		st := defaultStyles(dark)
 		assert.True(t, st.statusChip.GetReverse(), "dark=%t: the position is a reverse chip", dark)
 		assert.True(t, st.statusChip.GetBold(), "dark=%t: the position chip is bold", dark)
-		assert.Equal(t, accent, st.statusChip.GetForeground(), "dark=%t: the position chip is the accent color", dark)
+		assert.Equal(t, badge, st.statusChip.GetForeground(), "dark=%t: the position chip is the badge color", dark)
 		assert.Equal(t, purple, st.statusValue.GetForeground(), "dark=%t: the sort and limit values are purple", dark)
 		assert.True(t, st.statusMarked.GetBold(), "dark=%t: the mark count is bold", dark)
 		assert.Equal(t, st.indexMark.GetForeground(), st.statusMarked.GetForeground(), "dark=%t: the mark count is the marks' yellow", dark)

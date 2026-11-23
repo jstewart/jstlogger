@@ -22,6 +22,9 @@ var (
 	amber = lipgloss.Color("214")
 	// barText is the bright white of the text on the cursor bar.
 	barText = lipgloss.Color("15")
+	// badge is the color of every reverse pill: the header's title, the
+	// status line's position and the modals' close badge.
+	badge = blue
 )
 
 // On a light background, fixed 256-color stand-ins replace the palette
@@ -65,7 +68,7 @@ type styleSet struct {
 
 	header lipgloss.Style
 	title  lipgloss.Style
-	// titleBadge renders the app name in the header as a reverse accent
+	// titleBadge renders the app name in the header as a reverse badge
 	// pill.
 	titleBadge lipgloss.Style
 	body       lipgloss.Style
@@ -87,7 +90,7 @@ type styleSet struct {
 	indexMark lipgloss.Style
 	bands     map[string]lipgloss.Style
 
-	// statusChip renders the status line's position as a reverse accent
+	// statusChip renders the status line's position as a reverse badge
 	// chip, statusValue the values of its sort and limit, whose labels are
 	// muted, and statusMarked its mark count.
 	statusChip   lipgloss.Style
@@ -143,7 +146,7 @@ func defaultStyles(dark bool) styles {
 		dark:         dark,
 		header:       lipgloss.NewStyle().Padding(0, 1),
 		title:        lipgloss.NewStyle().Bold(true).Foreground(accent),
-		titleBadge:   lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(accent),
+		titleBadge:   lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(badge),
 		body:         lipgloss.NewStyle().Padding(0, 1),
 		footer:       lipgloss.NewStyle().Padding(0, 1),
 		muted:        lipgloss.NewStyle().Foreground(muted),
@@ -154,7 +157,7 @@ func defaultStyles(dark bool) styles {
 		indexDim:     lipgloss.NewStyle().Foreground(muted),
 		indexMark:    lipgloss.NewStyle().Bold(true).Foreground(yellow),
 		bands:        bandStyles(dark),
-		statusChip:   lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(accent),
+		statusChip:   lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(badge),
 		statusValue:  lipgloss.NewStyle().Foreground(purple),
 		statusMarked: lipgloss.NewStyle().Bold(true).Foreground(yellow),
 		tab:          lipgloss.NewStyle().Bold(true).Reverse(true),
@@ -172,7 +175,7 @@ func defaultStyles(dark bool) styles {
 		lotwInactive: lipgloss.NewStyle().Foreground(muted).Faint(true),
 		newBadge:     lipgloss.NewStyle().Bold(true).Foreground(good),
 		helpBox:      lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(blue).Padding(0, 1),
-		helpBadge:    lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(blue),
+		helpBadge:    lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(badge),
 		helpHeading:  lipgloss.NewStyle().Bold(true).Foreground(blue),
 		helpKey:      lipgloss.NewStyle().Bold(true).Foreground(purple),
 	}}
