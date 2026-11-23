@@ -89,10 +89,49 @@ func assertBackground(t *testing.T, m Model, dark bool) {
 	t.Helper()
 	assert.Equal(t, dark, m.styles.dark)
 	assert.Equal(t, defaultStyles(dark).muted.GetForeground(), m.styles.muted.GetForeground())
-	assert.Equal(t, help.DefaultStyles(dark), m.help.Styles)
+	assertFooterHelpStyles(t, m.help.Styles, defaultStyles(dark))
 	assert.Equal(t, inputStyles(dark), m.input.Styles())
 	assert.Equal(t, inputStyles(dark), m.entry.input(qsoentry.Call).Styles())
 	assert.Equal(t, areaStyles(dark), m.entry.area(qsoentry.Notes).Styles())
+}
+
+// assertFooterHelpStyles checks that the footer's key help hs renders its
+// keys like the help modal's and the rest in st's muted gray.
+func assertFooterHelpStyles(t *testing.T, hs help.Styles, st styles) {
+	t.Helper()
+	assert.Equal(t, st.helpKey, hs.ShortKey, "short key")
+	assert.Equal(t, st.helpKey, hs.FullKey, "full key")
+	for name, s := range map[string]lipgloss.Style{
+		"short desc":      hs.ShortDesc,
+		"full desc":       hs.FullDesc,
+		"short separator": hs.ShortSeparator,
+		"full separator":  hs.FullSeparator,
+		"ellipsis":        hs.Ellipsis,
+	} {
+		assert.Equal(t, st.muted, s, name)
+	}
+}
+
+func TestFooterHelpStyles(t *testing.T) {
+	m := New()
+	assertFooterHelpStyles(t, m.help.Styles, m.styles)
+
+	m, _ = update(t, m, tea.BackgroundColorMsg{Color: white})
+	assertFooterHelpStyles(t, m.help.Styles, defaultStyles(false))
+
+	m, _ = update(t, m, tea.ColorProfileMsg{Profile: colorprofile.ASCII})
+	assertFooterHelpStyles(t, m.help.Styles, m.styles)
+}
+
+func TestFooterHelpHasNoFixedColors(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		t.Run(fmt.Sprintf("dark=%t", dark), func(t *testing.T) {
+			m, _ := newIndexModel(t, 3, 80, 24, WithBackground(dark))
+			out := m.help.View(m.contextKeys())
+			require.NotEmpty(t, out)
+			assert.NotContains(t, out, "38;2;", "no 24-bit colors in the footer")
+		})
+	}
 }
 
 // requestsBackground reports whether cmd asks the terminal for its
