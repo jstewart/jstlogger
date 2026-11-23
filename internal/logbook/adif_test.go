@@ -91,6 +91,18 @@ func TestQSOFromRecordErrorKeepsCause(t *testing.T) {
 	assert.ErrorIs(t, err, strconv.ErrRange, "the parse error is wrapped, not dropped")
 }
 
+func TestQSOFromRecordFieldError(t *testing.T) {
+	_, err := QSOFromRecord(minimal(t, "freq_rx", "14.074 MHz"))
+	var fe *FieldError
+	require.ErrorAs(t, err, &fe)
+	assert.Equal(t, "FREQ_RX", fe.Field)
+	assert.Equal(t, "14.074 MHz", fe.Value)
+
+	_, err = QSOFromRecord(rec(t, "QSO_DATE", "20261028", "TIME_ON", "1442"))
+	require.ErrorIs(t, err, ErrInvalidRecord)
+	assert.NotErrorAs(t, err, &fe, "a missing field is not a FieldError")
+}
+
 func TestQSOFromRecordTxPwrUnits(t *testing.T) {
 	tests := []struct {
 		in   string

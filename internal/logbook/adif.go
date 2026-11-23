@@ -301,10 +301,34 @@ func missingField(name string) error {
 // invalidValue returns an error for a field whose value cannot be parsed,
 // wrapping cause when there is one.
 func invalidValue(name, v string, cause error) error {
-	if cause == nil {
-		return fmt.Errorf("%w: field %s: invalid value %q", ErrInvalidRecord, name, v)
+	return &FieldError{Field: name, Value: v, Err: cause}
+}
+
+// FieldError is returned by QSOFromRecord when a field's value cannot be
+// parsed. It matches ErrInvalidRecord and, when set, Err under errors.Is.
+type FieldError struct {
+	// Field is the upper-case ADIF field name.
+	Field string
+	// Value is the value that could not be parsed.
+	Value string
+	// Err is the parse error, or nil.
+	Err error
+}
+
+func (e *FieldError) Error() string {
+	msg := fmt.Sprintf("%v: field %s: invalid value %q", ErrInvalidRecord, e.Field, e.Value)
+	if e.Err != nil {
+		msg += ": " + e.Err.Error()
 	}
-	return fmt.Errorf("%w: field %s: invalid value %q: %w", ErrInvalidRecord, name, v, cause)
+	return msg
+}
+
+// Unwrap returns ErrInvalidRecord and, when set, the parse error.
+func (e *FieldError) Unwrap() []error {
+	if e.Err == nil {
+		return []error{ErrInvalidRecord}
+	}
+	return []error{ErrInvalidRecord, e.Err}
 }
 
 // parseDate parses an ADIF date (YYYYMMDD) as midnight UTC.
