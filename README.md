@@ -737,7 +737,9 @@ keeps the traffic on your machine:
    `224.0.0.1`.
 3. Use the `[listeners.wsjtx]` table above, with `interface = "lo0"`.
 
-On Linux, the loopback interface is `lo`.
+This recipe has been tested on macOS only. On Linux, the loopback interface
+is `lo`, which doesn't carry multicast by default (`ip link show lo` lacks
+the `MULTICAST` flag), so it needs more setup there.
 
 ## Development
 

@@ -79,9 +79,8 @@ type tomlRig struct {
 // WriteTOML writes c to w as TOML that Load accepts, with rig.poll_interval
 // and callbook.cache_ttl as duration strings (e.g. "1s"). Absent [spawn]
 // tables, an empty logbook.path, and unset listener interfaces and tags are
-// omitted. Non-empty callbook passwords
-// are written as "********", so a config holding passwords does not round
-// trip.
+// omitted. Non-empty callbook passwords are written as "********", so a
+// config holding passwords does not round trip.
 func WriteTOML(w io.Writer, c Config) error {
 	tc := tomlConfig{
 		DefaultStation: c.DefaultStation,
