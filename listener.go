@@ -47,12 +47,16 @@ func runListener(ctx context.Context, name string, cfg config.Listener, store lo
 
 // handleListenerEvent stores a QSO a listener received, with tags, and
 // tells the UI when it was added, or logs a packet the listener dropped.
+// Each field the listener left out of the QSO is logged as a warning.
 // A QSO already in the logbook is skipped as a duplicate.
 func handleListenerEvent(ctx context.Context, logger *slog.Logger, store logbook.Store, tags []string, send func(tea.Msg), event any) {
 	switch ev := event.(type) {
 	case listener.QSOReceived:
 		q := ev.QSO
 		attrs := []any{"source", ev.Source, "call", q.Call, "start", q.StartUTC, "band", q.Band, "mode", q.Mode}
+		for _, err := range ev.Dropped {
+			logger.Warn("listener qso field dropped", append(attrs, "err", err)...)
+		}
 		// The sender already counts the QSO as logged, so a QSO that
 		// arrives as the app quits is still stored.
 		importCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), listenerImportTimeout)

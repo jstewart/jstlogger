@@ -208,3 +208,21 @@ func TestHandleListenerEventImportError(t *testing.T) {
 	assert.Contains(t, logs.String(), "K1AB")
 	assert.Empty(t, sent())
 }
+
+func TestHandleListenerEventLogsDroppedFields(t *testing.T) {
+	store := openTestLogbook(t)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	send, _ := recordSends()
+
+	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
+	dropped := []error{&logbook.FieldError{Field: "FREQ_RX", Value: "14.074 MHz"}}
+	handleListenerEvent(t.Context(), logger, store, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q, Dropped: dropped})
+
+	assert.Contains(t, logs.String(), "level=WARN")
+	assert.Contains(t, logs.String(), "FREQ_RX")
+	assert.Contains(t, logs.String(), "K1AB")
+	n, err := store.Count(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "the QSO is still stored")
+}

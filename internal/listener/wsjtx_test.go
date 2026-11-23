@@ -3,6 +3,7 @@ package listener
 import (
 	"encoding/binary"
 	"errors"
+	"jstlogger/internal/logbook"
 	"testing"
 	"time"
 
@@ -127,6 +128,38 @@ func TestWSJTXDecodeKeepsUTF8(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, evs, 1)
 	assert.Equal(t, "José", evs[0].(QSOReceived).QSO.Name)
+}
+
+func TestWSJTXDecodeDropsBadOptionalFields(t *testing.T) {
+	// FREQ_RX and TX_PWR are free text in WSJT-X's Log QSO window.
+	text := "<call:4>K1AB <qso_date:8>20261123 <time_on:6>130102 <freq:9>14.075123 " +
+		"<freq_rx:10>14.074 MHz <tx_pwr:4>lots <EOR>"
+	evs, err := WSJTX{}.Decode(loggedADIF("WSJT-X", text))
+	require.NoError(t, err)
+	require.Len(t, evs, 1)
+	got := evs[0].(QSOReceived)
+	assert.Equal(t, "K1AB", got.QSO.Call)
+	assert.Equal(t, int64(14_075_123), got.QSO.FreqHz.V, "good fields are kept")
+	assert.False(t, got.QSO.FreqRxHz.Valid)
+	assert.False(t, got.QSO.TxPwr.Valid)
+	require.Len(t, got.Dropped, 2)
+	var fields []string
+	for _, d := range got.Dropped {
+		var fe *logbook.FieldError
+		require.ErrorAs(t, d, &fe)
+		fields = append(fields, fe.Field)
+	}
+	assert.ElementsMatch(t, []string{"FREQ_RX", "TX_PWR"}, fields)
+}
+
+func TestWSJTXDecodeBadRequiredFieldDropsQSO(t *testing.T) {
+	for _, field := range []string{"<qso_date:8>2026XX23 <time_on:6>130102", "<qso_date:8>20261123 <time_on:6>256102"} {
+		t.Run(field, func(t *testing.T) {
+			evs, err := WSJTX{}.Decode(loggedADIF("WSJT-X", "<call:4>K1AB "+field+" <EOR>"))
+			require.ErrorIs(t, err, logbook.ErrInvalidRecord)
+			assert.Empty(t, evs)
+		})
+	}
 }
 
 func TestNewDecoder(t *testing.T) {

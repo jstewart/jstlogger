@@ -9,6 +9,10 @@ type QSOReceived struct {
 	Source string
 	// QSO is the logged contact. It is not normalized.
 	QSO logbook.QSO
+	// Dropped holds a *logbook.FieldError for each optional field whose
+	// value could not be parsed and was left out of QSO, so a typo in a
+	// free-text field such as TX_PWR does not lose the QSO.
+	Dropped []error
 }
 
 // PacketDropped reports a packet the listener could not use: one that failed

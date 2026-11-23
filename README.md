@@ -715,6 +715,12 @@ just as it would be on an ADIF import. The QSO is stored as WSJT-X sent
 it: jstlogger doesn't look up its country, zones or callbook data, or fill
 in your station profile.
 
+WSJT-X doesn't check what you type in the Log QSO window. If a field such
+as **Pwr** or **RX Frequency** holds something jstlogger can't read (`10w`
+and `1.5 kW` are fine), the QSO is still stored without that field, and
+`--debug` logs a warning naming it. A QSO with an unreadable call, date or
+time isn't stored.
+
 The address must be a loopback or multicast address, never `0.0.0.0` or a
 LAN address, and jstlogger ignores packets from other hosts, so nothing
 else on your network can write to your log. Several listeners can run at

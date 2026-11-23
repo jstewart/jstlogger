@@ -2,7 +2,9 @@ package listener
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -65,13 +67,38 @@ func (WSJTX) Decode(packet []byte) ([]any, error) {
 		for j, f := range rec {
 			rec[j].Value = latin1ToUTF8(f.Value)
 		}
-		q, err := logbook.QSOFromRecord(rec)
+		q, dropped, err := qsoFromRecord(rec)
 		if err != nil {
 			return nil, fmt.Errorf("listener: wsjtx: record %d from %q: %w", i+1, id, err)
 		}
-		events = append(events, QSOReceived{Source: id, QSO: q})
+		events = append(events, QSOReceived{Source: id, QSO: q, Dropped: dropped})
 	}
 	return events, nil
+}
+
+// requiredFields are the ADIF fields a QSO cannot do without, so a bad value
+// in one of them drops the whole record rather than just the field.
+var requiredFields = []string{"CALL", "QSO_DATE", "TIME_ON"}
+
+// qsoFromRecord converts rec to a QSO. A field other than requiredFields
+// whose value cannot be parsed is left out, and its *logbook.FieldError is
+// returned in dropped.
+func qsoFromRecord(rec adif.Record) (q logbook.QSO, dropped []error, err error) {
+	for {
+		q, err = logbook.QSOFromRecord(rec)
+		var fe *logbook.FieldError
+		if err == nil || !errors.As(err, &fe) || slices.Contains(requiredFields, fe.Field) {
+			return q, dropped, err
+		}
+		kept := slices.DeleteFunc(slices.Clone(rec), func(f adif.Field) bool {
+			return strings.EqualFold(strings.TrimSpace(f.Name), fe.Field)
+		})
+		if len(kept) == len(rec) {
+			return q, dropped, err // not found; can't happen, but never loop
+		}
+		rec = kept
+		dropped = append(dropped, fe)
+	}
 }
 
 // latin1ToUTF8 converts s from Latin-1 to UTF-8 when it is not already valid
