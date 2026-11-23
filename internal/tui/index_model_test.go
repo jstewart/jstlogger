@@ -145,13 +145,16 @@ func special(code rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: code}
 }
 
-// statusLine returns the index status line, the last line of the body.
+// statusLine returns the text of the index status line, the last line of
+// the body, without styling, surrounding spaces or the padding of the
+// position chip, e.g. "QSO 3/10 · 2 marked".
 func statusLine(t *testing.T, m Model) string {
 	t.Helper()
 	lines := strings.Split(plain(m.View().Content), "\n")
 	footer := lipgloss.Height(m.footerView())
 	require.Greater(t, len(lines), footer)
-	return strings.TrimSpace(lines[len(lines)-footer-1])
+	line := strings.TrimSpace(lines[len(lines)-footer-1])
+	return strings.Replace(line, "  · ", " · ", 1)
 }
 
 func TestIndexIsTheStartScreen(t *testing.T) {
@@ -161,8 +164,8 @@ func TestIndexIsTheStartScreen(t *testing.T) {
 	lines := strings.Split(view, "\n")
 
 	assert.Contains(t, lines[1], "Date       Time  Call")
-	assert.Contains(t, lines[2], "K10A", "the newest QSO comes first")
-	assert.Contains(t, lines[11], "K1A")
+	assert.Contains(t, lines[3], "K10A", "the newest QSO comes first")
+	assert.Contains(t, lines[12], "K1A")
 	assert.Equal(t, "QSO 1/10", statusLine(t, m))
 	assert.Equal(t, []int{0}, s.loadedOffsets(), "one block loads the whole log")
 
@@ -282,8 +285,8 @@ func TestIndexMarkKey(t *testing.T) {
 	assert.Equal(t, map[int64]bool{10: true, 8: true}, m.idx.marks)
 	assert.Equal(t, "QSO 4/10 · 2 marked", statusLine(t, m))
 	lines := strings.Split(plain(m.View().Content), "\n")
-	assert.True(t, strings.HasPrefix(strings.TrimSpace(lines[2]), "* "), "the first QSO is marked")
-	assert.False(t, strings.HasPrefix(strings.TrimSpace(lines[3]), "* "))
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(lines[3]), "* "), "the first QSO is marked")
+	assert.False(t, strings.HasPrefix(strings.TrimSpace(lines[4]), "* "))
 }
 
 func TestIndexLoadsBlocksInBackground(t *testing.T) {
@@ -325,7 +328,8 @@ func TestIndexJumpPrompt(t *testing.T) {
 }
 
 // bodyLine returns line n of the body in m's view, without styling or
-// surrounding spaces. Line 0 is the index column header.
+// surrounding spaces. Line 0 is the index column header and line 1 the rule
+// under it.
 func bodyLine(t *testing.T, m Model, n int) string {
 	t.Helper()
 	lines := strings.Split(plain(m.View().Content), "\n")
@@ -338,7 +342,7 @@ func bodyLine(t *testing.T, m Model, n int) string {
 // header's "#" cell and row 1's number.
 func numbered(t *testing.T, m Model) bool {
 	t.Helper()
-	return strings.HasPrefix(bodyLine(t, m, 0), "# ") && strings.HasPrefix(bodyLine(t, m, 1), "1 ")
+	return strings.HasPrefix(bodyLine(t, m, 0), "# ") && strings.HasPrefix(bodyLine(t, m, 2), "1 ")
 }
 
 func TestIndexJumpPromptNumbers(t *testing.T) {

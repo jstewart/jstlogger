@@ -12,9 +12,13 @@ import (
 	"jstlogger/internal/lotw"
 )
 
+// indexHeaderLines is the number of body lines above the index's rows: the
+// column header and the rule under it.
+const indexHeaderLines = 2
+
 // indexChrome is the number of body lines the index uses besides its rows:
-// the column header and the status line.
-const indexChrome = 2
+// the header lines and the status line.
+const indexChrome = indexHeaderLines + 1
 
 // minFlexWidth is the narrowest the remaining-width column gets; below it
 // the line is truncated instead.
@@ -121,10 +125,10 @@ func formatCount(n int) string {
 	return s
 }
 
-// view renders the index in width by height cells: the column header, the
-// visible rows and the status line. Only the visible rows are formatted.
-// numbered adds a column at the left with each row's number, counting from
-// 1 as jump does.
+// view renders the index in width by height cells: the column header, a
+// muted rule under it, the visible rows and the status line. Only the
+// visible rows are formatted. numbered adds a column at the left with each
+// row's number, counting from 1 as jump does.
 func (x index) view(st styles, width, height int, numbered bool) string {
 	switch {
 	case !x.loaded && x.err != nil:
@@ -145,6 +149,7 @@ func (x index) view(st styles, width, height int, numbered bool) string {
 	lines = append(lines, st.indexHeader.Render(numberLine("#", nw, width, func(w int) string {
 		return formatLine(x.format, x.format.Titles(), w)
 	})))
+	lines = append(lines, st.muted.Render(strings.Repeat("─", width)))
 	for i := x.top; i < x.top+x.visible(); i++ {
 		lines = append(lines, x.rowView(st, i, width, nw))
 	}
@@ -153,7 +158,8 @@ func (x index) view(st styles, width, height int, numbered bool) string {
 		lines = append(lines, "")
 	}
 	lines = append(lines, x.statusView(st, width))
-	// A window too short for the header and status line shows what fits.
+	// A window too short for the header lines and status line shows what
+	// fits.
 	return strings.Join(lines[:min(len(lines), max(height, 1))], "\n")
 }
 
@@ -271,13 +277,15 @@ func fillBar(bar lipgloss.Style, line string) string {
 
 // statusView renders the position, the sort unless it is the default, the
 // limit, the mark count, the armed mark-prefix, any other armed prefixes
-// named by armed, and any message or error, e.g. "QSO 12/4,567 · sort: band
-// · limit: ~b 20m · 3 marked · mark-prefix".
+// named by armed, and any message or error, e.g. " QSO 12/4,567  · sort:
+// band · limit: ~b 20m · 3 marked · mark-prefix". The position is a chip,
+// the sort and limit have muted labels and purple values, the mark count is
+// bold yellow and the separators are muted.
 func (x index) statusView(st styles, width int, armed ...string) string {
-	position := "QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)
+	position := st.statusChip.Render(" QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total) + " ")
 	var rest []string
 	if n := len(x.marks); n > 0 {
-		rest = append(rest, formatCount(n)+" marked")
+		rest = append(rest, st.statusMarked.Render(formatCount(n)+" marked"))
 	}
 	if x.prefix {
 		rest = append(rest, "mark-prefix")
@@ -289,17 +297,19 @@ func (x index) statusView(st styles, width int, armed ...string) string {
 	if x.err != nil {
 		rest = append(rest, st.err.Render(x.err.Error()))
 	}
+	sep := st.muted.Render(" · ")
 	parts := []string{position}
 	if x.sort != logbook.DefaultSort {
-		parts = append(parts, "sort: "+x.sort.String())
+		parts = append(parts, st.muted.Render("sort: ")+st.statusValue.Render(x.sort.String()))
 	}
 	if x.limit.expr != nil {
 		// The limit prompt shows the whole pattern, so shorten it here to
-		// leave room for the marks, message and error.
-		const label = "limit: "
-		room := width - lipgloss.Width(strings.Join(slices.Concat(parts, []string{label}, rest), " · "))
-		parts = append(parts, label+truncate(x.limit.text, max(room, minLimitWidth), "…"))
+		// leave room for the marks, message and error. The widths are of
+		// the styled segments, padding and all.
+		label := st.muted.Render("limit: ")
+		room := width - lipgloss.Width(strings.Join(slices.Concat(parts, []string{label}, rest), sep))
+		parts = append(parts, label+st.statusValue.Render(truncate(x.limit.text, max(room, minLimitWidth), "…")))
 	}
-	line := strings.Join(append(parts, rest...), " · ")
+	line := strings.Join(append(parts, rest...), sep)
 	return lipgloss.NewStyle().MaxWidth(width).Render(line)
 }

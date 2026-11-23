@@ -446,3 +446,14 @@ func TestQSOTabMode(t *testing.T) {
 		})
 	}
 }
+
+func TestPagerStatusSegments(t *testing.T) {
+	m, _ := newIndexModel(t, 50, 80, 24)
+	m.idx.marks[1] = true
+	m = pressPager(t, m, enter())
+	require.True(t, m.pager.open)
+
+	raw := m.View().Content
+	assert.Contains(t, raw, m.styles.statusChip.Render(" QSO 1/50 "), "the pager's status line has the position chip")
+	assert.Contains(t, raw, m.styles.statusMarked.Render("1 marked"), "and the bold yellow mark count")
+}

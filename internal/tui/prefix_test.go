@@ -191,6 +191,6 @@ func TestStatusViewPrefixWithLimit(t *testing.T) {
 
 	got := plain(x.statusView(st, 80))
 
-	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (~b 20m | ~b 40m | ~b 15m) … · 1 marked · mark-prefix", got)
+	assert.Equal(t, " QSO 1/1,234  · limit: ~c W1 (~b 20m | ~b 40m | ~b 15m… · 1 marked · mark-prefix", got)
 	assert.Equal(t, 80, lipgloss.Width(got), "the limit is shortened to leave room for the mark-prefix")
 }

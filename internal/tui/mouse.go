@@ -72,10 +72,11 @@ func (m Model) click(mouse tea.Mouse) (Model, tea.Cmd) {
 }
 
 // clickIndex opens the QSO on line y of the index's body in the pager, as
-// moving to it and pressing enter does. Line 0 is the column header, which
-// does nothing, as do the empty lines below the last QSO.
+// moving to it and pressing enter does. The column header and its rule, on
+// the lines above the rows, do nothing, as do the empty lines below the last
+// QSO.
 func (m Model) clickIndex(y int) (Model, tea.Cmd) {
-	row := y - 1
+	row := y - indexHeaderLines
 	if !m.idx.loaded || m.idx.total == 0 || row < 0 || row >= m.idx.visible() {
 		return m, nil
 	}

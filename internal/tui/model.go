@@ -410,12 +410,12 @@ func (m Model) View() tea.View {
 	return v
 }
 
-// headerView renders the title and, when a rig is configured, the rig status
-// right-aligned and truncated to the terminal width.
+// headerView renders the title badge and, when a rig is configured, the rig
+// status right-aligned, truncated to the terminal width.
 func (m Model) headerView() string {
-	title := m.styles.title.Render("jstlogger")
+	title := m.styles.titleBadge.Render(" jstlogger ")
 	if m.rig == nil {
-		return m.styles.header.Render(title)
+		return m.styles.header.MaxWidth(m.width).Render(title)
 	}
 
 	status := m.rigStatusView()

@@ -255,7 +255,7 @@ func TestHelpWheelScrolls(t *testing.T) {
 
 func TestHelpClickDoesNothing(t *testing.T) {
 	m, _ := newIndexModel(t, 3, 80, 24)
-	click := clickOn(t, m, 2, "K3A")
+	click := clickOn(t, m, indexRowY(0), "K3A")
 	m = press(t, m, keyPress('?', 0))
 
 	m = send(t, m, click)
