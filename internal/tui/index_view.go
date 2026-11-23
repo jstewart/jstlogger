@@ -12,9 +12,13 @@ import (
 	"jstlogger/internal/lotw"
 )
 
+// indexHeaderLines is the number of body lines above the index's rows: the
+// column header and the rule under it.
+const indexHeaderLines = 2
+
 // indexChrome is the number of body lines the index uses besides its rows:
-// the column header and the status line.
-const indexChrome = 2
+// the header lines and the status line.
+const indexChrome = indexHeaderLines + 1
 
 // minFlexWidth is the narrowest the remaining-width column gets; below it
 // the line is truncated instead.
@@ -121,10 +125,10 @@ func formatCount(n int) string {
 	return s
 }
 
-// view renders the index in width by height cells: the column header, the
-// visible rows and the status line. Only the visible rows are formatted.
-// numbered adds a column at the left with each row's number, counting from
-// 1 as jump does.
+// view renders the index in width by height cells: the column header, a
+// muted rule under it, the visible rows and the status line. Only the
+// visible rows are formatted. numbered adds a column at the left with each
+// row's number, counting from 1 as jump does.
 func (x index) view(st styles, width, height int, numbered bool) string {
 	switch {
 	case !x.loaded && x.err != nil:
@@ -145,6 +149,7 @@ func (x index) view(st styles, width, height int, numbered bool) string {
 	lines = append(lines, st.indexHeader.Render(numberLine("#", nw, width, func(w int) string {
 		return formatLine(x.format, x.format.Titles(), w)
 	})))
+	lines = append(lines, st.muted.Render(strings.Repeat("─", width)))
 	for i := x.top; i < x.top+x.visible(); i++ {
 		lines = append(lines, x.rowView(st, i, width, nw))
 	}
@@ -153,7 +158,8 @@ func (x index) view(st styles, width, height int, numbered bool) string {
 		lines = append(lines, "")
 	}
 	lines = append(lines, x.statusView(st, width))
-	// A window too short for the header and status line shows what fits.
+	// A window too short for the header lines and status line shows what
+	// fits.
 	return strings.Join(lines[:min(len(lines), max(height, 1))], "\n")
 }
 

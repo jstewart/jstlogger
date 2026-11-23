@@ -309,9 +309,9 @@ func TestMouseMode(t *testing.T) {
 }
 
 // indexRowY is the screen line of row i of the index, counting from the
-// first visible row, below the header and the column header.
+// first visible row, below the header, the column header and its rule.
 func indexRowY(i int) int {
-	return 2 + i
+	return 3 + i
 }
 
 // stripRowY is the screen line of row i of the index strip above the
@@ -445,6 +445,7 @@ func TestIndexClickDoesNothing(t *testing.T) {
 		click tea.MouseClickMsg
 	}{
 		{"column header", nil, tea.MouseClickMsg{X: 7, Y: 1, Button: tea.MouseLeft}},
+		{"rule", nil, tea.MouseClickMsg{X: 7, Y: 2, Button: tea.MouseLeft}},
 		{"empty row", nil, tea.MouseClickMsg{X: 7, Y: indexRowY(5), Button: tea.MouseLeft}},
 		{"status line", nil, tea.MouseClickMsg{X: 7, Y: status, Button: tea.MouseLeft}},
 		{"header", nil, tea.MouseClickMsg{X: 7, Y: 0, Button: tea.MouseLeft}},

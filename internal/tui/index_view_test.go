@@ -78,7 +78,7 @@ func TestIndexViewPlaceholderCursor(t *testing.T) {
 	x.last()
 
 	for _, numbered := range []bool{false, true} {
-		lines := strings.Split(x.view(defaultStyles(true), 78, 7, numbered), "\n")
+		lines := strings.Split(x.view(defaultStyles(true), 78, 8, numbered), "\n")
 		row := lines[len(lines)-2]
 		assert.Contains(t, plain(row), "  …")
 		assert.Empty(t, offStyle(row, barBg), "the placeholder under the cursor is on the bar")
@@ -234,11 +234,11 @@ func TestIndexViewCustomFormat(t *testing.T) {
 			x.applyLoad(indexLoadedMsg{total: 1, rows: []logbook.QSO{q}})
 			x.setHeight(1)
 
-			lines := strings.Split(x.view(defaultStyles(true), 30, 3, false), "\n")
+			lines := strings.Split(x.view(defaultStyles(true), 30, 4, false), "\n")
 
-			require.Len(t, lines, 3)
+			require.Len(t, lines, 4)
 			assert.Equal(t, "Call    | Band Dist"+strings.Repeat(" ", 11), plain(lines[0]), "the header titles follow the format")
-			assert.Equal(t, tt.row+strings.Repeat(" ", 30-len(tt.row)), plain(lines[1]))
+			assert.Equal(t, tt.row+strings.Repeat(" ", 30-len(tt.row)), plain(lines[2]))
 		})
 	}
 }
@@ -286,18 +286,19 @@ func TestIndexView(t *testing.T) {
 	x.marks[x.blocks[0][11].ID] = true
 	x.marks[42] = true
 
-	lines := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 78, 8, false), "\n")
 
-	require.Len(t, lines, 7, "header, five rows and the status line")
+	require.Len(t, lines, 8, "header, rule, five rows and the status line")
 	assert.True(t, strings.HasPrefix(plain(lines[0]), "  Date       Time  Call       Mode   RST S RST R Band  Country      Station"))
-	assert.Contains(t, lines[1], "K4559A", "row 9 is the first visible")
-	assert.True(t, strings.HasPrefix(plain(lines[2]), "* "), "row 10 is marked")
-	assert.True(t, strings.HasPrefix(lines[2], defaultStyles(true).indexMark.Render("*")), "the mark is colored")
-	assert.True(t, strings.HasPrefix(plain(lines[4]), "* "), "the cursor row can be marked too")
-	assert.Contains(t, lines[4], "K4556A")
-	assert.Empty(t, offStyle(lines[4], barBg), "the cursor bar spans the row")
-	assert.Equal(t, 78, lipgloss.Width(lines[4]))
-	assert.Equal(t, " QSO 12/4,567  · 3 marked", plain(lines[6]))
+	assert.Equal(t, defaultStyles(true).muted.Render(strings.Repeat("─", 78)), lines[1], "a muted rule spans the width under the header")
+	assert.Contains(t, lines[2], "K4559A", "row 9 is the first visible")
+	assert.True(t, strings.HasPrefix(plain(lines[3]), "* "), "row 10 is marked")
+	assert.True(t, strings.HasPrefix(lines[3], defaultStyles(true).indexMark.Render("*")), "the mark is colored")
+	assert.True(t, strings.HasPrefix(plain(lines[5]), "* "), "the cursor row can be marked too")
+	assert.Contains(t, lines[5], "K4556A")
+	assert.Empty(t, offStyle(lines[5], barBg), "the cursor bar spans the row")
+	assert.Equal(t, 78, lipgloss.Width(lines[5]))
+	assert.Equal(t, " QSO 12/4,567  · 3 marked", plain(lines[7]))
 }
 
 func TestIndexViewNumbered(t *testing.T) {
@@ -305,22 +306,23 @@ func TestIndexViewNumbered(t *testing.T) {
 	x.cursor, x.top = 11, 8
 	x.marks[x.blocks[0][9].ID] = true
 
-	lines := strings.Split(x.view(defaultStyles(true), 78, 7, true), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 78, 8, true), "\n")
 
-	require.Len(t, lines, 7, "header, five rows and the status line")
+	require.Len(t, lines, 8, "header, rule, five rows and the status line")
 	header := plain(lines[0])
 	assert.True(t, strings.HasPrefix(header, "   #   Date       Time  Call"), "the number column is as wide as 4,567")
-	assert.True(t, strings.HasPrefix(lines[1], "   9   "), "row 8 is QSO 9")
-	assert.True(t, strings.HasPrefix(plain(lines[2]), "  10 * "), "the mark follows the number")
-	assert.True(t, strings.HasPrefix(plain(lines[4]), "  12 "), "the cursor row is numbered too")
-	assert.Empty(t, offStyle(lines[4], barBg), "the bar spans the number column too")
-	for _, l := range lines[:6] {
+	assert.Equal(t, strings.Repeat("─", 78), plain(lines[1]), "the rule spans the number column too")
+	assert.True(t, strings.HasPrefix(lines[2], "   9   "), "row 8 is QSO 9")
+	assert.True(t, strings.HasPrefix(plain(lines[3]), "  10 * "), "the mark follows the number")
+	assert.True(t, strings.HasPrefix(plain(lines[5]), "  12 "), "the cursor row is numbered too")
+	assert.Empty(t, offStyle(lines[5], barBg), "the bar spans the number column too")
+	for _, l := range lines[:7] {
 		assert.Equal(t, 78, lipgloss.Width(l), "each line spans the width")
 	}
-	assert.Equal(t, strings.Index(header, "Call"), strings.Index(plain(lines[1]), "K4559A"), "the columns line up")
-	assert.Equal(t, " QSO 12/4,567  · 1 marked", plain(lines[6]))
+	assert.Equal(t, strings.Index(header, "Call"), strings.Index(plain(lines[2]), "K4559A"), "the columns line up")
+	assert.Equal(t, " QSO 12/4,567  · 1 marked", plain(lines[7]))
 
-	unnumbered := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
+	unnumbered := strings.Split(x.view(defaultStyles(true), 78, 8, false), "\n")
 	assert.True(t, strings.HasPrefix(plain(unnumbered[0]), "  Date"), "no number column when not numbered")
 }
 
@@ -329,12 +331,12 @@ func TestIndexViewNumberedPlaceholder(t *testing.T) {
 	delete(x.blocks, 1)
 	x.last()
 
-	lines := strings.Split(x.view(defaultStyles(true), 40, 7, true), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 40, 8, true), "\n")
 
-	require.Len(t, lines, 7)
+	require.Len(t, lines, 8)
 	for i, want := range []string{" 996   …", " 997   …", " 998   …", " 999   …", "1000   …"} {
-		assert.Equal(t, want, strings.TrimRight(plain(lines[i+1]), " "))
-		assert.Equal(t, 40, lipgloss.Width(lines[i+1]))
+		assert.Equal(t, want, strings.TrimRight(plain(lines[i+2]), " "))
+		assert.Equal(t, 40, lipgloss.Width(lines[i+2]))
 	}
 }
 
@@ -342,10 +344,10 @@ func TestIndexViewStatusMessage(t *testing.T) {
 	x := loadedIndex(3, 5)
 	x.msg = msgFirstQSO
 
-	lines := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 78, 8, false), "\n")
 
-	require.Len(t, lines, 7, "the status line stays at the bottom")
-	assert.Equal(t, " QSO 1/3  · You are on the first QSO.", plain(lines[6]))
+	require.Len(t, lines, 8, "the status line stays at the bottom")
+	assert.Equal(t, " QSO 1/3  · You are on the first QSO.", plain(lines[7]))
 }
 
 func TestIndexViewPlaceholder(t *testing.T) {
@@ -353,10 +355,10 @@ func TestIndexViewPlaceholder(t *testing.T) {
 	delete(x.blocks, 1)
 	x.last()
 
-	lines := strings.Split(x.view(defaultStyles(true), 40, 7, false), "\n")
+	lines := strings.Split(x.view(defaultStyles(true), 40, 8, false), "\n")
 
-	require.Len(t, lines, 7)
-	for _, l := range lines[1:6] {
+	require.Len(t, lines, 8)
+	for _, l := range lines[2:7] {
 		assert.Equal(t, "  …", strings.TrimRight(plain(l), " "))
 	}
 }
