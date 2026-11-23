@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"jstlogger/internal/adif"
 	"jstlogger/internal/logbook"
@@ -61,6 +62,9 @@ func (WSJTX) Decode(packet []byte) ([]any, error) {
 	}
 	events := make([]any, 0, len(file.Records))
 	for i, rec := range file.Records {
+		for j, f := range rec {
+			rec[j].Value = latin1ToUTF8(f.Value)
+		}
 		q, err := logbook.QSOFromRecord(rec)
 		if err != nil {
 			return nil, fmt.Errorf("listener: wsjtx: record %d from %q: %w", i+1, id, err)
@@ -68,6 +72,20 @@ func (WSJTX) Decode(packet []byte) ([]any, error) {
 		events = append(events, QSOReceived{Source: id, QSO: q})
 	}
 	return events, nil
+}
+
+// latin1ToUTF8 converts s from Latin-1 to UTF-8 when it is not already valid
+// UTF-8. WSJT-X sends its ADIF as Latin-1 bytes, though its protocol
+// documents UTF-8; JTDX and MSHV may send UTF-8, which is kept as is.
+func latin1ToUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	b := make([]byte, 0, 2*len(s))
+	for i := range len(s) {
+		b = utf8.AppendRune(b, rune(s[i]))
+	}
+	return string(b)
 }
 
 // qreader reads big-endian Qt QDataStream values from a byte slice.

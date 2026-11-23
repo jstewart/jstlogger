@@ -109,6 +109,26 @@ func TestWSJTXDecodeMultipleRecords(t *testing.T) {
 	assert.Equal(t, "JTDX", evs[1].(QSOReceived).Source)
 }
 
+func TestWSJTXDecodeLatin1(t *testing.T) {
+	// WSJT-X encodes the ADIF as Latin-1, and its length counts are in
+	// bytes, despite the protocol documenting UTF-8.
+	text := "<call:4>K1AB <name:4>Jos\xe9 <comment:7>na\xefve!! <qso_date:8>20261123 <time_on:6>130102 <EOR>"
+	evs, err := WSJTX{}.Decode(loggedADIF("WSJT-X", text))
+	require.NoError(t, err)
+	require.Len(t, evs, 1)
+	q := evs[0].(QSOReceived).QSO
+	assert.Equal(t, "José", q.Name)
+	assert.Equal(t, "naïve!!", q.Comment)
+}
+
+func TestWSJTXDecodeKeepsUTF8(t *testing.T) {
+	text := "<call:4>K1AB <name:5>José <qso_date:8>20261123 <time_on:6>130102 <EOR>"
+	evs, err := WSJTX{}.Decode(loggedADIF("JTDX", text))
+	require.NoError(t, err)
+	require.Len(t, evs, 1)
+	assert.Equal(t, "José", evs[0].(QSOReceived).QSO.Name)
+}
+
 func TestNewDecoder(t *testing.T) {
 	d, err := NewDecoder(ProtocolWSJTX)
 	require.NoError(t, err)
