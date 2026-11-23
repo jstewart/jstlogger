@@ -209,7 +209,7 @@ func TestTitleBadge(t *testing.T) {
 		b := defaultStyles(dark).titleBadge
 		assert.True(t, b.GetBold(), "dark=%t: the badge is bold", dark)
 		assert.True(t, b.GetReverse(), "dark=%t: the badge is reverse video", dark)
-		assert.Equal(t, accent, b.GetForeground(), "dark=%t: the badge is the accent color", dark)
+		assert.Equal(t, badge, b.GetForeground(), "dark=%t: the badge is the badge color", dark)
 	}
 
 	m, _ := newIndexModel(t, 1, 80, 24)
@@ -228,4 +228,16 @@ func TestWithoutColorLeavesStylesAlone(t *testing.T) {
 	assert.True(t, colorless.cursor.GetReverse(), "the colorless cursor is reverse video")
 	assert.Equal(t, cursor, st.cursor, "the original styles keep their cursor")
 	assert.Equal(t, st.muted, colorless.muted, "the other styles carry over")
+}
+
+// TestBadgesShareAColor checks that every reverse pill, the header's title,
+// the status line's position and the modals' close badge, is one color.
+func TestBadgesShareAColor(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		st := defaultStyles(dark)
+		assert.Equal(t, blue, badge, "the badges are blue")
+		assert.Equal(t, badge, st.titleBadge.GetForeground(), "dark=%t: the title badge", dark)
+		assert.Equal(t, badge, st.statusChip.GetForeground(), "dark=%t: the position chip", dark)
+		assert.Equal(t, badge, st.helpBadge.GetForeground(), "dark=%t: the close badge", dark)
+	}
 }
