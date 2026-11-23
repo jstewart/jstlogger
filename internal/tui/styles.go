@@ -87,6 +87,13 @@ type styleSet struct {
 	indexMark lipgloss.Style
 	bands     map[string]lipgloss.Style
 
+	// statusChip renders the status line's position as a reverse accent
+	// chip, statusValue the values of its sort and limit, whose labels are
+	// muted, and statusMarked its mark count.
+	statusChip   lipgloss.Style
+	statusValue  lipgloss.Style
+	statusMarked lipgloss.Style
+
 	// tab renders the open pager tab and label a field's label.
 	tab   lipgloss.Style
 	label lipgloss.Style
@@ -147,6 +154,9 @@ func defaultStyles(dark bool) styles {
 		indexDim:     lipgloss.NewStyle().Foreground(muted),
 		indexMark:    lipgloss.NewStyle().Bold(true).Foreground(yellow),
 		bands:        bandStyles(dark),
+		statusChip:   lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(accent),
+		statusValue:  lipgloss.NewStyle().Foreground(purple),
+		statusMarked: lipgloss.NewStyle().Bold(true).Foreground(yellow),
 		tab:          lipgloss.NewStyle().Bold(true).Reverse(true),
 		label:        lipgloss.NewStyle().Bold(true),
 		rigFreq:      lipgloss.NewStyle().Bold(true),

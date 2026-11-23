@@ -297,7 +297,7 @@ func TestIndexView(t *testing.T) {
 	assert.Contains(t, lines[4], "K4556A")
 	assert.Empty(t, offStyle(lines[4], barBg), "the cursor bar spans the row")
 	assert.Equal(t, 78, lipgloss.Width(lines[4]))
-	assert.Equal(t, "QSO 12/4,567 · 3 marked", lines[6])
+	assert.Equal(t, " QSO 12/4,567  · 3 marked", plain(lines[6]))
 }
 
 func TestIndexViewNumbered(t *testing.T) {
@@ -318,7 +318,7 @@ func TestIndexViewNumbered(t *testing.T) {
 		assert.Equal(t, 78, lipgloss.Width(l), "each line spans the width")
 	}
 	assert.Equal(t, strings.Index(header, "Call"), strings.Index(plain(lines[1]), "K4559A"), "the columns line up")
-	assert.Equal(t, "QSO 12/4,567 · 1 marked", lines[6])
+	assert.Equal(t, " QSO 12/4,567  · 1 marked", plain(lines[6]))
 
 	unnumbered := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
 	assert.True(t, strings.HasPrefix(plain(unnumbered[0]), "  Date"), "no number column when not numbered")
@@ -345,7 +345,7 @@ func TestIndexViewStatusMessage(t *testing.T) {
 	lines := strings.Split(x.view(defaultStyles(true), 78, 7, false), "\n")
 
 	require.Len(t, lines, 7, "the status line stays at the bottom")
-	assert.Equal(t, "QSO 1/3 · You are on the first QSO.", lines[6])
+	assert.Equal(t, " QSO 1/3  · You are on the first QSO.", plain(lines[6]))
 }
 
 func TestIndexViewPlaceholder(t *testing.T) {
@@ -379,16 +379,16 @@ func TestIndexViewStates(t *testing.T) {
 func TestIndexStatusSort(t *testing.T) {
 	st := defaultStyles(true)
 	x := loadedIndex(1234, 8)
-	assert.Equal(t, "QSO 1/1,234", plain(x.statusView(st, 80)), "the default sort is not shown")
+	assert.Equal(t, " QSO 1/1,234 ", plain(x.statusView(st, 80)), "the default sort is not shown")
 
 	x.sort = logbook.Sort{Field: logbook.SortDate}
-	assert.Equal(t, "QSO 1/1,234 · sort: date", plain(x.statusView(st, 80)))
+	assert.Equal(t, " QSO 1/1,234  · sort: date", plain(x.statusView(st, 80)))
 
 	x.sort = logbook.Sort{Field: logbook.SortCountry, Reverse: true}
 	x.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
 	x.marks[1] = true
 
-	assert.Equal(t, "QSO 1/1,234 · sort: reverse-country · limit: ~b 20m · 1 marked", plain(x.statusView(st, 80)))
+	assert.Equal(t, " QSO 1/1,234  · sort: reverse-country · limit: ~b 20m · 1 marked", plain(x.statusView(st, 80)))
 }
 
 func TestIndexStatusLimit(t *testing.T) {
@@ -398,16 +398,44 @@ func TestIndexStatusLimit(t *testing.T) {
 	x.msg = "No QSOs match the pattern."
 
 	x.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
-	assert.Equal(t, "QSO 1/1,234 · limit: ~b 20m · 1 marked · No QSOs match the pattern.", plain(x.statusView(st, 80)))
+	assert.Equal(t, " QSO 1/1,234  · limit: ~b 20m · 1 marked · No QSOs match the pattern.", plain(x.statusView(st, 80)))
 
 	// A long limit is shortened so the marks and message still fit.
 	x.limit.text = "~c W1 (~b 20m | ~b 40m | ~b 15m) !~m FT8 ~d 2026-01-01-"
 	got := plain(x.statusView(st, 80))
-	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (~b 20m | ~b… · 1 marked · No QSOs match the pattern.", got)
+	assert.Equal(t, " QSO 1/1,234  · limit: ~c W1 (~b 20m | … · 1 marked · No QSOs match the pattern.", got)
 	assert.LessOrEqual(t, lipgloss.Width(got), 80)
 
 	// On a narrow screen the limit keeps a few characters and the line is
 	// cut instead.
 	got = plain(x.statusView(st, 40))
-	assert.Equal(t, "QSO 1/1,234 · limit: ~c W1 (… · 1 marked", got)
+	assert.Equal(t, " QSO 1/1,234  · limit: ~c W1 (… · 1 mark", got)
+}
+
+func TestStatusSegmentStyles(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		st := defaultStyles(dark)
+		assert.True(t, st.statusChip.GetReverse(), "dark=%t: the position is a reverse chip", dark)
+		assert.True(t, st.statusChip.GetBold(), "dark=%t: the position chip is bold", dark)
+		assert.Equal(t, accent, st.statusChip.GetForeground(), "dark=%t: the position chip is the accent color", dark)
+		assert.Equal(t, purple, st.statusValue.GetForeground(), "dark=%t: the sort and limit values are purple", dark)
+		assert.True(t, st.statusMarked.GetBold(), "dark=%t: the mark count is bold", dark)
+		assert.Equal(t, st.indexMark.GetForeground(), st.statusMarked.GetForeground(), "dark=%t: the mark count is the marks' yellow", dark)
+	}
+}
+
+func TestIndexStatusSegments(t *testing.T) {
+	st := defaultStyles(true)
+	x := loadedIndex(1234, 8)
+	x.sort = logbook.Sort{Field: logbook.SortCountry, Reverse: true}
+	x.limit = indexLimit{expr: logbook.All{}, text: "~b 20m"}
+	x.marks[1] = true
+
+	got := x.statusView(st, 80)
+	assert.True(t, strings.HasPrefix(got, st.statusChip.Render(" QSO 1/1,234 ")), "the line starts with the position chip: %q", got)
+	assert.Contains(t, got, st.muted.Render("sort: ")+st.statusValue.Render("reverse-country"), "the sort label is muted and its value purple")
+	assert.Contains(t, got, st.muted.Render("limit: ")+st.statusValue.Render("~b 20m"), "the limit label is muted and its value purple")
+	assert.Contains(t, got, st.statusMarked.Render("1 marked"), "the mark count is bold yellow")
+	assert.Equal(t, 3, strings.Count(got, st.muted.Render(" · ")), "the separators are muted")
+	assert.LessOrEqual(t, lipgloss.Width(got), 80)
 }

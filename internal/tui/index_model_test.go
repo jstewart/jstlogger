@@ -145,13 +145,16 @@ func special(code rune) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: code}
 }
 
-// statusLine returns the index status line, the last line of the body.
+// statusLine returns the text of the index status line, the last line of
+// the body, without styling, surrounding spaces or the padding of the
+// position chip, e.g. "QSO 3/10 · 2 marked".
 func statusLine(t *testing.T, m Model) string {
 	t.Helper()
 	lines := strings.Split(plain(m.View().Content), "\n")
 	footer := lipgloss.Height(m.footerView())
 	require.Greater(t, len(lines), footer)
-	return strings.TrimSpace(lines[len(lines)-footer-1])
+	line := strings.TrimSpace(lines[len(lines)-footer-1])
+	return strings.Replace(line, "  · ", " · ", 1)
 }
 
 func TestIndexIsTheStartScreen(t *testing.T) {

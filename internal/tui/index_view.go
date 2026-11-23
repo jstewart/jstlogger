@@ -271,13 +271,15 @@ func fillBar(bar lipgloss.Style, line string) string {
 
 // statusView renders the position, the sort unless it is the default, the
 // limit, the mark count, the armed mark-prefix, any other armed prefixes
-// named by armed, and any message or error, e.g. "QSO 12/4,567 · sort: band
-// · limit: ~b 20m · 3 marked · mark-prefix".
+// named by armed, and any message or error, e.g. " QSO 12/4,567  · sort:
+// band · limit: ~b 20m · 3 marked · mark-prefix". The position is a chip,
+// the sort and limit have muted labels and purple values, the mark count is
+// bold yellow and the separators are muted.
 func (x index) statusView(st styles, width int, armed ...string) string {
-	position := "QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total)
+	position := st.statusChip.Render(" QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total) + " ")
 	var rest []string
 	if n := len(x.marks); n > 0 {
-		rest = append(rest, formatCount(n)+" marked")
+		rest = append(rest, st.statusMarked.Render(formatCount(n)+" marked"))
 	}
 	if x.prefix {
 		rest = append(rest, "mark-prefix")
@@ -289,17 +291,19 @@ func (x index) statusView(st styles, width int, armed ...string) string {
 	if x.err != nil {
 		rest = append(rest, st.err.Render(x.err.Error()))
 	}
+	sep := st.muted.Render(" · ")
 	parts := []string{position}
 	if x.sort != logbook.DefaultSort {
-		parts = append(parts, "sort: "+x.sort.String())
+		parts = append(parts, st.muted.Render("sort: ")+st.statusValue.Render(x.sort.String()))
 	}
 	if x.limit.expr != nil {
 		// The limit prompt shows the whole pattern, so shorten it here to
-		// leave room for the marks, message and error.
-		const label = "limit: "
-		room := width - lipgloss.Width(strings.Join(slices.Concat(parts, []string{label}, rest), " · "))
-		parts = append(parts, label+truncate(x.limit.text, max(room, minLimitWidth), "…"))
+		// leave room for the marks, message and error. The widths are of
+		// the styled segments, padding and all.
+		label := st.muted.Render("limit: ")
+		room := width - lipgloss.Width(strings.Join(slices.Concat(parts, []string{label}, rest), sep))
+		parts = append(parts, label+st.statusValue.Render(truncate(x.limit.text, max(room, minLimitWidth), "…")))
 	}
-	line := strings.Join(append(parts, rest...), " · ")
+	line := strings.Join(append(parts, rest...), sep)
 	return lipgloss.NewStyle().MaxWidth(width).Render(line)
 }
