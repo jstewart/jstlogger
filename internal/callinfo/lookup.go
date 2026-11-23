@@ -25,6 +25,9 @@ const (
 // is then skipped. The zero value finds nothing. A Looker is safe for
 // concurrent use when its sources are.
 type Looker struct {
+	// DXCC resolves the call's DXCC entity, continent and zones. Only Fill
+	// uses it.
+	DXCC DXCCLookup
 	// Callbook looks up the operator's details.
 	Callbook callbook.Looker
 	// Logbook gives the details of an earlier QSO with the call when the
