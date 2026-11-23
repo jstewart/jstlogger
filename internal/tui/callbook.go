@@ -3,13 +3,13 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"jstlogger/internal/callbook"
+	"jstlogger/internal/callinfo"
 	"jstlogger/internal/callsign"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/qsoentry"
@@ -20,14 +20,11 @@ const (
 	// typed before the New QSO screen looks it up in the callbook, so
 	// typing a call does not query the callbook on every key press.
 	callbookDelay = 400 * time.Millisecond
-	// sourceLogbook is the source shown for details filled in from an
-	// earlier QSO.
-	sourceLogbook = "logbook"
 )
 
 // callbookTimeout bounds a callbook lookup. The logbook lookup that may
 // follow it has logbookTimeout of its own. Tests shorten it.
-var callbookTimeout = 15 * time.Second
+var callbookTimeout = callinfo.DefaultCallbookTimeout
 
 // WithCallbook fills in, on the New QSO screen, the name, QTH, grid, state,
 // county and email of the call typed, as looked up in l, and shows where
@@ -49,6 +46,7 @@ var callbookFields = [6]qsoentry.Field{
 var serviceNames = map[string]string{
 	callbook.ServiceQRZ:    "QRZ.com",
 	callbook.ServiceHamQTH: "HamQTH",
+	callinfo.SourceLogbook: "logbook",
 }
 
 // callbookLookup is the New QSO screen's lookup of the details of the call
@@ -195,112 +193,29 @@ func (m *Model) startCallbook() tea.Cmd {
 func callbookCmd(ctx context.Context, cancel context.CancelFunc, l callbook.Looker, s logbook.Store, gen, seq int, call string) tea.Cmd {
 	return func() tea.Msg {
 		defer cancel()
-		d, err := lookupDetails(ctx, l, s, call)
-		return entryCallbookMsg{gen: gen, seq: seq, call: call, details: d, err: err}
+		looker := callinfo.Looker{Callbook: l, Logbook: s, CallbookTimeout: callbookTimeout, LogbookTimeout: logbookTimeout}
+		d, err := looker.Details(ctx, call)
+		return entryCallbookMsg{gen: gen, seq: seq, call: call, details: detailsOf(d), err: err}
 	}
 }
 
-// lookupDetails returns the details of call from l, if not nil. When l
-// fails other than by not finding the call, or is nil, the details come
-// from the latest QSO in s with the call's base callsign instead, and the
-// error is l's failure. A call l does not find has no details. The lookup
-// in l is bounded by callbookTimeout and the one in s by logbookTimeout, so
-// a callbook that runs out of time still leaves time for the logbook. A
-// canceled lookup returns the error canceling it.
-func lookupDetails(ctx context.Context, l callbook.Looker, s logbook.Store, call string) (callbookDetails, error) {
-	var failed error
-	if l != nil {
-		lctx, cancel := context.WithTimeout(ctx, callbookTimeout)
-		r, err := l.Lookup(lctx, call)
-		cancel()
-		switch {
-		case err == nil:
-			return resultDetails(r), nil
-		case errors.Is(err, context.Canceled):
-			return callbookDetails{}, err
-		case notFoundOnly(err):
-			return callbookDetails{}, nil
-		}
-		failed = err
+// detailsOf returns d as the New QSO screen shows it: its values in the
+// order of callbookFields, and the name of where they came from.
+func detailsOf(d callinfo.Details) callbookDetails {
+	if d.Source == "" {
+		return callbookDetails{}
 	}
-	if s == nil {
-		return callbookDetails{}, failed
-	}
-	sctx, cancel := context.WithTimeout(ctx, logbookTimeout)
-	defer cancel()
-	d, err := logbookDetails(sctx, s, call)
-	if err != nil {
-		return callbookDetails{}, errors.Join(failed, err)
-	}
-	return d, failed
-}
-
-// notFoundOnly reports whether err reports only that the call is not found,
-// by every service when it joins the errors of several.
-func notFoundOnly(err error) bool {
-	if j, ok := errors.AsType[interface {
-		error
-		Unwrap() []error
-	}](err); ok {
-		errs := j.Unwrap()
-		for _, e := range errs {
-			if !notFoundOnly(e) {
-				return false
-			}
-		}
-		return len(errs) > 0
-	}
-	return errors.Is(err, callbook.ErrNotFound)
-}
-
-// resultDetails returns the details of r. The county is filled in as ADIF
-// CNTY has it, with the state, such as "MA,Middlesex", so a county without
-// a state is left out.
-func resultDetails(r callbook.Result) callbookDetails {
-	var cnty string
-	if r.State != "" && r.County != "" {
-		cnty = r.State + "," + r.County
-	}
-	source, ok := serviceNames[r.Service]
+	source, ok := serviceNames[d.Source]
 	if !ok {
-		source = r.Service
+		source = d.Source
 	}
-	if r.Limited {
+	if d.Limited {
 		source += " (limited)"
 	}
 	return callbookDetails{
-		values: [6]string{r.Name, r.QTH, r.Grid, r.State, cnty, r.Email},
+		values: [6]string{d.Name, d.QTH, d.Grid, d.State, d.Cnty, d.Email},
 		source: source,
 	}
-}
-
-// logbookDetails returns the details of call from the latest QSO in s with
-// its base callsign: the name and email, and where the station was, its
-// QTH, grid, state and county, only when that QSO's call is call itself.
-// It returns no details when there is no such QSO.
-func logbookDetails(ctx context.Context, s logbook.Store, call string) (callbookDetails, error) {
-	rows, err := s.Index(ctx, logbook.CallBaseIs{Call: call}, logbook.DefaultSort, 0, 1)
-	if err != nil {
-		return callbookDetails{}, fmt.Errorf("look up QSOs with %s: %w", call, err)
-	}
-	if len(rows) == 0 {
-		return callbookDetails{}, nil
-	}
-	q, err := s.Get(ctx, rows[0].ID)
-	if err != nil {
-		return callbookDetails{}, fmt.Errorf("load QSO %d with %s: %w", rows[0].ID, call, err)
-	}
-	f := qsoentry.Load(q)
-	var d callbookDetails
-	for i, k := range callbookFields {
-		if k == qsoentry.Name || k == qsoentry.Email || strings.EqualFold(q.Call, call) {
-			d.values[i] = f[k]
-		}
-	}
-	if d.values != [6]string{} {
-		d.source = sourceLogbook
-	}
-	return d, nil
 }
 
 // applyCallbook fills in the details of the lookup the New QSO screen last
