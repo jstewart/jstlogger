@@ -193,5 +193,10 @@ func TestIsLocalAddr(t *testing.T) {
 		ip, ok := netip.AddrFromSlice(ipnet.IP)
 		require.True(t, ok)
 		assert.True(t, isLocalAddr(ip.Unmap()), "this host's address %s", ip)
+		if ip.Is6() && ip.IsLinkLocalUnicast() {
+			// A link-local sender's source address carries a zone.
+			zoned := ip.WithZone("en0")
+			assert.True(t, isLocalAddr(zoned), "this host's address %s", zoned)
+		}
 	}
 }

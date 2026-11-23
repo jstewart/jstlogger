@@ -122,8 +122,10 @@ func (l *Listener) listen() (*net.UDPConn, error) {
 }
 
 // isLocalAddr reports whether ip is loopback or one of this host's
-// interface addresses.
+// interface addresses. An IPv6 zone is ignored, as interface addresses
+// carry none.
 func isLocalAddr(ip netip.Addr) bool {
+	ip = ip.WithZone("").Unmap()
 	if ip.IsLoopback() {
 		return true
 	}
