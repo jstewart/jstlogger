@@ -176,3 +176,22 @@ func TestListenerBadInterface(t *testing.T) {
 	defer cancel()
 	assert.Error(t, l.Run(ctx, func(any) {}))
 }
+
+func TestIsLocalAddr(t *testing.T) {
+	assert.True(t, isLocalAddr(netip.MustParseAddr("127.0.0.1")), "IPv4 loopback")
+	assert.True(t, isLocalAddr(netip.MustParseAddr("::1")), "IPv6 loopback")
+	assert.False(t, isLocalAddr(netip.MustParseAddr("192.0.2.1")), "a TEST-NET-1 address is no host's")
+	assert.False(t, isLocalAddr(netip.MustParseAddr("2001:db8::1")), "a documentation address is no host's")
+
+	addrs, err := net.InterfaceAddrs()
+	require.NoError(t, err)
+	for _, a := range addrs {
+		ipnet, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(ipnet.IP)
+		require.True(t, ok)
+		assert.True(t, isLocalAddr(ip.Unmap()), "this host's address %s", ip)
+	}
+}
