@@ -167,6 +167,9 @@ type indexLoadedMsg struct {
 	block  int
 	rows   []logbook.QSO
 	err    error
+	// keepTop leaves the view's first row where it was, rather than moving
+	// it with the cursor, so QSOs added above the cursor show up.
+	keepTop bool
 }
 
 // indexBlockMsg reports one loaded block.
@@ -305,14 +308,19 @@ func (x *index) applyLimit(msg indexLimitMsg) bool {
 	return true
 }
 
-// replace replaces the cache with the result of a successful (re)load.
+// replace replaces the cache with the result of a successful (re)load. The
+// cursor keeps its screen row, unless msg.keepTop, and the view then
+// scrolls as little as possible to keep it on screen.
 func (x *index) replace(msg indexLoadedMsg) {
 	x.err = nil
 	x.loaded = true
 	x.total = msg.total
 	x.blocks = map[int][]logbook.QSO{msg.block: msg.rows}
 	x.pending = map[int]bool{}
-	x.top += msg.cursor - x.cursor
+	if !msg.keepTop {
+		// The cursor keeps its screen row.
+		x.top += msg.cursor - x.cursor
+	}
 	x.cursor = msg.cursor
 	x.clampTop()
 	x.scrollToCursor()

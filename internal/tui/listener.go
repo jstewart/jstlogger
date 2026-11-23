@@ -7,7 +7,10 @@ import tea "charm.land/bubbletea/v2"
 type LogbookChanged struct{}
 
 // refreshIndex reloads the index after a background change to the logbook,
-// keeping the cursor on its QSO, without a message or a redraw. While a new
+// keeping the cursor on its QSO, without a message or a redraw. The view
+// keeps its first row, so a QSO added above the cursor, such as a new one
+// at the top of the newest-first index, shows up, and the cursor's row
+// moves down with its QSO. While a new
 // limit or sort loads, it marks the index stale instead, and the reload
 // follows that load (see refreshStale).
 func (m Model) refreshIndex() (Model, tea.Cmd) {
@@ -19,7 +22,12 @@ func (m Model) refreshIndex() (Model, tea.Cmd) {
 		return m, nil
 	}
 	id := m.idx.restart()
-	return m, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor)
+	load := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor)
+	return m, func() tea.Msg {
+		msg, _ := load().(indexLoadedMsg)
+		msg.keepTop = true
+		return msg
+	}
 }
 
 // refreshStale returns cmd, along with a reload of the index when stale

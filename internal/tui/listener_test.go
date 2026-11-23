@@ -14,7 +14,7 @@ func TestLogbookChangedReloadsIndex(t *testing.T) {
 	m = press(t, m, keyPress('k', 0))
 	require.Equal(t, 1, m.idx.cursor)
 	cur := currentID(t, m)
-	screenRow := m.idx.cursor - m.idx.top
+	top := m.idx.top
 
 	// Three newer QSOs are logged in the background.
 	s.mu.Lock()
@@ -25,10 +25,43 @@ func TestLogbookChangedReloadsIndex(t *testing.T) {
 
 	assert.Equal(t, cur, currentID(t, m), "the cursor stays on the same QSO")
 	assert.Equal(t, 4, m.idx.cursor)
-	assert.Equal(t, screenRow, m.idx.cursor-m.idx.top, "the cursor keeps its screen row")
+	assert.Equal(t, top, m.idx.top, "the view stays put, so the new QSOs show")
 	assert.Equal(t, 103, m.idx.total)
 	assert.Equal(t, map[int64]bool{cur: true}, m.idx.marks, "marks survive the reload")
 	assert.Equal(t, "QSO 5/103 · 1 marked", statusLine(t, m), "no message is shown")
+}
+
+func TestLogbookChangedShowsNewQSOsAtTheTop(t *testing.T) {
+	m, s := newIndexModel(t, 100, 80, 24)
+	require.Equal(t, 0, m.idx.top)
+	cur := currentID(t, m)
+
+	// A newer QSO is logged in the background, sorting first.
+	s.mu.Lock()
+	s.qsos = append(testQSOs(101)[:1], s.qsos...)
+	s.mu.Unlock()
+	m, cmd := update(t, m, LogbookChanged{})
+	m = runIndex(t, m, cmd)
+
+	assert.Equal(t, 0, m.idx.top, "the new QSO is on screen, in the first row")
+	assert.Equal(t, 1, m.idx.cursor, "the cursor moves down with its QSO")
+	assert.Equal(t, cur, currentID(t, m))
+}
+
+func TestLogbookChangedKeepsCursorOnScreen(t *testing.T) {
+	m, s := newIndexModel(t, 100, 80, 24)
+	m = press(t, m, keyPress('L', 0))
+	require.Equal(t, m.idx.pageSize()-1, m.idx.cursor-m.idx.top, "the cursor is on the last visible row")
+	cur := currentID(t, m)
+
+	s.mu.Lock()
+	s.qsos = append(testQSOs(102)[:2], s.qsos...)
+	s.mu.Unlock()
+	m, cmd := update(t, m, LogbookChanged{})
+	m = runIndex(t, m, cmd)
+
+	assert.Equal(t, cur, currentID(t, m))
+	assert.Equal(t, m.idx.pageSize()-1, m.idx.cursor-m.idx.top, "the view scrolls just enough to keep the cursor")
 }
 
 func TestLogbookChangedDoesNotRedrawScreen(t *testing.T) {
