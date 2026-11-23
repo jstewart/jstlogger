@@ -115,7 +115,7 @@ func QSOFromRecord(r adif.Record) (QSO, error) {
 		case "FREQ_RX":
 			q.FreqRxHz, err = nullFreq(v)
 		case "TX_PWR":
-			q.TxPwr, err = nullFloat(v)
+			q.TxPwr, err = nullPower(v)
 		case "DISTANCE":
 			q.DistanceKm, err = nullFloat(v)
 		case "DXCC":
@@ -418,6 +418,26 @@ func nullFloat(v string) (sql.Null[float64], error) {
 		return sql.Null[float64]{}, fmt.Errorf("parse number %q: not finite", v)
 	}
 	return sql.Null[float64]{V: f, Valid: true}, nil
+}
+
+// nullPower parses a TX_PWR value in watts. ADIF wants a bare number, but
+// WSJT-X and other loggers pass through what the operator typed, such as
+// "10w" or "1.5 kW", so a trailing W or kW unit, in any case, is accepted.
+func nullPower(v string) (sql.Null[float64], error) {
+	num, scale := v, 1.0
+	lower := strings.ToLower(v)
+	switch {
+	case strings.HasSuffix(lower, "kw"):
+		num, scale = v[:len(v)-2], 1000
+	case strings.HasSuffix(lower, "w"):
+		num = v[:len(v)-1]
+	}
+	w, err := nullFloat(strings.TrimSpace(num))
+	if err != nil {
+		return w, err
+	}
+	w.V *= scale
+	return w, nil
 }
 
 // nullInt parses a decimal integer.

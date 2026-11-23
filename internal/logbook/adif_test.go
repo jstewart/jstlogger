@@ -65,6 +65,8 @@ func TestQSOFromRecordErrors(t *testing.T) {
 		{"bad freq", minimal(t, "FREQ", "abc"), []string{"FREQ", `"abc"`}},
 		{"bad freq rx", minimal(t, "FREQ_RX", "1.2.3"), []string{"FREQ_RX", `"1.2.3"`}},
 		{"bad tx pwr", minimal(t, "TX_PWR", "lots"), []string{"TX_PWR", `"lots"`}},
+		{"tx pwr unit alone", minimal(t, "TX_PWR", "W"), []string{"TX_PWR", `"W"`}},
+		{"tx pwr unknown unit", minimal(t, "TX_PWR", "10dBm"), []string{"TX_PWR", `"10dBm"`}},
 		{"bad distance", minimal(t, "DISTANCE", "far"), []string{"DISTANCE", `"far"`}},
 		{"bad dxcc", minimal(t, "DXCC", "2.5"), []string{"DXCC", `"2.5"`}},
 		{"bad cqz", minimal(t, "CQZ", "five"), []string{"CQZ"}},
@@ -87,6 +89,28 @@ func TestQSOFromRecordErrorKeepsCause(t *testing.T) {
 	_, err := QSOFromRecord(minimal(t, "CQZ", "99999999999999999999"))
 	require.ErrorIs(t, err, ErrInvalidRecord)
 	assert.ErrorIs(t, err, strconv.ErrRange, "the parse error is wrapped, not dropped")
+}
+
+func TestQSOFromRecordTxPwrUnits(t *testing.T) {
+	tests := []struct {
+		in   string
+		want float64
+	}{
+		{"10", 10},
+		{"7.5", 7.5},
+		{"10w", 10},
+		{"100W", 100},
+		{"5 W", 5},
+		{"1.5kW", 1500},
+		{"1 kw", 1000},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			q, err := QSOFromRecord(minimal(t, "TX_PWR", tt.in))
+			require.NoError(t, err)
+			assert.Equal(t, sql.Null[float64]{V: tt.want, Valid: true}, q.TxPwr)
+		})
+	}
 }
 
 func TestQSOFromRecordEndTime(t *testing.T) {
