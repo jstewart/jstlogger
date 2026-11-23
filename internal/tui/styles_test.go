@@ -217,3 +217,15 @@ func TestTitleBadge(t *testing.T) {
 	assert.Contains(t, header, m.styles.titleBadge.Render(" jstlogger "), "the title is a padded badge")
 	assert.True(t, strings.HasPrefix(plain(header), "  jstlogger  "), "the badge follows the header's padding: %q", plain(header))
 }
+
+// TestWithoutColorLeavesStylesAlone guards the style set shared by copies
+// of the styles: restyling for no colors makes new styles rather than
+// changing the ones other Model copies hold.
+func TestWithoutColorLeavesStylesAlone(t *testing.T) {
+	st := defaultStyles(true)
+	cursor := st.cursor
+	colorless := st.withoutColor()
+	assert.True(t, colorless.cursor.GetReverse(), "the colorless cursor is reverse video")
+	assert.Equal(t, cursor, st.cursor, "the original styles keep their cursor")
+	assert.Equal(t, st.muted, colorless.muted, "the other styles carry over")
+}

@@ -50,7 +50,16 @@ var bandColors = map[string]struct{ dark, light string }{
 	"6m":   {dark: "12"},
 }
 
+// styles holds the style set by pointer: a lipgloss.Style is several
+// hundred bytes, and Bubble Tea copies the Model, styles and all, on every
+// message. The set is never changed once made, so copies share it; to
+// restyle, make a new set, as withoutColor does.
 type styles struct {
+	*styleSet
+}
+
+// styleSet is the TUI's styles.
+type styleSet struct {
 	// dark reports whether the styles are for a dark background.
 	dark bool
 
@@ -123,7 +132,7 @@ type styles struct {
 func defaultStyles(dark bool) styles {
 	ld := lipgloss.LightDark(dark)
 	muted, yellow, amber := ld(lightMuted, muted), ld(lightYellow, yellow), ld(lightAmber, amber)
-	return styles{
+	return styles{&styleSet{
 		dark:         dark,
 		header:       lipgloss.NewStyle().Padding(0, 1),
 		title:        lipgloss.NewStyle().Bold(true).Foreground(accent),
@@ -156,7 +165,7 @@ func defaultStyles(dark bool) styles {
 		helpBadge:    lipgloss.NewStyle().Bold(true).Reverse(true).Foreground(blue),
 		helpHeading:  lipgloss.NewStyle().Bold(true).Foreground(blue),
 		helpKey:      lipgloss.NewStyle().Bold(true).Foreground(purple),
-	}
+	}}
 }
 
 // bandStyles returns the styles of the index's band cells for a dark or a
@@ -191,8 +200,9 @@ func (st styles) footerHelp() help.Styles {
 // under NO_COLOR. The cursor bar would lose its background there, so the
 // cursor is reverse video instead.
 func (st styles) withoutColor() styles {
-	st.cursor = lipgloss.NewStyle().Reverse(true)
-	return st
+	set := *st.styleSet
+	set.cursor = lipgloss.NewStyle().Reverse(true)
+	return styles{&set}
 }
 
 // WithBackground fixes the styles for a dark or a light background, rather
