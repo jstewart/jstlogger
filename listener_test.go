@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"log/slog"
 	"net"
 	"path/filepath"
@@ -15,8 +16,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
+	"jstlogger/internal/callbook"
+	cbmock "jstlogger/internal/callbook/mock"
+	"jstlogger/internal/callinfo"
 	"jstlogger/internal/config"
+	"jstlogger/internal/dxcc"
 	"jstlogger/internal/listener"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/tui"
@@ -81,13 +87,13 @@ func openTestLogbook(t *testing.T) *logbook.SQLiteStore {
 }
 
 // startListener runs runListener in the background until the test ends.
-func startListener(t *testing.T, name string, cfg config.Listener, store logbook.Store, logger *slog.Logger, send func(tea.Msg)) {
+func startListener(t *testing.T, name string, cfg config.Listener, store logbook.Store, info callinfo.Looker, logger *slog.Logger, send func(tea.Msg)) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runListener(ctx, name, cfg, store, logger, send)
+		runListener(ctx, name, cfg, store, info, logger, send)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -111,11 +117,15 @@ func sendUDP(t *testing.T, addr string, b []byte) {
 
 func TestRunListenerLogsQSOsOnce(t *testing.T) {
 	store := openTestLogbook(t)
+	cb := cbmock.NewMockLooker(gomock.NewController(t))
+	// Once for each time WSJT-X sends the QSO.
+	cb.EXPECT().Lookup(gomock.Any(), "K1AB").Return(callbook.Result{Name: "Alice", QTH: "Boston", Service: callbook.ServiceQRZ}, nil).MinTimes(1)
+	info := callinfo.Looker{DXCC: dxcc.Default(), Callbook: cb, Logbook: store}
 	addr := freeUDPAddr(t)
 	send, sent := recordSends()
 	var logs lockedBuffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	startListener(t, "wsjtx", config.Listener{Protocol: "wsjtx", Address: addr, Tags: []string{"wsjtx", "ft8"}}, store, logger, send)
+	startListener(t, "wsjtx", config.Listener{Protocol: "wsjtx", Address: addr, Tags: []string{"wsjtx", "ft8"}}, store, info, logger, send)
 
 	// The listener binds in the background, so send until the QSO lands.
 	packet := wsjtxLoggedADIF("WSJT-X", testWSJTXADIF)
@@ -144,6 +154,11 @@ func TestRunListenerLogsQSOsOnce(t *testing.T) {
 	assert.Equal(t, "K1AB", q.Call)
 	assert.Equal(t, "FT8", q.Mode)
 	assert.ElementsMatch(t, []string{"wsjtx", "ft8"}, q.Tags)
+	assert.Equal(t, 291, q.DXCC.V, "the DXCC entity is filled in")
+	assert.Equal(t, "NA", q.Cont)
+	assert.Equal(t, "Alice", q.Name, "the callbook's name is filled in")
+	assert.Equal(t, "Boston", q.QTH)
+	assert.Equal(t, "FN42", q.Gridsquare, "WSJT-X's grid is kept")
 	assert.Contains(t, logs.String(), "K1AB")
 	assert.Contains(t, logs.String(), "listener=wsjtx")
 }
@@ -169,7 +184,7 @@ func TestRunListenerLogsSetupErrors(t *testing.T) {
 			send, sent := recordSends()
 
 			// runListener returns on its own, without ctx being canceled.
-			runListener(t.Context(), "wsjtx", tt.cfg, openTestLogbook(t), logger, send)
+			runListener(t.Context(), "wsjtx", tt.cfg, openTestLogbook(t), callinfo.Looker{}, logger, send)
 
 			assert.Contains(t, logs.String(), "level=ERROR")
 			assert.Contains(t, logs.String(), tt.want)
@@ -185,7 +200,7 @@ func TestHandleListenerEventStoresAfterCancel(t *testing.T) {
 	cancel()
 
 	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
-	handleListenerEvent(ctx, slog.New(slog.DiscardHandler), store, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
+	handleListenerEvent(ctx, slog.New(slog.DiscardHandler), store, callinfo.Looker{}, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
 
 	n, err := store.Count(t.Context(), nil)
 	require.NoError(t, err)
@@ -202,7 +217,7 @@ func TestHandleListenerEventImportError(t *testing.T) {
 	send, sent := recordSends()
 
 	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
-	handleListenerEvent(t.Context(), logger, store, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
+	handleListenerEvent(t.Context(), logger, store, callinfo.Looker{}, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
 
 	assert.Contains(t, logs.String(), "level=ERROR")
 	assert.Contains(t, logs.String(), "K1AB")
@@ -217,7 +232,7 @@ func TestHandleListenerEventLogsDroppedFields(t *testing.T) {
 
 	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
 	dropped := []error{&logbook.FieldError{Field: "FREQ_RX", Value: "14.074 MHz"}}
-	handleListenerEvent(t.Context(), logger, store, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q, Dropped: dropped})
+	handleListenerEvent(t.Context(), logger, store, callinfo.Looker{}, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q, Dropped: dropped})
 
 	assert.Contains(t, logs.String(), "level=WARN")
 	assert.Contains(t, logs.String(), "FREQ_RX")
@@ -225,4 +240,27 @@ func TestHandleListenerEventLogsDroppedFields(t *testing.T) {
 	n, err := store.Count(t.Context(), nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, n, "the QSO is still stored")
+}
+
+func TestHandleListenerEventStoresAfterFailedLookup(t *testing.T) {
+	store := openTestLogbook(t)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	send, sent := recordSends()
+	cb := cbmock.NewMockLooker(gomock.NewController(t))
+	cb.EXPECT().Lookup(gomock.Any(), "K1AB").Return(callbook.Result{}, fmt.Errorf("qrz: %w", callbook.ErrAuth))
+	info := callinfo.Looker{DXCC: dxcc.Default(), Callbook: cb, Logbook: store}
+
+	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
+	handleListenerEvent(t.Context(), logger, store, info, nil, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
+
+	assert.Contains(t, logs.String(), "level=WARN")
+	assert.Contains(t, logs.String(), "lookup failed")
+	assert.Equal(t, []tea.Msg{tui.LogbookChanged{}}, sent())
+	qsos, err := store.Index(t.Context(), nil, logbook.Sort{}, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, qsos, 1)
+	got, err := store.Get(t.Context(), qsos[0].ID)
+	require.NoError(t, err)
+	assert.Equal(t, 291, got.DXCC.V, "the QSO is stored with what was found")
 }
