@@ -298,13 +298,13 @@ and, for most letters, a value:
 | `~b BAND`  | Band is `BAND`, e.g. `~b 20m`                                 |
 | `~m MODE`  | Mode or submode is `MODE`, so `~m FT4` matches MFSK/FT4       |
 | `~y TAG`   | Carries the tag `TAG`                                         |
-| `~C NAME`  | Country is `NAME`, ignoring case, e.g. `~C "United States"`   |
+| `~C NAME`  | Country is `NAME`, ignoring case, e.g. `~C Canada`            |
 | `~s STATE` | State or province is `STATE`, e.g. `~s MA`                    |
 | `~o CONT`  | Continent is `CONT`: `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA` |
 | `~d RANGE` | Started within `RANGE` (see below)                            |
 
 `~s` matches the ADIF state code of any country, so `~s WA` also matches
-Western Australia; add `~C "United States"` to narrow it.
+Western Australia; add `~C "United States of America"` to narrow it.
 
 `RANGE` is in UTC dates, `YYYY-MM-DD`: `D` is that day, `D-` is from `D`
 on, `-D` is through `D`, and `D1-D2` is `D1` through `D2`.
@@ -324,7 +324,7 @@ the next character. The space between a term and its value is optional.
 As in mutt's simple search, input with none of `~ ! | ( ) " '` is a bare
 value matched against the default fields, as if typed as
 `~c V | ~b V | ~m V | ~C V | ~s V | ~o V`. So `W1AW` finds the call, `20m`
-the band and `United States` the country. To match a value containing any
+the band and `Canada` the country. To match a value containing any
 of those characters, use its term, as in `~C "Cote d'Ivoire"`.
 
 ### Keybindings
@@ -462,6 +462,12 @@ QSO tab, such as `Canada · NA · CQ 4 · ITU 4`, before its LoTW status.
 A value typed by hand is never overwritten; changing the call updates
 the fields that were filled in, and a call with no entity, such as an
 unknown prefix or `/MM`, clears them.
+
+On save, the QSO's country is filled in from its DXCC code, with the
+name as ADIF lists it, such as `UNITED STATES OF AMERICA` for 291. DXCC
+0, which is no entity, leaves the country empty. Editing a QSO keeps the
+country it has unless the DXCC code changes, so a country an ADIF import
+brought in stays as it was.
 
 The New QSO screen also fills in the name, QTH, grid, state, county and
 email from the [callbook](#callbook-lookup), in the same way: typed values
@@ -715,11 +721,13 @@ just as it would be on an ADIF import.
 
 Before storing the QSO, jstlogger fills in what WSJT-X leaves out, just
 as the New QSO screen does: the DXCC entity, continent and CQ and ITU
-zones from the country file, and the name, QTH, grid, state, county and
-email from the [callbook](#callbook-lookup), or from your latest earlier
-QSO with the call when no callbook is configured or the lookup fails. A
-value WSJT-X sent is kept, so the grid it decoded wins over the
-callbook's. If a lookup fails, the QSO is still stored with whatever was
+zones from the country file, the country from the DXCC code with the
+name as ADIF lists it (such as `UNITED STATES OF AMERICA`), and the name,
+QTH, grid, state, county and email from the [callbook](#callbook-lookup),
+or from your latest earlier QSO with the call when no callbook is
+configured or the lookup fails. A value WSJT-X sent is kept, so the grid
+it decoded wins over the callbook's, and a country it sent stays as it
+was. If a lookup fails, the QSO is still stored with whatever was
 found, and `--debug` logs the failure as a warning. jstlogger
 doesn't fill in your station profile.
 
