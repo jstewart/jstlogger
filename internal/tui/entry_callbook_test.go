@@ -437,26 +437,6 @@ func TestEntryCallbookStartsAtOnceOffTheCall(t *testing.T) {
 	assert.Equal(t, "Hiram Maxim", entryValue(m, qsoentry.Name))
 }
 
-func TestNotFoundOnly(t *testing.T) {
-	notFound := fmt.Errorf("qrz: lookup W1AW: %w", callbook.ErrNotFound)
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"not found", notFound, true},
-		{"every service not found", errors.Join(notFound, fmt.Errorf("hamqth: %w", callbook.ErrNotFound)), true},
-		{"one service failed", errors.Join(notFound, fmt.Errorf("hamqth: %w", callbook.ErrAuth)), false},
-		{"nested join", errors.Join(errors.Join(notFound, notFound), notFound), true},
-		{"other error", callbook.ErrRateLimit, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, notFoundOnly(tt.err))
-		})
-	}
-}
-
 func TestEntryCallbookFallsBackAfterTimeout(t *testing.T) {
 	orig := callbookTimeout
 	callbookTimeout = 10 * time.Millisecond

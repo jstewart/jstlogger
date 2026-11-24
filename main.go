@@ -20,6 +20,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"jstlogger/internal/browser"
+	"jstlogger/internal/callinfo"
 	"jstlogger/internal/config"
 	"jstlogger/internal/dxcc"
 	"jstlogger/internal/eqsl"
@@ -67,9 +68,13 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		tui.WithURLOpener(browser.Open),
 		tui.WithStations(stationProfiles(session)),
 	}
-	if l := newCallbook(session.Config.Callbook); l != nil {
-		tuiOpts = append(tuiOpts, tui.WithCallbook(l))
+	// The New QSO screen and the listeners share the callbook, and so its
+	// cache.
+	cb := newCallbook(session.Config.Callbook)
+	if cb != nil {
+		tuiOpts = append(tuiOpts, tui.WithCallbook(cb))
 	}
+	info := callinfo.Looker{Callbook: cb, Logbook: store}
 
 	var syncer *lotw.Syncer
 	var eqslSyncer *eqsl.Syncer
@@ -85,6 +90,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 		table := loadDXCCTable(ctx, countries, logger)
 		dxccSyncer = newDXCCSyncer(countries)
 		tuiOpts = append(tuiOpts, tui.WithLoTW(users), tui.WithEQSL(members), tui.WithDXCC(table))
+		info.DXCC = table
 	}
 	if dark, fixed := fixedBackground(session.Config.UI); fixed {
 		tuiOpts = append(tuiOpts, tui.WithBackground(dark))
@@ -122,7 +128,7 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	}
 	for _, name := range slices.Sorted(maps.Keys(session.Config.Listeners)) {
 		cfg := session.Config.Listeners[name]
-		wg.Go(func() { runListener(ctx, name, cfg, store, logger, p.Send) })
+		wg.Go(func() { runListener(ctx, name, cfg, store, info, logger, p.Send) })
 	}
 	_, err = p.Run()
 	cancel()
