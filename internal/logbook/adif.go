@@ -115,7 +115,7 @@ func QSOFromRecord(r adif.Record) (QSO, error) {
 		case "FREQ_RX":
 			q.FreqRxHz, err = nullFreq(v)
 		case "TX_PWR":
-			q.TxPwr, err = nullFloat(v)
+			q.TxPwr, err = nullPower(v)
 		case "DISTANCE":
 			q.DistanceKm, err = nullFloat(v)
 		case "DXCC":
@@ -301,10 +301,34 @@ func missingField(name string) error {
 // invalidValue returns an error for a field whose value cannot be parsed,
 // wrapping cause when there is one.
 func invalidValue(name, v string, cause error) error {
-	if cause == nil {
-		return fmt.Errorf("%w: field %s: invalid value %q", ErrInvalidRecord, name, v)
+	return &FieldError{Field: name, Value: v, Err: cause}
+}
+
+// FieldError is returned by QSOFromRecord when a field's value cannot be
+// parsed. It matches ErrInvalidRecord and, when set, Err under errors.Is.
+type FieldError struct {
+	// Field is the upper-case ADIF field name.
+	Field string
+	// Value is the value that could not be parsed.
+	Value string
+	// Err is the parse error, or nil.
+	Err error
+}
+
+func (e *FieldError) Error() string {
+	msg := fmt.Sprintf("%v: field %s: invalid value %q", ErrInvalidRecord, e.Field, e.Value)
+	if e.Err != nil {
+		msg += ": " + e.Err.Error()
 	}
-	return fmt.Errorf("%w: field %s: invalid value %q: %w", ErrInvalidRecord, name, v, cause)
+	return msg
+}
+
+// Unwrap returns ErrInvalidRecord and, when set, the parse error.
+func (e *FieldError) Unwrap() []error {
+	if e.Err == nil {
+		return []error{ErrInvalidRecord}
+	}
+	return []error{ErrInvalidRecord, e.Err}
 }
 
 // parseDate parses an ADIF date (YYYYMMDD) as midnight UTC.
@@ -418,6 +442,26 @@ func nullFloat(v string) (sql.Null[float64], error) {
 		return sql.Null[float64]{}, fmt.Errorf("parse number %q: not finite", v)
 	}
 	return sql.Null[float64]{V: f, Valid: true}, nil
+}
+
+// nullPower parses a TX_PWR value in watts. ADIF wants a bare number, but
+// WSJT-X and other loggers pass through what the operator typed, such as
+// "10w" or "1.5 kW", so a trailing W or kW unit, in any case, is accepted.
+func nullPower(v string) (sql.Null[float64], error) {
+	num, scale := v, 1.0
+	lower := strings.ToLower(v)
+	switch {
+	case strings.HasSuffix(lower, "kw"):
+		num, scale = v[:len(v)-2], 1000
+	case strings.HasSuffix(lower, "w"):
+		num = v[:len(v)-1]
+	}
+	w, err := nullFloat(strings.TrimSpace(num))
+	if err != nil {
+		return w, err
+	}
+	w.V *= scale
+	return w, nil
 }
 
 // nullInt parses a decimal integer.

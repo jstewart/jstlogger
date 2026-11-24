@@ -40,8 +40,8 @@ var unusedKeyReplacer = strings.NewReplacer("[", ".", "]", "")
 // existing file is never modified.
 //
 // Unknown keys are reported in LoadResult.Warnings rather than as errors.
-// Station and rig profile names, and the values that refer to them, are
-// lowercased.
+// Station, rig profile and listener names, and the values that refer to
+// them, are lowercased.
 func Load(path string, explicit bool) (Config, LoadResult, error) {
 	res := LoadResult{Path: path}
 
@@ -173,8 +173,10 @@ func parsePagerIndexLines(raw any) (int, error) {
 
 // applyEntryDefaults fills per-entry defaults that viper cannot express
 // (the table key is dynamic), recovers empty tables that viper drops from
-// Unmarshal, lowercases values that refer to station or profile names, and
-// normalizes logbook.distance_unit, callbook.services and ui.background.
+// Unmarshal (including listener tables, whose address defaults to
+// DefaultListenerAddress), lowercases values that refer to station or
+// profile names, and normalizes logbook.distance_unit, callbook.services
+// and ui.background.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)
@@ -223,5 +225,20 @@ func applyEntryDefaults(v *viper.Viper, c *Config) {
 			p.Spawn = &Spawn{}
 		}
 		c.Rig.Profiles[name] = p
+	}
+
+	for name := range v.GetStringMap("listeners") {
+		if _, ok := c.Listeners[name]; !ok {
+			if c.Listeners == nil {
+				c.Listeners = make(map[string]Listener)
+			}
+			c.Listeners[name] = Listener{}
+		}
+	}
+	for name, l := range c.Listeners {
+		if !v.IsSet("listeners." + name + ".address") {
+			l.Address = DefaultListenerAddress
+		}
+		c.Listeners[name] = l
 	}
 }

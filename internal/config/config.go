@@ -18,6 +18,12 @@ const (
 	BackendRigctld = "rigctld"
 )
 
+// Listener protocols accepted in a listener's protocol option.
+const (
+	// ProtocolWSJTX is WSJT-X's UDP message protocol.
+	ProtocolWSJTX = "wsjtx"
+)
+
 // Defaults applied in code when the config file leaves an option unset.
 const (
 	// DefaultHost is the default rig profile host.
@@ -41,6 +47,9 @@ const (
 	DefaultBackground = BackgroundAuto
 	// DefaultCallbookCacheTTL is the default callbook.cache_ttl.
 	DefaultCallbookCacheTTL = 168 * time.Hour
+	// DefaultListenerAddress is the default listener address, WSJT-X's
+	// default UDP Server address.
+	DefaultListenerAddress = "127.0.0.1:2237"
 )
 
 // Callbook services accepted in callbook.services.
@@ -86,6 +95,24 @@ type Config struct {
 	Callbook Callbook `mapstructure:"callbook" toml:"callbook"`
 	// UI is the [ui] table.
 	UI UI `mapstructure:"ui" toml:"ui"`
+	// Listeners holds the [listeners.<name>] tables, keyed by lowercase name.
+	Listeners map[string]Listener `mapstructure:"listeners" toml:"listeners"`
+}
+
+// Listener is a UDP listener that logs QSOs other programs send, keyed by name under [listeners].
+type Listener struct {
+	// Protocol is the protocol the sender speaks: ProtocolWSJTX.
+	Protocol string `mapstructure:"protocol" toml:"protocol"`
+	// Address is the "ip:port" to listen on. The IP must be a loopback or
+	// multicast address, so other hosts cannot write to the log. Load
+	// defaults it to DefaultListenerAddress.
+	Address string `mapstructure:"address" toml:"address"`
+	// Interface is the network interface that joins a multicast group.
+	// Empty lets the system choose; it may only be set for a multicast
+	// Address.
+	Interface string `mapstructure:"interface" toml:"interface"`
+	// Tags are added to each QSO the listener logs.
+	Tags []string `mapstructure:"tags" toml:"tags"`
 }
 
 // UI is the [ui] table, which configures how the TUI looks.

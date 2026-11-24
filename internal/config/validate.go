@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/netip"
 	"slices"
 	"strings"
 
@@ -44,6 +45,7 @@ func (c Config) Validate(station string) error {
 	errs = append(errs, c.validateUI()...)
 	errs = append(errs, c.validateIndex()...)
 	errs = append(errs, c.validateCallbook()...)
+	errs = append(errs, c.validateListeners()...)
 	return errors.Join(errs...)
 }
 
@@ -200,6 +202,34 @@ func (c Config) validateCallbook() []error {
 	}
 	if c.Callbook.CacheTTL < 0 {
 		errs = append(errs, invalid("callbook.cache_ttl", "must be 0 or more, got %s", c.Callbook.CacheTTL))
+	}
+	return errs
+}
+
+// validateListeners checks every [listeners.<name>] table. The address must
+// be a loopback or multicast IP literal with a port, so other hosts on the
+// network cannot write to the log. Whether the interface exists is checked
+// when the listener binds, not here.
+func (c Config) validateListeners() []error {
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(c.Listeners)) {
+		l := c.Listeners[name]
+		prefix := "listeners." + name + "."
+		if l.Protocol != ProtocolWSJTX {
+			errs = append(errs, invalid(prefix+"protocol", "must be %q, got %q", ProtocolWSJTX, l.Protocol))
+		}
+		addr, err := netip.ParseAddrPort(l.Address)
+		switch {
+		case err != nil:
+			errs = append(errs, invalid(prefix+"address", "want an IP address and port such as %q, got %q", DefaultListenerAddress, l.Address))
+		case addr.Port() == 0:
+			errs = append(errs, invalid(prefix+"address", "port must be 1-65535, got %q", l.Address))
+		case !addr.Addr().IsLoopback() && !addr.Addr().IsMulticast():
+			errs = append(errs, invalid(prefix+"address", "must be a loopback or multicast address, got %q", l.Address))
+		}
+		if l.Interface != "" && (err != nil || !addr.Addr().IsMulticast()) {
+			errs = append(errs, invalid(prefix+"interface", "only allowed with a multicast address, got address %q", l.Address))
+		}
 	}
 	return errs
 }

@@ -58,6 +58,14 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 			}
 			return c
 		}},
+		{name: "listeners", config: func(t *testing.T) Config {
+			c := fullConfig(t)
+			c.Listeners = map[string]Listener{
+				"wsjtx": {Protocol: ProtocolWSJTX, Address: "224.0.0.1:2237", Interface: "lo0", Tags: []string{"wsjtx"}},
+				"local": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress},
+			}
+			return c
+		}},
 		{name: "session effective config", config: func(t *testing.T) Config {
 			return resolve(t, Overrides{Station: "portable", Grid: "FN31", POTA: []string{"US-0001"}, NoRig: true}).Config
 		}},
@@ -171,6 +179,48 @@ func TestWriteTOMLCallbook(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := fullConfig(t)
 			c.Callbook = tt.callbook
+			out := writeTOML(t, c)
+			for _, w := range tt.want {
+				assert.Contains(t, out, w)
+			}
+			for _, w := range tt.notWant {
+				assert.NotContains(t, out, w)
+			}
+		})
+	}
+}
+
+func TestWriteTOMLListeners(t *testing.T) {
+	tests := []struct {
+		name      string
+		listeners map[string]Listener
+		want      []string
+		notWant   []string
+	}{
+		{
+			name:    "no listeners are omitted",
+			notWant: []string{"listeners"},
+		},
+		{
+			name: "unset interface and tags are omitted",
+			listeners: map[string]Listener{
+				"local": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress},
+			},
+			want:    []string{"[listeners.local]", "protocol = 'wsjtx'", "address = '127.0.0.1:2237'"},
+			notWant: []string{"interface =", "tags ="},
+		},
+		{
+			name: "interface and tags are written when set",
+			listeners: map[string]Listener{
+				"wsjtx": {Protocol: ProtocolWSJTX, Address: "224.0.0.1:2237", Interface: "lo0", Tags: []string{"wsjtx"}},
+			},
+			want: []string{"[listeners.wsjtx]", "interface = 'lo0'", "tags = ['wsjtx']"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := fullConfig(t)
+			c.Listeners = tt.listeners
 			out := writeTOML(t, c)
 			for _, w := range tt.want {
 				assert.Contains(t, out, w)

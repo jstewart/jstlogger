@@ -13,13 +13,24 @@ const maskedPassword = "********"
 // tomlConfig mirrors Config for encoding, with rig.poll_interval and
 // callbook.cache_ttl as duration strings so the output can be loaded again.
 type tomlConfig struct {
-	DefaultStation string                 `toml:"default_station"`
-	Stations       map[string]tomlStation `toml:"stations"`
-	Rig            tomlRig                `toml:"rig"`
-	Logbook        tomlLogbook            `toml:"logbook"`
-	Index          Index                  `toml:"index"`
-	Callbook       tomlCallbook           `toml:"callbook"`
-	UI             UI                     `toml:"ui"`
+	DefaultStation string                  `toml:"default_station"`
+	Stations       map[string]tomlStation  `toml:"stations"`
+	Rig            tomlRig                 `toml:"rig"`
+	Logbook        tomlLogbook             `toml:"logbook"`
+	Index          Index                   `toml:"index"`
+	Callbook       tomlCallbook            `toml:"callbook"`
+	UI             UI                      `toml:"ui"`
+	Listeners      map[string]tomlListener `toml:"listeners,omitempty"`
+}
+
+// tomlListener mirrors Listener for encoding. It must stay convertible to
+// and from Listener; it differs only in omitting an unset interface and
+// tags, as tomlStation omits pota_references.
+type tomlListener struct {
+	Protocol  string   `toml:"protocol"`
+	Address   string   `toml:"address"`
+	Interface string   `toml:"interface,omitempty"`
+	Tags      []string `toml:"tags,omitempty"`
 }
 
 // tomlCallbook mirrors Callbook for encoding, with cache_ttl as a duration
@@ -67,9 +78,9 @@ type tomlRig struct {
 
 // WriteTOML writes c to w as TOML that Load accepts, with rig.poll_interval
 // and callbook.cache_ttl as duration strings (e.g. "1s"). Absent [spawn]
-// tables and an empty logbook.path are omitted. Non-empty callbook passwords
-// are written as "********", so a config holding passwords does not round
-// trip.
+// tables, an empty logbook.path, and unset listener interfaces and tags are
+// omitted. Non-empty callbook passwords are written as "********", so a
+// config holding passwords does not round trip.
 func WriteTOML(w io.Writer, c Config) error {
 	tc := tomlConfig{
 		DefaultStation: c.DefaultStation,
@@ -93,6 +104,12 @@ func WriteTOML(w io.Writer, c Config) error {
 	tc.Callbook.HamQTH.Password = mask(tc.Callbook.HamQTH.Password)
 	for name, s := range c.Stations {
 		tc.Stations[name] = tomlStation(s)
+	}
+	if len(c.Listeners) > 0 {
+		tc.Listeners = make(map[string]tomlListener, len(c.Listeners))
+		for name, l := range c.Listeners {
+			tc.Listeners[name] = tomlListener(l)
+		}
 	}
 	if err := toml.NewEncoder(w).Encode(tc); err != nil {
 		return fmt.Errorf("writing config as TOML: %w", err)

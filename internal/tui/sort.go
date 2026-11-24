@@ -79,6 +79,7 @@ func (m Model) sortIndex(s logbook.Sort) (Model, tea.Cmd) {
 	}
 	x.sort = s
 	id := x.restart()
+	x.settling = true
 	x.blocks = map[int][]logbook.QSO{}
 	return m, loadIndexCmd(m.logbook, x.gen, x.limit.expr, x.sort, id, x.cursor)
 }

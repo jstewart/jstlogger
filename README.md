@@ -552,7 +552,9 @@ rigctld address (for example `localhost:4532`).
 ### Debug log
 
 Run `jstlogger --debug` to log rig events (state changes, connection
-changes and commands) and the background LoTW, eQSL and DXCC syncs to `$XDG_STATE_HOME/jstlogger/debug.log`
+changes and commands), the background LoTW, eQSL and DXCC syncs, and the
+QSOs and errors of [UDP listeners](#logging-from-wsjt-x) to
+`$XDG_STATE_HOME/jstlogger/debug.log`
 (`~/.local/state/jstlogger/debug.log` by default). Watch it with
 `tail -f` in another terminal.
 
@@ -692,6 +694,59 @@ normalizations:
   grid when that is missing. A `DISTANCE` in the file is always kept.
 - `APP_JSTLOGGER_UUID` is added to every record.
 
+### Logging from WSJT-X
+
+jstlogger can listen for the QSOs you log in WSJT-X and add them to the
+logbook as they arrive, the way GridTracker2 does. JTDX and MSHV speak the
+same protocol and work the same way. Add a listener to the config file:
+
+```toml
+[listeners.wsjtx]
+protocol  = "wsjtx"            # only "wsjtx" for now
+address   = "224.0.0.1:2237"   # loopback or multicast ip:port; default "127.0.0.1:2237"
+interface = "lo0"              # optional, multicast only: the interface to join on
+tags      = ["wsjtx"]          # optional, added to each logged QSO
+```
+
+When you press **OK** in WSJT-X's Log QSO window, WSJT-X sends the QSO
+as ADIF. jstlogger stores it, and the QSO index refreshes, keeping the
+cursor where it was. A QSO WSJT-X sends again is skipped as a duplicate,
+just as it would be on an ADIF import. The QSO is stored as WSJT-X sent
+it: jstlogger doesn't look up its country, zones or callbook data, or fill
+in your station profile.
+
+WSJT-X doesn't check what you type in the Log QSO window. If a field such
+as **Pwr** or **RX Frequency** holds something jstlogger can't read (`10w`
+and `1.5 kW` are fine), the QSO is still stored without that field, and
+`--debug` logs a warning naming it. A QSO with an unreadable call, date or
+time isn't stored.
+
+The address must be a loopback or multicast address, never `0.0.0.0` or a
+LAN address, and jstlogger ignores packets from other hosts, so nothing
+else on your network can write to your log. Several listeners can run at
+once, each in its own `[listeners.<name>]` table. If a listener can't
+start (for example, the port is taken), jstlogger keeps running without
+it; run with `--debug` to see why.
+
+**Running alongside GridTracker2.** With a plain address such as
+`127.0.0.1:2237`, only one program gets each packet, so jstlogger and
+GridTracker2 can't both listen. Send to a multicast group instead, and
+both receive every packet. On macOS, a group on the loopback interface
+keeps the traffic on your machine:
+
+1. In WSJT-X, open **Settings → Reporting**. Under **UDP Server**, set
+   the address to `224.0.0.1` and the port to `2237`. In **Outgoing
+   interfaces**, which appears once the address is a multicast group,
+   choose `lo0` only. Set **Multicast TTL** to `1`.
+2. In GridTracker2's settings, set its WSJT-X/JTDX UDP receive port to
+   `2237`, turn on **Multicast**, and set the multicast IP to
+   `224.0.0.1`.
+3. Use the `[listeners.wsjtx]` table above, with `interface = "lo0"`.
+
+This recipe has been tested on macOS only. On Linux, the loopback interface
+is `lo`, which doesn't carry multicast by default (`ip link show lo` lacks
+the `MULTICAST` flag), so it needs more setup there.
+
 ## Development
 
 ```sh
@@ -729,6 +784,7 @@ internal/dxcc/     DXCC entity lookup from callsign prefixes (AD1C Big CTY)
 internal/eqsl/     eQSL AG member list download, storage and lookup
 internal/feed/     conditional download and sync metadata shared by the lists
 internal/indexfmt/ QSO index format parsing and column values
+internal/listener/ UDP listeners that decode QSOs other programs log (WSJT-X)
 internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
 internal/lotw/     LoTW user activity feed download, storage and recency
 internal/rig/      rigctld client: polls the rig and sends it commands

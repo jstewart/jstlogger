@@ -37,9 +37,11 @@ var version = "dev"
 
 // runTUI starts the terminal UI on store, the rig when the session enables
 // one, and background syncs of the LoTW activity feed, the eQSL AG member
-// list and the DXCC country file when store is a SQLite logbook, and blocks
-// until the UI exits. Rig events and the syncs' outcomes are logged to
-// logger; all but the DXCC sync's are also sent to the UI.
+// list and the DXCC country file when store is a SQLite logbook, and the
+// configured UDP listeners, and blocks until the UI exits. Rig events, the
+// syncs' outcomes and the listeners' QSOs and errors are logged to logger;
+// all but the DXCC sync's outcome and listener errors are also sent to the
+// UI.
 // Tests replace it so the TUI never starts.
 var runTUI = func(ctx context.Context, session config.Session, store logbook.Store, logger *slog.Logger) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -117,6 +119,10 @@ var runTUI = func(ctx context.Context, session config.Session, store logbook.Sto
 	}
 	if dxccSyncer != nil {
 		wg.Go(func() { syncDXCCInBackground(ctx, dxccSyncer, logger) })
+	}
+	for _, name := range slices.Sorted(maps.Keys(session.Config.Listeners)) {
+		cfg := session.Config.Listeners[name]
+		wg.Go(func() { runListener(ctx, name, cfg, store, logger, p.Send) })
 	}
 	_, err = p.Run()
 	cancel()
