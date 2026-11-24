@@ -200,7 +200,11 @@ func TestEditTabs(t *testing.T) {
 		{"Station rig", MyRig, "FTdx10", func(q *logbook.QSO) { q.Fields["MY_RIG"] = "FTdx10" }},
 		{"Station power", TxPwr, "50", func(q *logbook.QSO) { q.TxPwr = sql.Null[float64]{V: 50, Valid: true} }},
 		{"Station name cleared", StationName, "", func(q *logbook.QSO) { delete(q.Fields, logbook.StationField) }},
-		{"General DXCC", DXCC, "1", func(q *logbook.QSO) { q.DXCC = sql.Null[int]{V: 1, Valid: true} }},
+		{"General DXCC", DXCC, "1", func(q *logbook.QSO) {
+			q.DXCC, q.Country = sql.Null[int]{V: 1, Valid: true}, "CANADA"
+		}},
+		{"General DXCC cleared", DXCC, "", func(q *logbook.QSO) { q.DXCC, q.Country = sql.Null[int]{}, "" }},
+		{"General DXCC none", DXCC, "0", func(q *logbook.QSO) { q.DXCC, q.Country = sql.Null[int]{V: 0, Valid: true}, "" }},
 		{"General email", Email, "ann@example.org", func(q *logbook.QSO) { q.Fields["EMAIL"] = "ann@example.org" }},
 		{"General CQ zone cleared", CQZ, "", func(q *logbook.QSO) { q.CQZ = sql.Null[int]{} }},
 		{"Satellite name", SatName, "so-50", func(q *logbook.QSO) { q.Fields["SAT_NAME"] = "SO-50" }},
@@ -225,6 +229,33 @@ func TestEditTabs(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, want, got, "only the edited field changes")
+		})
+	}
+}
+
+func TestEditCountry(t *testing.T) {
+	tests := []struct {
+		name   string
+		stored string
+		dxcc   string
+		want   string
+	}{
+		{"same code keeps the stored country", "United States", "291", "United States"},
+		{"same code without a stored country gets ADIF's name", "", "291", "UNITED STATES OF AMERICA"},
+		{"a new code gets its name", "United States", "1", "CANADA"},
+		{"a cleared code leaves none", "United States", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			orig := storedQSO(t, fullForm())
+			orig.Country = tt.stored
+			f := Load(orig)
+			f[DXCC] = tt.dxcc
+
+			got, err := Edit(f, orig, testNow)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.Country)
 		})
 	}
 }
@@ -407,6 +438,7 @@ func TestEditStoreRoundTripWithChanges(t *testing.T) {
 	want := cloneQSO(before)
 	want.Call = "K1XYZ"
 	want.DXCC = sql.Null[int]{V: 1, Valid: true}
+	want.Country = "CANADA"
 	want.Fields["MY_RIG"] = "FTdx10"
 	want.Fields["SAT_NAME"] = "SO-50"
 	want.Fields["NOTES"] = "edited"

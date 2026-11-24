@@ -432,6 +432,7 @@ func TestBuildGeneralTab(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, sql.Null[int]{V: 291, Valid: true}, q.DXCC)
+	assert.Equal(t, "UNITED STATES OF AMERICA", q.Country, "the country is ADIF's name for the entity")
 	assert.Equal(t, "NA", q.Cont)
 	assert.Equal(t, sql.Null[int]{V: 5, Valid: true}, q.CQZ)
 	assert.Equal(t, sql.Null[int]{V: 8, Valid: true}, q.ITUZ)
@@ -459,6 +460,14 @@ func TestBuildDXCCZero(t *testing.T) {
 	q, err := Build(f, testNow)
 	require.NoError(t, err)
 	assert.Equal(t, sql.Null[int]{V: 0, Valid: true}, q.DXCC, "DXCC 0 means no entity and is stored")
+	assert.Empty(t, q.Country, "no entity has no country")
+}
+
+func TestBuildNoDXCCNoCountry(t *testing.T) {
+	q, err := Build(validForm(), testNow)
+	require.NoError(t, err)
+	assert.False(t, q.DXCC.Valid)
+	assert.Empty(t, q.Country)
 }
 
 func TestBuildSatellite(t *testing.T) {

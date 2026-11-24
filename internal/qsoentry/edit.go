@@ -100,22 +100,27 @@ func formatInt(n int, valid bool) string {
 // returns orig with those changes applied. now is the current time, as for
 // Build. When any field is invalid, Edit returns Build's Errors as they are.
 //
-// Everything the form does not show is kept from orig: its ID, UUID,
-// country, ITU region, distance and timestamps, its fields other than the
-// form's, and its confirmations from other services. The Satellite tab is
-// the form's only when PROP_MODE is SAT, as Build drops it otherwise, so a
-// stored satellite is kept when the propagation mode is anything else. Each
-// QSL sent status sets the Sent of its service's confirmation, keeping the
-// received status and the dates; a confirmation left with nothing in it is
-// dropped. Edit never changes orig, and the QSO it returns shares no maps
-// or slices with it.
+// Everything the form does not show is kept from orig: its ID, UUID, ITU
+// region, distance and timestamps, its fields other than the form's, and
+// its confirmations from other services. Its country is kept too while the
+// DXCC entity code is unchanged; when the code changes, or orig has no
+// country, the country is Build's, ADIF's name for the code.
+//
+// The Satellite tab is the form's only when PROP_MODE is SAT, as Build
+// drops it otherwise, so a stored satellite is kept when the propagation
+// mode is anything else. Each QSL sent status sets the Sent of its
+// service's confirmation, keeping the received status and the dates; a
+// confirmation left with nothing in it is dropped. Edit never changes
+// orig, and the QSO it returns shares no maps or slices with it.
 func Edit(f Form, orig logbook.QSO, now time.Time) (logbook.QSO, error) {
 	q, err := Build(f, now)
 	if err != nil {
 		return logbook.QSO{}, err
 	}
 	q.ID, q.UUID = orig.ID, orig.UUID
-	q.Country = orig.Country
+	if q.DXCC == orig.DXCC && orig.Country != "" {
+		q.Country = orig.Country
+	}
 	q.ITURegion = orig.ITURegion
 	q.DistanceKm = orig.DistanceKm
 	q.CreatedAt, q.UpdatedAt = orig.CreatedAt, orig.UpdatedAt
