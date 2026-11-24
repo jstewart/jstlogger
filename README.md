@@ -711,9 +711,17 @@ tags      = ["wsjtx"]          # optional, added to each logged QSO
 When you press **OK** in WSJT-X's Log QSO window, WSJT-X sends the QSO
 as ADIF. jstlogger stores it, and the QSO index refreshes, keeping the
 cursor where it was. A QSO WSJT-X sends again is skipped as a duplicate,
-just as it would be on an ADIF import. The QSO is stored as WSJT-X sent
-it: jstlogger doesn't look up its country, zones or callbook data, or fill
-in your station profile.
+just as it would be on an ADIF import.
+
+Before storing the QSO, jstlogger fills in what WSJT-X leaves out, just
+as the New QSO screen does: the DXCC entity, continent and CQ and ITU
+zones from the country file, and the name, QTH, grid, state, county and
+email from the [callbook](#callbook-lookup), or from your latest earlier
+QSO with the call when no callbook is configured or the lookup fails. A
+value WSJT-X sent is kept, so the grid it decoded wins over the
+callbook's. If a lookup fails, the QSO is still stored with whatever was
+found, and `--debug` logs the failure as a warning. jstlogger
+doesn't fill in your station profile.
 
 WSJT-X doesn't check what you type in the Log QSO window. If a field such
 as **Pwr** or **RX Frequency** holds something jstlogger can't read (`10w`
@@ -779,6 +787,7 @@ JSTLOGGER_ROUNDTRIP_ADIF=/path/to/log.adi go test -run TestRoundTripExternalFile
 main.go            entry point; parses flags, loads config and starts the app
 internal/adif/     ADIF .adi file reading, writing and comparison
 internal/callbook/ QRZ.com and HamQTH callbook lookups, with caching
+internal/callinfo/ what is known about a call: DXCC entity and callbook details
 internal/config/   config file loading, validation and session overrides
 internal/dxcc/     DXCC entity lookup from callsign prefixes (AD1C Big CTY)
 internal/eqsl/     eQSL AG member list download, storage and lookup
