@@ -20,4 +20,10 @@
 // cty.csv lists the current entity for each prefix and exception call, with
 // no dates, so a call resolves to its current entity even when an older
 // QSO with it counted for a different one.
+//
+// cty.csv's entity names are AD1C's ("United States"), not ARRL's.
+// EntityName gives the name ADIF lists for an entity code ("UNITED STATES
+// OF AMERICA"), the form ADIF files and LoTW use for a QSO's country, from
+// a copy of ADIF's DXCC_Entity_Code enumeration that includes deleted
+// entities.
 package dxcc
