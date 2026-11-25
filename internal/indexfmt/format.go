@@ -1,12 +1,14 @@
 package indexfmt
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"jstlogger/internal/logbook"
 )
@@ -25,6 +27,10 @@ const FieldTime byte = '{'
 // FieldLoTW is the Item.Field of a %L expando, whose value is "L" when the
 // QSO's callsign is a LoTW user (see Row).
 const FieldLoTW byte = 'L'
+
+// FieldTags is the Item.Field of a %T expando, whose value is the QSO's
+// tags sorted ignoring case and joined with ", " (see FitTags).
+const FieldTags byte = 'T'
 
 // Row is the state of a QSO's row that the caller knows and the QSO does
 // not.
@@ -131,6 +137,52 @@ var expandos = map[byte]expando{
 		}
 		return strconv.Itoa(q.DXCC.V)
 	}},
+	FieldTags: {"Tags", func(q logbook.QSO, _ Unit) string {
+		return strings.Join(sortTags(q.Tags), tagSep)
+	}},
+}
+
+// tagSep separates the tags of a %T value.
+const tagSep = ", "
+
+// sortTags returns a copy of tags sorted alphabetically ignoring case, with
+// ties broken by the exact text so the order is deterministic.
+func sortTags(tags []string) []string {
+	out := slices.Clone(tags)
+	slices.SortFunc(out, func(a, b string) int {
+		return cmp.Or(
+			strings.Compare(strings.ToLower(a), strings.ToLower(b)),
+			strings.Compare(a, b),
+		)
+	})
+	return out
+}
+
+// FitTags formats tags for a %T column width cells wide. The tags are
+// sorted as in %T, and as many whole tags as fit are joined with ", ",
+// followed by " +N" when N tags are left out, e.g. "pota, sota +3". A tag
+// is never split: when not even one fits, FitTags returns "+N" alone, even
+// if that is wider than width. No tags gives "", and a width of 0 or less
+// is unlimited, giving every tag. Widths are counted in runes, and tags is
+// not modified.
+func FitTags(tags []string, width int) string {
+	sorted := sortTags(tags)
+	if width <= 0 {
+		return strings.Join(sorted, tagSep)
+	}
+	for k := len(sorted); k > 0; k-- {
+		s := strings.Join(sorted[:k], tagSep)
+		if k < len(sorted) {
+			s += " +" + strconv.Itoa(len(sorted)-k)
+		}
+		if utf8.RuneCountInString(s) <= width {
+			return s
+		}
+	}
+	if len(sorted) == 0 {
+		return ""
+	}
+	return "+" + strconv.Itoa(len(sorted))
 }
 
 // MaxWidth is the widest fixed column width a format can give.
