@@ -252,6 +252,21 @@ func (mr *MockStoreMockRecorder) Tags(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Tags", reflect.TypeOf((*MockStore)(nil).Tags), ctx)
 }
 
+// TagsFor mocks base method.
+func (m *MockStore) TagsFor(ctx context.Context, ids []int64) (map[int64][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TagsFor", ctx, ids)
+	ret0, _ := ret[0].(map[int64][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TagsFor indicates an expected call of TagsFor.
+func (mr *MockStoreMockRecorder) TagsFor(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TagsFor", reflect.TypeOf((*MockStore)(nil).TagsFor), ctx, ids)
+}
+
 // Untag mocks base method.
 func (m *MockStore) Untag(ctx context.Context, qsoIDs []int64, tags ...string) error {
 	m.ctrl.T.Helper()

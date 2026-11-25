@@ -87,6 +87,28 @@ func (s *SQLiteStore) Tags(ctx context.Context) (tags []Tag, err error) {
 	return tags, nil
 }
 
+// TagsFor returns the tags of each of the given QSOs, keyed by QSO ID, using
+// one query whatever the number of IDs, for filling the index's Tags column.
+// Tags within a QSO are in name order ignoring case. QSOs without tags and
+// unknown IDs are absent from the map. No IDs returns nil without querying.
+func (s *SQLiteStore) TagsFor(ctx context.Context, ids []int64) (map[int64][]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	in := "(" + placeholders(len(args)) + ")"
+	tags := make(map[int64][]string)
+	if err := s.loadTags(ctx, in, args, func(id int64, name string) {
+		tags[id] = append(tags[id], name)
+	}); err != nil {
+		return nil, fmt.Errorf("logbook: tags for qsos: %w", err)
+	}
+	return tags, nil
+}
+
 // deleteUnusedTags deletes every tag that no longer labels a QSO, so Tags
 // lists only tags in use.
 func deleteUnusedTags(ctx context.Context, tx *sql.Tx) error {

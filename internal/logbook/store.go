@@ -50,6 +50,10 @@ type Store interface {
 	Untag(ctx context.Context, qsoIDs []int64, tags ...string) error
 	// Tags returns every tag.
 	Tags(ctx context.Context) ([]Tag, error)
+	// TagsFor returns the tags of each of the given QSOs, keyed by QSO ID,
+	// using one query, in name order ignoring case within each QSO. QSOs
+	// without tags and unknown IDs are absent. No IDs returns nil.
+	TagsFor(ctx context.Context, ids []int64) (map[int64][]string, error)
 	// Import stores qsos in a single transaction, skipping duplicates, and
 	// applies tags to each QSO it stores (in addition to the QSO's own
 	// Tags). Duplicates are not updated and are not tagged. If any QSO
