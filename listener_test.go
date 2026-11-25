@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"log/slog"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -434,4 +435,34 @@ func TestRunListenerBadHighlightColorsStillLogs(t *testing.T) {
 		return len(sent()) > 0
 	}, 3*time.Second, 20*time.Millisecond)
 	assert.Contains(t, logs.String(), "highlighting off")
+}
+
+func TestHighlightListenerEventQuietOnQuit(t *testing.T) {
+	store := openTestLogbook(t)
+	scheme, err := highlightScheme(config.DefaultHighlightColors)
+	require.NoError(t, err)
+	hl := highlight.New(store, scheme, highlightTTL)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	reply := func(context.Context, netip.AddrPort, []byte) error { return ctx.Err() }
+	ev := listener.DecodeReceived{Source: "WSJT-X", From: netip.MustParseAddrPort("127.0.0.1:50000"), Message: "CQ K1AB FN42"}
+	highlightListenerEvent(ctx, logger, hl, reply, ev)
+	assert.Empty(t, logs.String(), "a lookup cut short as the app quits is not a failure")
+}
+
+func TestHighlightListenerEventLogsFailures(t *testing.T) {
+	store, err := logbook.Open(t.Context(), filepath.Join(t.TempDir(), "logbook.db"), logbook.Options{})
+	require.NoError(t, err)
+	require.NoError(t, store.Close(), "lookups in a closed logbook fail")
+	hl := highlight.New(store, highlight.Scheme{}, highlightTTL)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	ev := listener.DecodeReceived{Source: "WSJT-X", From: netip.MustParseAddrPort("127.0.0.1:50000"), Message: "CQ K1AB FN42"}
+	highlightListenerEvent(t.Context(), logger, hl, nil, ev)
+	assert.Contains(t, logs.String(), "level=WARN")
+	assert.Contains(t, logs.String(), "lookup failed")
 }

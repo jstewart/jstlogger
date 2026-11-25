@@ -124,12 +124,16 @@ func handleListenerEvent(ctx context.Context, logger *slog.Logger, store logbook
 // on, a decode is answered with the highlight hl picks for its caller,
 // sent back to the sender with reply, and a received QSO, which
 // handleListenerEvent has stored, has its call looked up afresh. A failed
-// lookup or send is logged as a warning.
+// lookup or send is logged as a warning. Decodes that arrive as the app
+// quits are dropped.
 func highlightListenerEvent(ctx context.Context, logger *slog.Logger, hl *highlight.Highlighter, reply func(context.Context, netip.AddrPort, []byte) error, event any) {
 	switch ev := event.(type) {
 	case listener.StatusReceived:
 		hl.Status(highlight.Client{ID: ev.Source, Addr: ev.From}, ev.DialHz, ev.Mode)
 	case listener.DecodeReceived:
+		if ctx.Err() != nil {
+			return // the app is quitting
+		}
 		ctx, cancel := context.WithTimeout(ctx, highlightTimeout)
 		defer cancel()
 		h, ok, err := hl.Decode(ctx, highlight.Client{ID: ev.Source, Addr: ev.From}, ev.Message)
