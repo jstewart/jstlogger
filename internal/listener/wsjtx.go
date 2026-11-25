@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -15,19 +16,34 @@ import (
 // wsjtxMagic starts every WSJT-X packet.
 const wsjtxMagic uint32 = 0xADBCCBDA
 
-// wsjtxLoggedADIF is the message type that carries a logged QSO as ADIF.
-const wsjtxLoggedADIF uint32 = 12
+// WSJT-X message types.
+const (
+	// wsjtxStatus carries the sender's dial frequency, mode and more.
+	wsjtxStatus uint32 = 1
+	// wsjtxDecode carries one decoded message.
+	wsjtxDecode uint32 = 2
+	// wsjtxLoggedADIF carries a logged QSO as ADIF.
+	wsjtxLoggedADIF uint32 = 12
+	// wsjtxHighlightCallsign asks the receiver to highlight a callsign.
+	wsjtxHighlightCallsign uint32 = 13
+)
+
+// wsjtxSchema is the schema number of the packets this package sends:
+// QDataStream's Qt 5.0 format, which every WSJT-X 2.x and JTDX reads.
+const wsjtxSchema uint32 = 2
 
 // qNull is the QByteArray length that marks a null array.
 const qNull uint32 = 0xFFFFFFFF
 
-// WSJTX decodes the WSJT-X UDP protocol. It reports LoggedADIF messages as
-// QSOReceived events and ignores every other message type, including
-// QSOLogged, which repeats the QSO sent in LoggedADIF.
+// WSJTX decodes the WSJT-X UDP protocol. It reports Status messages as
+// StatusReceived, Decode messages as DecodeReceived and LoggedADIF
+// messages as QSOReceived events, and ignores every other message type,
+// including QSOLogged, which repeats the QSO sent in LoggedADIF.
 type WSJTX struct{}
 
-// Decode returns a QSOReceived for each record in a LoggedADIF message and
-// no events for any other message.
+// Decode returns the events in one WSJT-X message: a StatusReceived for a
+// Status message, a DecodeReceived for a Decode message, a QSOReceived for
+// each record in a LoggedADIF message, and none for any other message.
 func (WSJTX) Decode(packet []byte) ([]any, error) {
 	r := qreader{buf: packet}
 	magic, err := r.u32()
@@ -44,13 +60,59 @@ func (WSJTX) Decode(packet []byte) ([]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listener: wsjtx: read message type: %w", err)
 	}
-	if msgType != wsjtxLoggedADIF {
+	switch msgType {
+	case wsjtxStatus, wsjtxDecode, wsjtxLoggedADIF:
+	default:
 		return nil, nil
 	}
 	id, err := r.utf8()
 	if err != nil {
 		return nil, fmt.Errorf("listener: wsjtx: read id: %w", err)
 	}
+	switch msgType {
+	case wsjtxStatus:
+		return decodeStatus(&r, id)
+	case wsjtxDecode:
+		return decodeDecode(&r, id)
+	}
+	return decodeLoggedADIF(&r, id)
+}
+
+// decodeStatus reads the rest of a Status message from id: its dial
+// frequency and mode. The fields after them are ignored.
+func decodeStatus(r *qreader, id string) ([]any, error) {
+	dial, err := r.u64()
+	if err != nil {
+		return nil, fmt.Errorf("listener: wsjtx: status from %q: read dial frequency: %w", id, err)
+	}
+	mode, err := r.utf8()
+	if err != nil {
+		return nil, fmt.Errorf("listener: wsjtx: status from %q: read mode: %w", id, err)
+	}
+	return []any{StatusReceived{Source: id, DialHz: dial, Mode: mode}}, nil
+}
+
+// decodeDecode reads the rest of a Decode message from id up to its
+// message text. The fields after it are ignored.
+func decodeDecode(r *qreader, id string) ([]any, error) {
+	// New (bool), time (quint32), SNR (qint32), delta time (double) and
+	// delta frequency (quint32) come before the mode and message.
+	if err := r.skip(1 + 4 + 4 + 8 + 4); err != nil {
+		return nil, fmt.Errorf("listener: wsjtx: decode from %q: %w", id, err)
+	}
+	if _, err := r.utf8(); err != nil {
+		return nil, fmt.Errorf("listener: wsjtx: decode from %q: read mode: %w", id, err)
+	}
+	msg, err := r.utf8()
+	if err != nil {
+		return nil, fmt.Errorf("listener: wsjtx: decode from %q: read message: %w", id, err)
+	}
+	return []any{DecodeReceived{Source: id, Message: msg}}, nil
+}
+
+// decodeLoggedADIF reads the rest of a LoggedADIF message from id and
+// returns a QSOReceived for each of its records.
+func decodeLoggedADIF(r *qreader, id string) ([]any, error) {
 	text, err := r.utf8()
 	if err != nil {
 		return nil, fmt.Errorf("listener: wsjtx: read ADIF: %w", err)
@@ -74,6 +136,54 @@ func (WSJTX) Decode(packet []byte) ([]any, error) {
 		events = append(events, QSOReceived{Source: id, QSO: q, Dropped: dropped})
 	}
 	return events, nil
+}
+
+// WSJTXHighlightCallsign returns a HighlightCallsign message for the
+// program with the client ID id: highlight call in its Band Activity
+// window with the background bg and the foreground fg. A nil color leaves
+// that color as the program's default, so two nil colors clear the
+// highlight. With last set, only the newest decode of call is
+// highlighted; otherwise every one is, including later ones.
+func WSJTXHighlightCallsign(id, call string, bg, fg color.Color, last bool) []byte {
+	b := binary.BigEndian.AppendUint32(nil, wsjtxMagic)
+	b = binary.BigEndian.AppendUint32(b, wsjtxSchema)
+	b = binary.BigEndian.AppendUint32(b, wsjtxHighlightCallsign)
+	b = appendUTF8(b, id)
+	b = appendUTF8(b, call)
+	b = appendQColor(b, bg)
+	b = appendQColor(b, fg)
+	if last {
+		return append(b, 1)
+	}
+	return append(b, 0)
+}
+
+// appendUTF8 appends s as a QByteArray.
+func appendUTF8(b []byte, s string) []byte {
+	b = binary.BigEndian.AppendUint32(b, uint32(len(s))) // a callsign or client ID is far shorter than 4 GiB
+	return append(b, s...)
+}
+
+// QColor color specs.
+const (
+	qColorInvalid = 0
+	qColorRGB     = 1
+)
+
+// appendQColor appends c as a QColor: its spec, then alpha, red, green and
+// blue as 16-bit values and a padding word. A nil c is an invalid QColor.
+func appendQColor(b []byte, c color.Color) []byte {
+	if c == nil {
+		// An invalid color is streamed with an opaque alpha and zero
+		// components, as QColor() is.
+		return append(b, qColorInvalid, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0)
+	}
+	r, g, bl, a := c.RGBA()
+	b = append(b, qColorRGB)
+	for _, v := range []uint32{a, r, g, bl, 0} {
+		b = binary.BigEndian.AppendUint16(b, uint16(v)) // color.Color components are 16-bit
+	}
+	return b
 }
 
 // requiredFields are the ADIF fields a QSO cannot do without, so a bad value
@@ -128,6 +238,25 @@ func (r *qreader) u32() (uint32, error) {
 	v := binary.BigEndian.Uint32(r.buf)
 	r.buf = r.buf[4:]
 	return v, nil
+}
+
+// u64 reads a quint64.
+func (r *qreader) u64() (uint64, error) {
+	if len(r.buf) < 8 {
+		return 0, ErrTruncated
+	}
+	v := binary.BigEndian.Uint64(r.buf)
+	r.buf = r.buf[8:]
+	return v, nil
+}
+
+// skip skips n bytes.
+func (r *qreader) skip(n int) error {
+	if len(r.buf) < n {
+		return ErrTruncated
+	}
+	r.buf = r.buf[n:]
+	return nil
 }
 
 // utf8 reads a QByteArray holding UTF-8 text. A null array reads as "".
