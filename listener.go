@@ -60,6 +60,8 @@ func runListener(ctx context.Context, name string, cfg config.Listener, store lo
 		}
 	}
 	logger.Info("listener starting", "protocol", cfg.Protocol, "address", cfg.Address, "interface", cfg.Interface, "highlight", hl != nil)
+	// Run calls this from its one goroutine, which is what keeps hl, which
+	// is not safe for concurrent use, safe.
 	err = l.Run(ctx, func(event any) {
 		handleListenerEvent(ctx, logger, store, info, cfg.Tags, send, event)
 		if hl != nil {
@@ -121,7 +123,8 @@ func handleListenerEvent(ctx context.Context, logger *slog.Logger, store logbook
 // hl: a sender's status sets the band and mode its decodes are looked up
 // on, a decode is answered with the highlight hl picks for its caller,
 // sent back to the sender with reply, and a received QSO, which
-// handleListenerEvent has stored, has its call looked up afresh. A failed lookup or send is logged as a warning.
+// handleListenerEvent has stored, has its call looked up afresh. A failed
+// lookup or send is logged as a warning.
 func highlightListenerEvent(ctx context.Context, logger *slog.Logger, hl *highlight.Highlighter, reply func(context.Context, netip.AddrPort, []byte) error, event any) {
 	switch ev := event.(type) {
 	case listener.StatusReceived:

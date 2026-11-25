@@ -175,9 +175,9 @@ func parsePagerIndexLines(raw any) (int, error) {
 // (the table key is dynamic), recovers empty tables that viper drops from
 // Unmarshal (including listener tables, whose address defaults to
 // DefaultListenerAddress, and whose colors default to
-// DefaultHighlightColors when they highlight), lowercases values that refer to station or
-// profile names, and normalizes logbook.distance_unit, callbook.services
-// and ui.background.
+// DefaultHighlightColors when they highlight), lowercases values that
+// refer to station or profile names, and normalizes
+// logbook.distance_unit, callbook.services and ui.background.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)
