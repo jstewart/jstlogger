@@ -42,24 +42,14 @@ func formatLine(f indexfmt.Format, cells []string, width int) string {
 // is nil, and writes what style returns. Styling after the cells are
 // measured keeps escape sequences out of the widths.
 func formatStyledLine(f indexfmt.Format, cells []string, width int, style func(i int, s string) string) string {
-	used := 0
-	for i, it := range f.Items {
-		switch {
-		case it.Flex:
-		case it.IsLiteral() || it.Width == 0:
-			used += lipgloss.Width(cells[i])
-		default:
-			used += it.Width
-		}
-	}
-
+	flex := flexWidth(f, cells, width)
 	var b strings.Builder
 	room := width
 	for i, it := range f.Items {
 		v := cells[i]
 		switch w := it.Width; {
 		case it.Flex:
-			w = max(width-used, minFlexWidth)
+			w = flex
 			fallthrough
 		case !it.IsLiteral() && w > 0:
 			v = truncate(v, w, "…")
@@ -82,6 +72,45 @@ func formatStyledLine(f indexfmt.Format, cells []string, width int, style func(i
 		}
 	}
 	return b.String() + strings.Repeat(" ", room)
+}
+
+// flexWidth returns the width formatLine gives the flexible item of f when
+// it lays out cells in width cells: what the other items leave, but at
+// least minFlexWidth.
+func flexWidth(f indexfmt.Format, cells []string, width int) int {
+	used := 0
+	for i, it := range f.Items {
+		switch {
+		case it.Flex:
+		case it.IsLiteral() || it.Width == 0:
+			used += lipgloss.Width(cells[i])
+		default:
+			used += it.Width
+		}
+	}
+	return max(width-used, minFlexWidth)
+}
+
+// fitTags returns cells with each %T cell of a fixed-width or flexible
+// column, laid out in width cells, replaced by as many of tags as fit and a
+// count of the rest, so truncating never splits a tag. A natural-width %T
+// cell keeps every tag. cells is not modified.
+func fitTags(f indexfmt.Format, cells []string, tags []string, width int) []string {
+	out, cloned := cells, false
+	for i, it := range f.Items {
+		if it.Field != indexfmt.FieldTags || (!it.Flex && it.Width == 0) {
+			continue
+		}
+		if !cloned {
+			out, cloned = slices.Clone(cells), true
+		}
+		w := it.Width
+		if it.Flex {
+			w = flexWidth(f, cells, width)
+		}
+		out[i] = indexfmt.FitTags(tags, w)
+	}
+	return out
 }
 
 // truncate shortens s to at most width cells, ending it with tail when it
@@ -205,7 +234,7 @@ func (x index) rowView(st styles, i, width, nw int) string {
 		}
 	}
 	line := numberLine(num, nw, width, func(w int) string {
-		return formatStyledLine(x.format, cells, w, style)
+		return formatStyledLine(x.format, fitTags(x.format, cells, q.Tags, w), w, style)
 	})
 	if i == x.cursor {
 		return fillBar(st.cursor, line)
@@ -217,13 +246,13 @@ func (x index) rowView(st styles, i, width, nw int) string {
 // a row with the marks and LoTW status of row and a last LoTW upload of
 // recency r, and reports whether the cell is styled. The style follows the
 // item's field, so custom formats get it too: the call is bold accent, the
-// date, time and RST are muted, a marked row's mark is bold yellow, a band
-// has its own color and the LoTW cell shows the upload's recency.
+// date, time, RST and tags are muted, a marked row's mark is bold yellow, a
+// band has its own color and the LoTW cell shows the upload's recency.
 func cellStyle(st styles, it indexfmt.Item, v string, row indexfmt.Row, r lotw.Recency) (lipgloss.Style, bool) {
 	switch it.Field {
 	case 'c':
 		return st.indexCall, true
-	case indexfmt.FieldTime, 's', 'r':
+	case indexfmt.FieldTime, 's', 'r', indexfmt.FieldTags:
 		return st.indexDim, true
 	case 'Z':
 		return st.indexMark, row.Marked

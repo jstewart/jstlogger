@@ -441,3 +441,54 @@ func TestIndexStatusSegments(t *testing.T) {
 	assert.Equal(t, 3, strings.Count(got, st.muted.Render(" · ")), "the separators are muted")
 	assert.LessOrEqual(t, lipgloss.Width(got), 80)
 }
+
+func TestIndexViewTagsColumn(t *testing.T) {
+	tags := []string{"sota", "POTA", "wwff", "iota"}
+	for _, tt := range []struct {
+		name   string
+		format string
+		width  int
+		tags   []string
+		row    string
+	}{
+		{name: "fixed left", format: "%-12T|%c", width: 20, tags: tags, row: "iota +3     |W1AW"},
+		{name: "fixed right", format: "%12T|%c", width: 20, tags: tags, row: "     iota +3|W1AW"},
+		{name: "fixed fits all", format: "%-22T|%c", width: 30, tags: tags, row: "iota, POTA, sota, wwff|W1AW"},
+		{name: "flex", format: "%-*T|%c", width: 20, tags: tags, row: "iota, POTA +2  |W1AW"},
+		{name: "natural", format: "%T|%c", width: 30, tags: tags, row: "iota, POTA, sota, wwff|W1AW"},
+		{name: "no tags", format: "%-12T|%c", width: 20, row: "            |W1AW"},
+		{name: "no tags flex", format: "%-*T|%c", width: 20, row: "               |W1AW"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := indexfmt.Parse(tt.format)
+			require.NoError(t, err)
+			q := logbook.QSO{ID: 1, Call: "W1AW", Tags: tt.tags}
+			m := New(WithIndexFormat(f, indexfmt.Km))
+			x := m.idx
+			x.applyLoad(indexLoadedMsg{total: 1, rows: []logbook.QSO{q}})
+			x.setHeight(1)
+
+			lines := strings.Split(x.view(defaultStyles(true), tt.width, 4, false), "\n")
+
+			require.Len(t, lines, 4)
+			row := plain(lines[2])
+			assert.Equal(t, tt.row+strings.Repeat(" ", tt.width-len(tt.row)), row)
+			assert.NotContains(t, row, "…", "no tag is cut")
+		})
+	}
+}
+
+func TestIndexViewTagsColumnNumbered(t *testing.T) {
+	f, err := indexfmt.Parse("%-*T|%c")
+	require.NoError(t, err)
+	q := logbook.QSO{ID: 1, Call: "W1AW", Tags: []string{"sota", "POTA", "wwff", "iota"}}
+	m := New(WithIndexFormat(f, indexfmt.Km))
+	x := m.idx
+	x.applyLoad(indexLoadedMsg{total: 1, rows: []logbook.QSO{q}})
+	x.setHeight(1)
+
+	lines := strings.Split(x.view(defaultStyles(true), 22, 4, true), "\n")
+
+	require.Len(t, lines, 4)
+	assert.Equal(t, "1 iota, POTA +2  |W1AW", plain(lines[2]), "the flex width leaves out the number column")
+}
