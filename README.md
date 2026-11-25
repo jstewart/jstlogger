@@ -273,6 +273,7 @@ is a column, written `%[-][width]X`:
 | `%D`        | distance, in whole `[logbook] distance_unit`s            |
 | `%k`        | continent                                                |
 | `%x`        | DXCC entity number                                       |
+| `%T`        | tags, sorted alphabetically                              |
 
 A date and time format can use `%Y` `%y` `%m` `%d` `%e` `%j` `%H` `%M`
 `%S` `%b` `%B` `%a` `%A` and `%%`. The header row shows each column's
@@ -285,6 +286,11 @@ dim by how recently the station last uploaded), except on the cursor's
 row. It is blank when the station is not in the LoTW feed, while it is
 being looked up, when the lookup fails (with the error on the status line)
 and when the logbook has no LoTW data.
+
+`%T` is not in the default format either. It lists the QSO's tags sorted
+alphabetically, ignoring case. Tags are never cut short: the column shows
+as many whole tags as fit and `+N` for the rest, e.g. `pota, sota +3`.
+Choose the column's width in the format, e.g. `%-12T`.
 
 ### Patterns
 

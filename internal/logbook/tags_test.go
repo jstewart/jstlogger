@@ -155,3 +155,42 @@ func TestSQLiteStoreUpdateRemovesUnusedTags(t *testing.T) {
 
 	assert.Equal(t, []string{"pota"}, tagNames(t, s))
 }
+
+func TestSQLiteStoreTagsFor(t *testing.T) {
+	t.Run("loads the tags of several QSOs in name order ignoring case", func(t *testing.T) {
+		s := newTestStore(t)
+		ids := seedBare(t, s, 4)
+		require.NoError(t, s.Tag(t.Context(), ids[:1], "b", "A", "c"))
+		require.NoError(t, s.Tag(t.Context(), ids[1:3], "pota"))
+
+		got, err := s.TagsFor(t.Context(), ids)
+
+		require.NoError(t, err)
+		assert.Equal(t, map[int64][]string{
+			ids[0]: {"A", "b", "c"},
+			ids[1]: {"pota"},
+			ids[2]: {"pota"},
+		}, got, "the untagged QSO is absent")
+	})
+
+	t.Run("ignores unknown IDs", func(t *testing.T) {
+		s := newTestStore(t)
+		ids := seedBare(t, s, 1)
+		require.NoError(t, s.Tag(t.Context(), ids, "dx"))
+
+		got, err := s.TagsFor(t.Context(), []int64{ids[0], ids[0] + 1000})
+
+		require.NoError(t, err)
+		assert.Equal(t, map[int64][]string{ids[0]: {"dx"}}, got)
+	})
+
+	t.Run("no IDs gives a nil map", func(t *testing.T) {
+		s := newTestStore(t)
+		for _, ids := range [][]int64{nil, {}} {
+			got, err := s.TagsFor(t.Context(), ids)
+
+			require.NoError(t, err)
+			assert.Nil(t, got)
+		}
+	})
+}

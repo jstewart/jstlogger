@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"jstlogger/internal/indexfmt"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/pattern"
 )
@@ -33,6 +34,34 @@ type fakeIndexStore struct {
 	countErr error
 	// idsCalls counts the IDs calls.
 	idsCalls int
+	// tags are the tags TagsFor serves, by QSO ID.
+	tags map[int64][]string
+	// tagsCalls records the IDs of each TagsFor call.
+	tagsCalls [][]int64
+}
+
+// TagsFor returns the tags of the given QSOs from tags, and records the call.
+func (s *fakeIndexStore) TagsFor(_ context.Context, ids []int64) (map[int64][]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tagsCalls = append(s.tagsCalls, slices.Clone(ids))
+	if s.err != nil {
+		return nil, s.err
+	}
+	out := map[int64][]string{}
+	for _, id := range ids {
+		if t, ok := s.tags[id]; ok {
+			out[id] = slices.Clone(t)
+		}
+	}
+	return out, nil
+}
+
+// tagsCallIDs returns the IDs of each TagsFor call.
+func (s *fakeIndexStore) tagsCallIDs() [][]int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.tagsCalls)
 }
 
 // IDs returns the ID of every QSO, ignoring e, and counts the call.
@@ -1107,4 +1136,82 @@ func TestIndexSearchReloadDropsSearchInFlight(t *testing.T) {
 	m = runIndex(t, m, reloadCmd)
 
 	assert.Equal(t, 0, m.idx.cursor, "the search started before the reload is dropped")
+}
+
+// newTaggedIndexModel returns a Model in an 80 by 24 window showing an index
+// of n QSOs, every third one tagged, in the given index format.
+func newTaggedIndexModel(t *testing.T, n int, format string) (Model, *fakeIndexStore) {
+	t.Helper()
+	parsed, err := indexfmt.Parse(format)
+	require.NoError(t, err)
+	s := &fakeIndexStore{qsos: testQSOs(n), tags: map[int64][]string{}}
+	for _, q := range s.qsos {
+		if q.ID%3 == 0 {
+			s.tags[q.ID] = []string{"sota", fmt.Sprintf("t%d", q.ID)}
+		}
+	}
+	m := New(WithLogbook(s), WithIndexFormat(parsed, indexfmt.Km))
+	m = runIndex(t, m, m.Init())
+	m, cmd := update(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	return runIndex(t, m, cmd), s
+}
+
+func TestIndexLoadsTagsWithTagsColumn(t *testing.T) {
+	m, s := newTaggedIndexModel(t, 10, "%-10c %T")
+
+	require.Len(t, s.loadedOffsets(), 1)
+	calls := s.tagsCallIDs()
+	require.Len(t, calls, 1, "one TagsFor call per Index call")
+	assert.ElementsMatch(t, []int64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, calls[0])
+
+	for _, q := range m.idx.blocks[0] {
+		assert.Equal(t, s.tags[q.ID], q.Tags, "QSO %d", q.ID)
+	}
+}
+
+func TestIndexLoadsTagsForEachBlock(t *testing.T) {
+	m, s := newTaggedIndexModel(t, 2_000, "%-10c %T")
+	require.Len(t, s.tagsCallIDs(), 1)
+
+	m = press(t, m, special(tea.KeyEnd))
+
+	require.Equal(t, []int{0, 3 * indexBlockSize}, s.loadedOffsets())
+	calls := s.tagsCallIDs()
+	require.Len(t, calls, 2, "one TagsFor call per Index call")
+	assert.Len(t, calls[1], len(m.idx.blocks[3]))
+	for _, q := range m.idx.blocks[3] {
+		assert.Equal(t, s.tags[q.ID], q.Tags, "QSO %d", q.ID)
+	}
+}
+
+func TestIndexSkipsTagsWithoutTagsColumn(t *testing.T) {
+	m, s := newTaggedIndexModel(t, 2_000, indexfmt.Default)
+
+	m = press(t, m, special(tea.KeyEnd))
+
+	require.Len(t, s.loadedOffsets(), 2)
+	assert.Empty(t, s.tagsCallIDs(), "no %T column, no TagsFor call")
+	for _, q := range m.idx.blocks[3] {
+		assert.Nil(t, q.Tags)
+	}
+}
+
+func TestIndexTagsLoadErrorIsShown(t *testing.T) {
+	parsed, err := indexfmt.Parse("%-10c %T")
+	require.NoError(t, err)
+	s := &tagsFailingStore{fakeIndexStore: &fakeIndexStore{qsos: testQSOs(3)}}
+	m := New(WithLogbook(s), WithIndexFormat(parsed, indexfmt.Km))
+	m = runIndex(t, m, m.Init())
+	m, _ = update(t, m, tea.WindowSizeMsg{Width: 120, Height: 24})
+
+	assert.Contains(t, plain(m.View().Content), "load index tags")
+}
+
+// tagsFailingStore fails only TagsFor.
+type tagsFailingStore struct {
+	*fakeIndexStore
+}
+
+func (s *tagsFailingStore) TagsFor(context.Context, []int64) (map[int64][]string, error) {
+	return nil, assert.AnError
 }

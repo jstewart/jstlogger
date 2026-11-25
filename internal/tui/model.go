@@ -170,7 +170,7 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, tea.RequestBackgroundColor)
 	}
 	if m.logbook != nil {
-		cmds = append(cmds, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, 0, 0))
+		cmds = append(cmds, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, 0, 0, m.idx.wantsTags()))
 	}
 	return tea.Batch(cmds...)
 }
@@ -502,7 +502,7 @@ func (m *Model) layout() tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	for _, b := range m.idx.missing() {
-		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, b))
+		cmds = append(cmds, loadBlockCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, b, m.idx.wantsTags()))
 	}
 	return tea.Batch(append(cmds, m.fetch(), m.fetchLoTW(), m.fetchEQSL(), m.fetchEntryLoTW(), m.fetchWorked(), m.fetchCallbook())...)
 }
@@ -586,5 +586,5 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 // dropped. The redraw repairs a screen the terminal has drawn wrong.
 func (m Model) reloadIndex() (Model, tea.Cmd) {
 	id := m.idx.restart()
-	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor))
+	return m, tea.Batch(tea.ClearScreen, loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor, m.idx.wantsTags()))
 }

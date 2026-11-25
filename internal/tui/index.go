@@ -209,8 +209,9 @@ type indexSearchMsg struct {
 // loadIndexCmd returns a command that counts the QSOs matching limit and
 // loads the block holding the cursor, in the order of sort. The cursor goes
 // to the QSO with the given ID if it still matches, and otherwise to row
-// fallback. A nil limit matches every QSO.
-func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sort, id int64, fallback int) tea.Cmd {
+// fallback. A nil limit matches every QSO. When tags is true the rows carry
+// their tags.
+func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sort, id int64, fallback int, tags bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
@@ -232,7 +233,7 @@ func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sor
 			}
 			cursor = max(min(cursor, total-1), 0)
 			block := cursor / indexBlockSize
-			rows, err := s.Index(ctx, limit, sort, block*indexBlockSize, indexBlockSize)
+			rows, err := indexRows(ctx, s, limit, sort, block*indexBlockSize, indexBlockSize, tags)
 			if err != nil {
 				return fmt.Errorf("load index: %w", err)
 			}
@@ -247,8 +248,8 @@ func loadIndexCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sor
 // order of sort, as loadIndexCmd does, and reports it as an indexLimitMsg.
 // The cursor stays on the QSO with the given ID if it matches, and
 // otherwise goes to row 0.
-func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, sort logbook.Sort, id int64) tea.Cmd {
-	load := loadIndexCmd(s, gen, limit.expr, sort, id, 0)
+func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, sort logbook.Sort, id int64, tags bool) tea.Cmd {
+	load := loadIndexCmd(s, gen, limit.expr, sort, id, 0, tags)
 	return func() tea.Msg {
 		msg, _ := load().(indexLoadedMsg)
 		return indexLimitMsg{indexLoadedMsg: msg, limit: limit}
@@ -256,17 +257,48 @@ func limitIndexCmd(s logbook.Store, gen int, limit indexLimit, sort logbook.Sort
 }
 
 // loadBlockCmd returns a command that loads one block of the rows matching
-// limit, in the order of sort. A nil limit matches every QSO.
-func loadBlockCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sort, block int) tea.Cmd {
+// limit, in the order of sort. A nil limit matches every QSO. When tags is
+// true the rows carry their tags.
+func loadBlockCmd(s logbook.Store, gen int, limit logbook.Expr, sort logbook.Sort, block int, tags bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), logbookTimeout)
 		defer cancel()
-		rows, err := s.Index(ctx, limit, sort, block*indexBlockSize, indexBlockSize)
+		rows, err := indexRows(ctx, s, limit, sort, block*indexBlockSize, indexBlockSize, tags)
 		if err != nil {
 			err = fmt.Errorf("load rows %d–%d: %w", block*indexBlockSize+1, (block+1)*indexBlockSize, err)
 		}
 		return indexBlockMsg{gen: gen, block: block, rows: rows, err: err}
 	}
+}
+
+// indexRows loads up to limit rows matching e, from offset in the order of
+// sort. When tags is true it fills in the rows' tags, in one batched query.
+func indexRows(ctx context.Context, s logbook.Store, e logbook.Expr, sort logbook.Sort, offset, limit int, tags bool) ([]logbook.QSO, error) {
+	rows, err := s.Index(ctx, e, sort, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	if !tags || len(rows) == 0 {
+		return rows, nil
+	}
+	ids := make([]int64, len(rows))
+	for i, q := range rows {
+		ids[i] = q.ID
+	}
+	byID, err := s.TagsFor(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("load index tags: %w", err)
+	}
+	for i := range rows {
+		rows[i].Tags = byID[rows[i].ID]
+	}
+	return rows, nil
+}
+
+// wantsTags reports whether the index format shows tags, so its rows must
+// be loaded with them.
+func (x *index) wantsTags() bool {
+	return x.format.Has(indexfmt.FieldTags)
 }
 
 // applyLoad replaces the cache with the result of a (re)load. The cursor
@@ -724,7 +756,7 @@ func (m *Model) limitIndex(s string) (tea.Cmd, error) {
 	}
 	id := m.idx.restart()
 	m.idx.settling = true
-	return limitIndexCmd(m.logbook, m.idx.gen, limit, m.idx.sort, id), nil
+	return limitIndexCmd(m.logbook, m.idx.gen, limit, m.idx.sort, id, m.idx.wantsTags()), nil
 }
 
 // markPattern returns a command that marks, when add is true, or unmarks the

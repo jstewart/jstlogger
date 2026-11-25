@@ -22,7 +22,7 @@ func (m Model) refreshIndex() (Model, tea.Cmd) {
 		return m, nil
 	}
 	id := m.idx.restart()
-	load := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor)
+	load := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, id, m.idx.cursor, m.idx.wantsTags())
 	return m, func() tea.Msg {
 		msg, _ := load().(indexLoadedMsg)
 		msg.keepTop = true

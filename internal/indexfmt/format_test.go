@@ -105,6 +105,10 @@ func TestParseItems(t *testing.T) {
 		{"lotw intrinsic", "%L", []Item{{Field: FieldLoTW, Width: 1}}},
 		{"lotw explicit left", "%-3L", []Item{{Field: FieldLoTW, Width: 3, Left: true}}},
 		{"lotw flex", "%*L", []Item{{Field: FieldLoTW, Flex: true}}},
+		{"tags natural", "%T", []Item{{Field: FieldTags}}},
+		{"tags left", "%-12T", []Item{{Field: FieldTags, Width: 12, Left: true}}},
+		{"tags right", "%12T", []Item{{Field: FieldTags, Width: 12}}},
+		{"tags flex", "%*T", []Item{{Field: FieldTags, Flex: true}}},
 		{"time", "%{%H}|", []Item{{Field: '{', Time: "%H"}, {Literal: "|"}}},
 		{"multi digit", "%12n", []Item{{Field: 'n', Width: 12}}},
 	}
@@ -178,6 +182,8 @@ func TestValues(t *testing.T) {
 		{"dxcc", "%x", nil, Km, "291"},
 		{"dxcc missing", "%x", func(q *logbook.QSO) { q.DXCC.Valid = false }, Km, ""},
 		{"time in utc", "%{%Y-%m-%d %H:%M:%S}", nil, Km, "2024-03-05 12:08:09"},
+		{"tags sorted", "%T", func(q *logbook.QSO) { q.Tags = []string{"sota", "Contest", "pota"} }, Km, "Contest, pota, sota"},
+		{"tags none", "%T", func(q *logbook.QSO) { q.Tags = nil }, Km, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -212,11 +218,11 @@ func TestFormatDistance(t *testing.T) {
 }
 
 func TestTitles(t *testing.T) {
-	f, err := Parse("%c|%m%s%r%b%f%C%S%o%n%g%D%k%x%Z%L%{%H:%M}%{%d}%{%b}")
+	f, err := Parse("%c|%m%s%r%b%f%C%S%o%n%g%D%k%x%Z%L%T%{%H:%M}%{%d}%{%b}")
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"Call", "|", "Mode", "RST S", "RST R", "Band", "Freq", "Country", "Station",
-		"Op", "Name", "Grid", "Dist", "Cont", "DXCC", "", "L", "Time", "Date", "Date",
+		"Op", "Name", "Grid", "Dist", "Cont", "DXCC", "", "L", "Tags", "Time", "Date", "Date",
 	}, f.Titles())
 }
 
@@ -251,6 +257,8 @@ func TestHas(t *testing.T) {
 		{"%c L", FieldLoTW, false},
 		{"%c %%L", FieldLoTW, false},
 		{"%{%H}", FieldTime, true},
+		{"%c %-12T", FieldTags, true},
+		{Default, FieldTags, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.format, func(t *testing.T) {
@@ -259,4 +267,51 @@ func TestHas(t *testing.T) {
 			assert.Equal(t, tt.want, f.Has(tt.field))
 		})
 	}
+}
+
+func TestValuesTagsDoesNotMutate(t *testing.T) {
+	q := sampleQSO()
+	q.Tags = []string{"sota", "pota"}
+	f, err := Parse("%T")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"pota, sota"}, f.Values(q, Row{}, Km))
+	assert.Equal(t, []string{"sota", "pota"}, q.Tags)
+}
+
+func TestDefaultUnchanged(t *testing.T) {
+	assert.Equal(t, "%Z %-10{%Y-%m-%d} %-5{%H:%M} %-10c %-6m %-5s %-5r %-5b %-*C %-10S", Default)
+}
+
+func TestFitTags(t *testing.T) {
+	five := []string{"wwff", "pota", "sota", "iota", "bota"}
+	tests := []struct {
+		name  string
+		tags  []string
+		width int
+		want  string
+	}{
+		{"no tags", nil, 10, ""},
+		{"empty tags", []string{}, 10, ""},
+		{"one tag too long", []string{"contest"}, 3, "+1"},
+		{"none fit shows count even if wider", five, 1, "+5"},
+		{"exact fit no suffix", []string{"sota", "pota"}, len("pota, sota"), "pota, sota"},
+		{"overflow", five, len("bota, iota +3"), "bota, iota +3"},
+		{"overflow one short of more", five, len("bota, iota, pota +2") - 1, "bota, iota +3"},
+		{"all fit with room", five, 100, "bota, iota, pota, sota, wwff"},
+		{"mixed case sort", []string{"b", "C", "a", "B"}, 0, "a, B, b, C"},
+		{"width zero is full join", five, 0, "bota, iota, pota, sota, wwff"},
+		{"negative width is full join", []string{"sota", "pota"}, -1, "pota, sota"},
+		{"runes not bytes", []string{"été", "über"}, len([]rune("été, über")), "été, über"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, FitTags(tt.tags, tt.width))
+		})
+	}
+}
+
+func TestFitTagsDoesNotMutate(t *testing.T) {
+	tags := []string{"sota", "Pota", "iota"}
+	_ = FitTags(tags, 5)
+	assert.Equal(t, []string{"sota", "Pota", "iota"}, tags)
 }

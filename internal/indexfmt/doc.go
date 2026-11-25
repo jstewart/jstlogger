@@ -37,10 +37,13 @@
 //	%D    distance, rounded, in the configured unit                Dist
 //	%k    continent                                                Cont
 //	%x    DXCC entity number                                       DXCC
+//	%T    tags, sorted ignoring case, joined with ", "             Tags
 //	%{}   start time                                               Time or Date
 //
 // The caller supplies the state %Z and %L show (see Row); %L is not in the
-// default format.
+// default format, and neither is %T. A %T column shows as many whole tags
+// as fit its width, which the format chooses (e.g. %-12T), and "+N" for the
+// N tags left out; see FitTags.
 //
 // A %{} column is titled Time when its layout has only time-of-day
 // conversions (%H, %M, %S) and Date otherwise. Layouts use this strftime

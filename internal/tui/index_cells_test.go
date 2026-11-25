@@ -26,9 +26,10 @@ func cellQSO(id int64, call, band string) logbook.QSO {
 
 func TestCellStyle(t *testing.T) {
 	st := defaultStyles(true)
-	f, err := indexfmt.Parse("%Z %{%Y-%m-%d} %-10c %m %s %r %b %L")
+	f, err := indexfmt.Parse("%Z %{%Y-%m-%d} %-10c %m %s %r %b %L %T")
 	require.NoError(t, err)
 	q := cellQSO(1, "W1AW", "20m")
+	q.Tags = []string{"sota", "pota"}
 
 	tests := []struct {
 		name   string
@@ -48,6 +49,7 @@ func TestCellStyle(t *testing.T) {
 		{name: "mode", field: 'm'},
 		{name: "lotw", field: indexfmt.FieldLoTW, row: indexfmt.Row{LoTW: true}, recent: lotw.Recent, want: st.lotwRecent, styled: true},
 		{name: "lotw unknown", field: indexfmt.FieldLoTW},
+		{name: "tags", field: indexfmt.FieldTags, want: st.indexDim, styled: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
