@@ -178,10 +178,11 @@ func appendQColor(b []byte, c color.Color) []byte {
 		// components, as QColor() is.
 		return append(b, qColorInvalid, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0)
 	}
-	r, g, bl, a := c.RGBA()
+	// QColor holds straight, not premultiplied, alpha.
+	n, _ := color.NRGBA64Model.Convert(c).(color.NRGBA64)
 	b = append(b, qColorRGB)
-	for _, v := range []uint32{a, r, g, bl, 0} {
-		b = binary.BigEndian.AppendUint16(b, uint16(v)) // color.Color components are 16-bit
+	for _, v := range []uint16{n.A, n.R, n.G, n.B, 0} {
+		b = binary.BigEndian.AppendUint16(b, v)
 	}
 	return b
 }
