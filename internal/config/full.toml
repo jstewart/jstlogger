@@ -79,3 +79,16 @@ background = "auto"   # "auto" | "dark" | "light"; auto asks the terminal and as
 # address   = "224.0.0.1:2237"     # WSJT-X's UDP Server; loopback or multicast IP:port, default "127.0.0.1:2237"
 # interface = "lo0"                # Multicast only: the interface to join the group on
 # tags      = ["wsjtx"]            # Added to each logged QSO
+# highlight = true                 # Highlight decoded calls in WSJT-X by whether you've worked them
+#
+# [listeners.wsjtx.colors.worked]  # Worked before, but not on this band and mode
+# background = "#fff59d"           # "#rrggbb", or "" to keep WSJT-X's color
+# foreground = ""
+#
+# [listeners.wsjtx.colors.worked_band_mode]  # Worked on this band and mode
+# background = ""
+# foreground = "#9e9e9e"
+#
+# [listeners.wsjtx.colors.new]     # Never worked; not highlighted by default
+# background = ""
+# foreground = ""

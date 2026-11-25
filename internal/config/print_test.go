@@ -63,6 +63,11 @@ func TestWriteTOMLRoundTrip(t *testing.T) {
 			c.Listeners = map[string]Listener{
 				"wsjtx": {Protocol: ProtocolWSJTX, Address: "224.0.0.1:2237", Interface: "lo0", Tags: []string{"wsjtx"}},
 				"local": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress},
+				"jtdx": {Protocol: ProtocolWSJTX, Address: "127.0.0.1:2238", Highlight: true, Colors: HighlightColors{
+					New:            HighlightColor{Background: "#00ff00"},
+					Worked:         DefaultHighlightColors.Worked,
+					WorkedBandMode: HighlightColor{},
+				}},
 			}
 			return c
 		}},
@@ -207,7 +212,7 @@ func TestWriteTOMLListeners(t *testing.T) {
 				"local": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress},
 			},
 			want:    []string{"[listeners.local]", "protocol = 'wsjtx'", "address = '127.0.0.1:2237'"},
-			notWant: []string{"interface =", "tags ="},
+			notWant: []string{"interface =", "tags =", "highlight =", "colors"},
 		},
 		{
 			name: "interface and tags are written when set",
@@ -215,6 +220,13 @@ func TestWriteTOMLListeners(t *testing.T) {
 				"wsjtx": {Protocol: ProtocolWSJTX, Address: "224.0.0.1:2237", Interface: "lo0", Tags: []string{"wsjtx"}},
 			},
 			want: []string{"[listeners.wsjtx]", "interface = 'lo0'", "tags = ['wsjtx']"},
+		},
+		{
+			name: "highlight and its colors are written when set",
+			listeners: map[string]Listener{
+				"wsjtx": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress, Highlight: true, Colors: DefaultHighlightColors},
+			},
+			want: []string{"highlight = true", "[listeners.wsjtx.colors.worked]", "[listeners.wsjtx.colors.worked_band_mode]"},
 		},
 	}
 	for _, tt := range tests {

@@ -230,6 +230,31 @@ func (c Config) validateListeners() []error {
 		if l.Interface != "" && (err != nil || !addr.Addr().IsMulticast()) {
 			errs = append(errs, invalid(prefix+"interface", "only allowed with a multicast address, got address %q", l.Address))
 		}
+		errs = append(errs, validateHighlightColors(prefix+"colors.", l.Colors)...)
+	}
+	return errs
+}
+
+// validateHighlightColors checks that each color under prefix, such as
+// "listeners.wsjtx.colors.", is "#rrggbb" or empty.
+func validateHighlightColors(prefix string, c HighlightColors) []error {
+	var errs []error
+	for _, s := range []struct {
+		name string
+		c    HighlightColor
+	}{
+		{"new", c.New},
+		{"worked", c.Worked},
+		{"worked_band_mode", c.WorkedBandMode},
+	} {
+		for _, f := range []struct{ name, value string }{
+			{"background", s.c.Background},
+			{"foreground", s.c.Foreground},
+		} {
+			if _, err := ParseColor(f.value); err != nil {
+				errs = append(errs, invalid(prefix+s.name+"."+f.name, "%s", err))
+			}
+		}
 	}
 	return errs
 }

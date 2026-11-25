@@ -113,6 +113,42 @@ type Listener struct {
 	Interface string `mapstructure:"interface" toml:"interface"`
 	// Tags are added to each QSO the listener logs.
 	Tags []string `mapstructure:"tags" toml:"tags"`
+	// Highlight turns on highlighting the calls the sender decodes, in
+	// WSJT-X's Band Activity window, by how they stand in the logbook.
+	Highlight bool `mapstructure:"highlight" toml:"highlight"`
+	// Colors are the highlight colors of each status. Load fills in
+	// DefaultHighlightColors for each one a highlighting listener leaves
+	// unset.
+	Colors HighlightColors `mapstructure:"colors" toml:"colors"`
+}
+
+// HighlightColors is the [listeners.<name>.colors] table: how a listener
+// highlights a decoded call, by how it stands in the logbook.
+type HighlightColors struct {
+	// New is for a call with no QSOs in the logbook.
+	New HighlightColor `mapstructure:"new" toml:"new"`
+	// Worked is for a call with QSOs, but none on the sender's band and
+	// mode.
+	Worked HighlightColor `mapstructure:"worked" toml:"worked"`
+	// WorkedBandMode is for a call with a QSO on the sender's band and
+	// mode.
+	WorkedBandMode HighlightColor `mapstructure:"worked_band_mode" toml:"worked_band_mode"`
+}
+
+// HighlightColor is one status's highlight colors, each "#rrggbb", or ""
+// to leave the sender's own color.
+type HighlightColor struct {
+	Background string `mapstructure:"background" toml:"background"`
+	Foreground string `mapstructure:"foreground" toml:"foreground"`
+}
+
+// DefaultHighlightColors are a highlighting listener's colors: a pale
+// yellow background for a call worked before, and gray text for one
+// worked on the band and mode, which is a duplicate. New calls are not
+// highlighted, as WSJT-X marks them itself.
+var DefaultHighlightColors = HighlightColors{
+	Worked:         HighlightColor{Background: "#fff59d"},
+	WorkedBandMode: HighlightColor{Foreground: "#9e9e9e"},
 }
 
 // UI is the [ui] table, which configures how the TUI looks.

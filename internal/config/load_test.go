@@ -505,6 +505,42 @@ tags      = ["wsjtx", "ft8"]
 			want:    map[string]Listener{"wsjtx": {}},
 		},
 		{
+			name:    "highlight fills in unset colors",
+			content: "[listeners.wsjtx]\nprotocol = \"wsjtx\"\nhighlight = true\n",
+			want: map[string]Listener{"wsjtx": {
+				Protocol: ProtocolWSJTX, Address: DefaultListenerAddress, Highlight: true,
+				Colors: DefaultHighlightColors,
+			}},
+		},
+		{
+			name: "highlight keeps set colors, even empty ones",
+			content: `[listeners.wsjtx]
+protocol  = "wsjtx"
+highlight = true
+[listeners.wsjtx.colors.new]
+background = "#00FF00"
+[listeners.wsjtx.colors.worked]
+background = ""
+foreground = "#123456"
+`,
+			want: map[string]Listener{"wsjtx": {
+				Protocol: ProtocolWSJTX, Address: DefaultListenerAddress, Highlight: true,
+				Colors: HighlightColors{
+					New:            HighlightColor{Background: "#00FF00", Foreground: DefaultHighlightColors.New.Foreground},
+					Worked:         HighlightColor{Foreground: "#123456"},
+					WorkedBandMode: DefaultHighlightColors.WorkedBandMode,
+				},
+			}},
+		},
+		{
+			name:    "no highlight leaves colors unset",
+			content: "[listeners.wsjtx]\nprotocol = \"wsjtx\"\n[listeners.wsjtx.colors.new]\nbackground = \"#00ff00\"\n",
+			want: map[string]Listener{"wsjtx": {
+				Protocol: ProtocolWSJTX, Address: DefaultListenerAddress,
+				Colors: HighlightColors{New: HighlightColor{Background: "#00ff00"}},
+			}},
+		},
+		{
 			name:    "names are lowercased",
 			content: "[listeners.WSJTX]\nprotocol = \"wsjtx\"\n",
 			want:    map[string]Listener{"wsjtx": {Protocol: ProtocolWSJTX, Address: DefaultListenerAddress}},
