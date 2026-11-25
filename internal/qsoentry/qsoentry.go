@@ -16,6 +16,7 @@ import (
 	"unicode"
 
 	"jstlogger/internal/adif"
+	"jstlogger/internal/dxcc"
 	"jstlogger/internal/logbook"
 )
 
@@ -326,9 +327,14 @@ func (b *builder) station(q *logbook.QSO) {
 	b.put(MyCity, b.text(MyCity))
 }
 
-// general reads the General tab into q.
+// general reads the General tab into q. The form has no country, so q's
+// is ADIF's name for its DXCC entity code, or empty when there is no code,
+// the code is 0 (no entity) or ADIF does not list it.
 func (b *builder) general(q *logbook.QSO) {
 	q.DXCC = b.number(DXCC, parseDXCC, "a DXCC entity code")
+	if q.DXCC.Valid {
+		q.Country, _ = dxcc.EntityName(q.DXCC.V)
+	}
 	q.Cont = b.ref(Cont, isContinent, "a continent")
 	b.put(Region, b.upper(Region))
 	q.CQZ = b.number(CQZ, parseCQZone, "a CQ zone")

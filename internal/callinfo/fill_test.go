@@ -47,6 +47,7 @@ func TestFillFillsEmptyFields(t *testing.T) {
 
 	assert.Equal(t, sql.Null[int]{V: 291, Valid: true}, q.DXCC)
 	assert.Equal(t, "NA", q.Cont)
+	assert.Equal(t, "UNITED STATES OF AMERICA", q.Country)
 	assert.Equal(t, sql.Null[int]{V: 5, Valid: true}, q.CQZ)
 	assert.Equal(t, sql.Null[int]{V: 8, Valid: true}, q.ITUZ)
 	assert.Equal(t, "Hiram Maxim", q.Name)
@@ -130,6 +131,7 @@ func TestFillNoDXCCEntity(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, q.DXCC.Valid, "maritime mobile is in no entity")
 	assert.Empty(t, q.Cont)
+	assert.Empty(t, q.Country)
 }
 
 func TestFillWithCountryFile(t *testing.T) {
@@ -137,4 +139,34 @@ func TestFillWithCountryFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 291, q.DXCC.V)
 	assert.Equal(t, "NA", q.Cont)
+	assert.Equal(t, "UNITED STATES OF AMERICA", q.Country)
+}
+
+func TestFillCountry(t *testing.T) {
+	code := func(n int) sql.Null[int] { return sql.Null[int]{V: n, Valid: true} }
+	tests := []struct {
+		name    string
+		looker  Looker
+		dxcc    sql.Null[int]
+		country string
+		want    string
+	}{
+		{"from the entity found", Looker{DXCC: stubDXCC{usa}}, sql.Null[int]{}, "", "UNITED STATES OF AMERICA"},
+		{"an existing country is kept", Looker{DXCC: stubDXCC{usa}}, sql.Null[int]{}, "USA", "USA"},
+		{"a blank country is filled", Looker{DXCC: stubDXCC{usa}}, sql.Null[int]{}, "  ", "UNITED STATES OF AMERICA"},
+		{"a code WSJT-X sent", Looker{}, code(1), "", "CANADA"},
+		{"the code the QSO has wins", Looker{DXCC: stubDXCC{usa}}, code(1), "", "CANADA"},
+		{"no entity", Looker{}, code(0), "", ""},
+		{"an unknown code", Looker{}, code(999), "", ""},
+		{"no code", Looker{}, sql.Null[int]{}, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := wsjtxQSO()
+			in.DXCC, in.Country = tt.dxcc, tt.country
+			q, err := tt.looker.Fill(t.Context(), in)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, q.Country)
+		})
+	}
 }

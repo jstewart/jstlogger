@@ -20,10 +20,12 @@ type DXCCLookup interface {
 }
 
 // Fill returns q with what is known about its call filled into the fields
-// it leaves empty: the DXCC entity, continent and CQ and ITU zones, and
-// the name, QTH, grid, state, county and email from Details. A value q
-// already has is kept, so a grid the station sent wins over the
-// callbook's. A call without a base callsign is not looked up.
+// it leaves empty: the DXCC entity, continent and CQ and ITU zones, the
+// name, QTH, grid, state, county and email from Details, and the country,
+// ADIF's name for the QSO's DXCC entity code, whether that code was found
+// here or came with q. A value q already has is kept, so a grid the station
+// sent wins over the callbook's. A call without a base callsign is not
+// looked up.
 //
 // The error reports a lookup that failed; the QSO returned is still q with
 // whatever was found, ready to store.
@@ -37,6 +39,7 @@ func (l Looker) Fill(ctx context.Context, q logbook.QSO) (logbook.QSO, error) {
 			fillEntity(&q, ent)
 		}
 	}
+	fillCountry(&q)
 	d, err := l.Details(ctx, call)
 	fillDetails(&q, d)
 	if err != nil {
@@ -52,6 +55,18 @@ func fillEntity(q *logbook.QSO, ent dxcc.Entity) {
 	fillString(&q.Cont, ent.Continent)
 	fillNull(&q.CQZ, ent.CQZone)
 	fillNull(&q.ITUZ, ent.ITUZone)
+}
+
+// fillCountry fills ADIF's name for q's DXCC entity code into q's country
+// when it is empty. A code of 0, which is no entity, or one ADIF does not
+// list leaves it empty.
+func fillCountry(q *logbook.QSO) {
+	if !q.DXCC.Valid {
+		return
+	}
+	if name, ok := dxcc.EntityName(q.DXCC.V); ok {
+		fillString(&q.Country, name)
+	}
 }
 
 // fillDetails fills d into the fields of q that are empty.
