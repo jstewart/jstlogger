@@ -105,11 +105,18 @@ type client struct {
 	band, mode string
 	// sent is the highlight last sent for each call, as it was decoded.
 	sent map[string]sent
+	// lastSeen is when the program last sent a status or decode.
+	lastSeen time.Time
 }
 
-// maxCached is the number of cached statuses past which expired ones are
-// dropped.
+// maxCached is the number of cached statuses, and of highlights sent to
+// a client, past which expired ones are dropped. It is a soft cap: when
+// none have expired, the map grows past it.
 const maxCached = 4096
+
+// clientIdle is the number of TTLs after which a program that has sent
+// nothing is forgotten, as one that restarts sends from a new port.
+const clientIdle = 10
 
 // Highlighter decides which highlights to send to the programs that send
 // it decodes. It is not safe for concurrent use.
@@ -180,9 +187,11 @@ func (h *Highlighter) Decode(ctx context.Context, c Client, message string) (Hig
 	case ok && prev.status == status && now.Before(prev.expires):
 		return Highlight{}, false, nil
 	case colors.IsZero() && (!ok || prev.colors.IsZero()):
+		h.pruneSent(cl, now)
 		cl.sent[call] = sent{status: status, expires: now.Add(h.ttl)}
 		return Highlight{}, false, nil
 	}
+	h.pruneSent(cl, now)
 	cl.sent[call] = sent{status: status, colors: colors, expires: now.Add(h.ttl)}
 	return Highlight{Call: call, Colors: colors}, true, nil
 }
@@ -206,14 +215,36 @@ func (h *Highlighter) Logged(call string) {
 	}
 }
 
-// client returns what is known of c, adding it if new.
+// client returns what is known of c, adding it if new and forgetting
+// programs idle for clientIdle TTLs, and notes that c was seen.
 func (h *Highlighter) client(c Client) *client {
+	now := h.now()
 	cl, ok := h.clients[c]
 	if !ok {
+		for other, ocl := range h.clients {
+			if now.Sub(ocl.lastSeen) > clientIdle*h.ttl {
+				delete(h.clients, other)
+			}
+		}
 		cl = &client{sent: make(map[string]sent)}
 		h.clients[c] = cl
 	}
+	cl.lastSeen = now
 	return cl
+}
+
+// pruneSent drops the expired highlights sent to cl once it holds
+// maxCached of them. A dropped highlight is not cleared later, should the
+// call's colors go away; the program has likely moved on from it by then.
+func (h *Highlighter) pruneSent(cl *client, now time.Time) {
+	if len(cl.sent) < maxCached {
+		return
+	}
+	for call, s := range cl.sent {
+		if !now.Before(s.expires) {
+			delete(cl.sent, call)
+		}
+	}
 }
 
 // statusOf returns the status of the base callsign of call on band and in
@@ -230,9 +261,9 @@ func (h *Highlighter) statusOf(ctx context.Context, call, band, mode string) (St
 		return StatusNew, fmt.Errorf("highlight: look up %s: %w", k.call, err)
 	}
 	if len(h.cache) >= maxCached {
-		for k, c := range h.cache {
-			if !now.Before(c.expires) {
-				delete(h.cache, k)
+		for ek, ec := range h.cache {
+			if !now.Before(ec.expires) {
+				delete(h.cache, ek)
 			}
 		}
 	}

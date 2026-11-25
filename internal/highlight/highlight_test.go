@@ -4,6 +4,7 @@ import (
 	"errors"
 	"image/color"
 	"net/netip"
+	"strconv"
 	"testing"
 	"time"
 
@@ -226,4 +227,32 @@ func TestDecodeError(t *testing.T) {
 	_, ok, err := h.Decode(t.Context(), wsjtx, "CQ K1ABC FN42")
 	require.Error(t, err)
 	assert.False(t, ok)
+}
+
+func TestIdleClientsAreDropped(t *testing.T) {
+	h, store, now := newTest(t)
+	store.EXPECT().Count(anyExpr, k1abc).Return(2, nil).AnyTimes()
+	_, _, err := h.Decode(t.Context(), wsjtx, "CQ K1ABC FN42")
+	require.NoError(t, err)
+	require.Len(t, h.clients, 1)
+
+	// WSJT-X restarts on a new port; the old one goes quiet.
+	*now = now.Add(clientIdle*time.Minute + time.Second)
+	restarted := Client{ID: "WSJT-X", Addr: netip.MustParseAddrPort("127.0.0.1:50002")}
+	_, _, err = h.Decode(t.Context(), restarted, "CQ K1ABC FN42")
+	require.NoError(t, err)
+	assert.Len(t, h.clients, 1)
+	assert.Contains(t, h.clients, restarted)
+}
+
+func TestSentIsBounded(t *testing.T) {
+	h, store, now := newTest(t)
+	store.EXPECT().Count(anyExpr, gomock.Any()).Return(0, nil).AnyTimes()
+	cl := h.client(wsjtx)
+	for i := range maxCached {
+		cl.sent["K"+strconv.Itoa(i)+"AB"] = sent{expires: now.Add(-time.Second)}
+	}
+	_, _, err := h.Decode(t.Context(), wsjtx, "CQ K1ABC FN42")
+	require.NoError(t, err)
+	assert.Len(t, cl.sent, 1, "expired entries are dropped once there are too many")
 }
