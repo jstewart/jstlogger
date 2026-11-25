@@ -1310,7 +1310,7 @@ func (m Model) applySaved(msg entrySavedMsg) (Model, tea.Cmd) {
 	// The saved QSO is now an earlier QSO with its call.
 	e.worked = workedBefore{}
 	m.idx.restart()
-	reload := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, msg.qso.ID, m.idx.cursor)
+	reload := loadIndexCmd(m.logbook, m.idx.gen, m.idx.limit.expr, m.idx.sort, msg.qso.ID, m.idx.cursor, m.idx.wantsTags())
 	if e.editing && m.pager.open {
 		// The pager shows the saved QSO, as stored, rather than the copy it
 		// fetched before.

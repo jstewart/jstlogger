@@ -81,7 +81,7 @@ func (m Model) sortIndex(s logbook.Sort) (Model, tea.Cmd) {
 	id := x.restart()
 	x.settling = true
 	x.blocks = map[int][]logbook.QSO{}
-	return m, loadIndexCmd(m.logbook, x.gen, x.limit.expr, x.sort, id, x.cursor)
+	return m, loadIndexCmd(m.logbook, x.gen, x.limit.expr, x.sort, id, x.cursor, x.wantsTags())
 }
 
 // WithIndexSort sorts the index by s, rather than by date, newest first,
