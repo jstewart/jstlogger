@@ -1,6 +1,7 @@
 package callinfo
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -44,9 +45,13 @@ const (
 // for the callbook.
 func (l Looker) Sync(ctx context.Context, s logbook.Store, id int64) (SyncOutcome, error) {
 	l.Logbook = nil
-	q, err := s.Get(ctx, id)
+	var q logbook.QSO
+	err := l.inLogbook(ctx, "get", id, func(ctx context.Context) (err error) {
+		q, err = s.Get(ctx, id)
+		return err
+	})
 	if err != nil {
-		return SyncFailed, fmt.Errorf("get QSO %d: %w", id, err)
+		return SyncFailed, err
 	}
 	filled, d, err := l.fill(ctx, q)
 	if err != nil {
@@ -57,17 +62,51 @@ func (l Looker) Sync(ctx context.Context, s logbook.Store, id int64) (SyncOutcom
 	}
 	if !filledChanged(q, filled) {
 		if slices.Contains(q.Tags, PendingTag) {
-			if err := s.Untag(ctx, []int64{id}, PendingTag); err != nil {
-				return SyncFailed, fmt.Errorf("untag QSO %d: %w", id, err)
+			err := l.inLogbook(ctx, "untag", id, func(ctx context.Context) error {
+				return s.Untag(ctx, []int64{id}, PendingTag)
+			})
+			if err != nil {
+				return SyncFailed, err
 			}
 		}
 		return SyncUnchanged, nil
 	}
 	filled.Tags = slices.DeleteFunc(slices.Clone(filled.Tags), func(t string) bool { return t == PendingTag })
-	if err := s.Update(ctx, filled); err != nil {
-		return SyncFailed, fmt.Errorf("update QSO %d: %w", id, err)
+	err = l.inLogbook(ctx, "update", id, func(ctx context.Context) error {
+		return s.Update(ctx, filled)
+	})
+	if err != nil {
+		return SyncFailed, err
 	}
 	return SyncUpdated, nil
+}
+
+// LogbookError is a failure to read or write the QSO with ID ID while
+// syncing it with the callbook. It is no callbook failure, so Unreachable
+// reports false for it even when it ran out of time.
+type LogbookError struct {
+	Op  string // "get", "untag" or "update"
+	ID  int64
+	Err error
+}
+
+// Error implements error.
+func (e *LogbookError) Error() string {
+	return fmt.Sprintf("%s QSO %d: %v", e.Op, e.ID, e.Err)
+}
+
+// Unwrap returns the logbook's error.
+func (e *LogbookError) Unwrap() error { return e.Err }
+
+// inLogbook runs op on the logbook, bounded by LogbookTimeout, and reports
+// its failure as a *LogbookError.
+func (l Looker) inLogbook(ctx context.Context, name string, id int64, op func(ctx context.Context) error) error {
+	ctx, cancel := context.WithTimeout(ctx, cmp.Or(l.LogbookTimeout, DefaultLogbookTimeout))
+	defer cancel()
+	if err := op(ctx); err != nil {
+		return &LogbookError{Op: name, ID: id, Err: err}
+	}
+	return nil
 }
 
 // filledChanged reports whether Fill changed any field of before to give
@@ -83,8 +122,11 @@ func filledChanged(before, after logbook.QSO) bool {
 
 // Unreachable reports whether err, or any error it wraps or joins, says the
 // callbook could not be reached: a *callbook.NetworkError or a lookup that
-// ran out of time.
+// ran out of time. A *LogbookError is never one.
 func Unreachable(err error) bool {
+	if _, ok := errors.AsType[*LogbookError](err); ok {
+		return false
+	}
 	_, network := errors.AsType[*callbook.NetworkError](err)
 	return network || errors.Is(err, context.DeadlineExceeded)
 }

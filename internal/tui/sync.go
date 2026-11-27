@@ -82,6 +82,7 @@ func (m Model) startSync(ids []int64) (Model, tea.Cmd) {
 			DXCC:            m.dxcc,
 			Callbook:        m.callbook,
 			CallbookTimeout: callbookTimeout,
+			LogbookTimeout:  logbookTimeout,
 		},
 		ctx:    ctx,
 		cancel: cancel,
@@ -102,13 +103,10 @@ func (r *callbookSync) stepCmd(s logbook.Store) tea.Cmd {
 }
 
 // syncStepCmd returns a command that fills in the stored QSO with ID id
-// from the callbook, for run gen of the sync. The step is bounded by the
-// callbook lookup's timeout and logbookTimeout each for loading and saving
-// the QSO, so a stuck logbook doesn't stall the run.
+// from the callbook, for run gen of the sync. The looker bounds the lookup
+// and each read and write of the QSO.
 func syncStepCmd(ctx context.Context, l callinfo.Looker, s logbook.Store, gen int, id int64) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(ctx, l.CallbookTimeout+2*logbookTimeout)
-		defer cancel()
 		outcome, err := l.Sync(ctx, s, id)
 		return callbookSyncStepMsg{gen: gen, id: id, outcome: outcome, err: err}
 	}

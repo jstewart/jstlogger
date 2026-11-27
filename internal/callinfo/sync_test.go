@@ -269,3 +269,27 @@ func TestSyncRemovesPendingTag(t *testing.T) {
 		})
 	}
 }
+
+// stuckStore is a store whose reads wait until their context is done.
+type stuckStore struct {
+	logbook.Store
+}
+
+func (stuckStore) Get(ctx context.Context, _ int64) (logbook.QSO, error) {
+	<-ctx.Done()
+	return logbook.QSO{}, ctx.Err()
+}
+
+func TestSyncLogbookTimeoutIsNotUnreachable(t *testing.T) {
+	s, id := syncStore(t, offlineQSO())
+	l := Looker{LogbookTimeout: 10 * time.Millisecond}
+
+	start := time.Now()
+	got, err := l.Sync(t.Context(), stuckStore{s}, id)
+
+	assert.Less(t, time.Since(start), 5*time.Second, "the read is bounded by LogbookTimeout")
+	assert.Equal(t, SyncFailed, got)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.False(t, Unreachable(err), "a logbook timeout is no callbook failure")
+	assert.False(t, StopsSync(err), "the next QSO may load")
+}
