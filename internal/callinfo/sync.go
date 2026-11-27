@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 
 	"jstlogger/internal/callbook"
 	"jstlogger/internal/logbook"
@@ -38,7 +39,9 @@ const (
 // fallback, so a QSO is not filled from earlier QSOs with the call. A QSO
 // whose call the callbook does not find is left untouched, even when its
 // DXCC entity is known. A lookup that fails leaves the QSO untouched and
-// returns SyncFailed with the error, which StopsSync classifies.
+// returns SyncFailed with the error, which StopsSync classifies. A QSO the
+// callbook finds, updated or not, loses PendingTag, as it no longer waits
+// for the callbook.
 func (l Looker) Sync(ctx context.Context, s logbook.Store, id int64) (SyncOutcome, error) {
 	l.Logbook = nil
 	q, err := s.Get(ctx, id)
@@ -53,8 +56,14 @@ func (l Looker) Sync(ctx context.Context, s logbook.Store, id int64) (SyncOutcom
 		return SyncNotFound, nil
 	}
 	if !filledChanged(q, filled) {
+		if slices.Contains(q.Tags, PendingTag) {
+			if err := s.Untag(ctx, []int64{id}, PendingTag); err != nil {
+				return SyncFailed, fmt.Errorf("untag QSO %d: %w", id, err)
+			}
+		}
 		return SyncUnchanged, nil
 	}
+	filled.Tags = slices.DeleteFunc(slices.Clone(filled.Tags), func(t string) bool { return t == PendingTag })
 	if err := s.Update(ctx, filled); err != nil {
 		return SyncFailed, fmt.Errorf("update QSO %d: %w", id, err)
 	}

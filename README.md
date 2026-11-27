@@ -656,6 +656,12 @@ callbook unreachable`. The QSOs it updated or found unchanged are
 unmarked; the rest stay marked, so pressing `;c` again retries them. `;c`
 is only available when a callbook is configured.
 
+A QSO saved from the New QSO screen or received by a listener while the
+callbook is unreachable, or too slow to answer, is tagged
+`callbook-pending`. Back online, mark them with `T ~y callbook-pending`
+and press `;c`: each QSO the callbook finds loses the tag, and the rest
+keep it for next time.
+
 The passwords live in the config file, so keep it private with
 `chmod 600`; jstlogger warns at startup when the file holds a password and
 can be read by group or others. To keep the passwords out of the file, set

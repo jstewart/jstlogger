@@ -231,3 +231,41 @@ func TestUnreachableAndStopsSync(t *testing.T) {
 		})
 	}
 }
+
+func TestSyncRemovesPendingTag(t *testing.T) {
+	updated := offlineQSO()
+	unchanged := offlineQSO()
+	unchanged.Name, unchanged.QTH, unchanged.Gridsquare, unchanged.State, unchanged.Cnty = "Hi", "Here", "FN31", "CT", "CT,Hartford"
+	tests := []struct {
+		name string
+		in   logbook.QSO
+		res  callbook.Result
+		err  error
+		want SyncOutcome
+		kept bool
+	}{
+		{"updated", updated, hiram, nil, SyncUpdated, false},
+		{"unchanged", unchanged, hiram, nil, SyncUnchanged, false},
+		{"not found", updated, callbook.Result{}, callbook.ErrNotFound, SyncNotFound, true},
+		{"unreachable", updated, callbook.Result{}, &callbook.NetworkError{Service: callbook.ServiceQRZ, Err: errors.New("no route to host")}, SyncFailed, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := tt.in
+			in.Tags = []string{PendingTag, "pota"}
+			s, id := syncStore(t, in)
+			l := Looker{Callbook: looker(t, "W1AW", tt.res, tt.err)}
+
+			got, _ := l.Sync(t.Context(), s, id)
+			assert.Equal(t, tt.want, got)
+
+			q, err := s.Get(t.Context(), id)
+			require.NoError(t, err)
+			if tt.kept {
+				assert.ElementsMatch(t, []string{PendingTag, "pota"}, q.Tags)
+			} else {
+				assert.Equal(t, []string{"pota"}, q.Tags, "a synced QSO is no longer pending")
+			}
+		})
+	}
+}
