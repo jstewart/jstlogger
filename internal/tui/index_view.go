@@ -307,10 +307,10 @@ func fillBar(bar lipgloss.Style, line string) string {
 // statusView renders the position, the sort unless it is the default, the
 // limit, the mark count, the armed mark-prefix, any other armed prefixes
 // named by armed, the progress of a long operation, and any message or
-// error, e.g. " QSO 12/4,567  · sort:
-// band · limit: ~b 20m · 3 marked · mark-prefix". The position is a chip,
-// the sort and limit have muted labels and purple values, the mark count is
-// bold yellow and the separators are muted.
+// error, e.g. " QSO 12/4,567  · sort: band · limit: ~b 20m · 3 marked ·
+// mark-prefix". The position is a chip, the sort and limit have muted
+// labels and purple values, the mark count is bold yellow and the
+// separators are muted.
 func (x index) statusView(st styles, width int, armed ...string) string {
 	position := st.statusChip.Render(" QSO " + formatCount(x.cursor+1) + "/" + formatCount(x.total) + " ")
 	var rest []string

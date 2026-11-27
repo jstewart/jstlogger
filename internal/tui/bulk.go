@@ -265,9 +265,10 @@ func saveQSOsCmd(s logbook.Store, ids []int64, path, version string) tea.Cmd {
 // applyBulk reports the outcome of a bulk operation on the status line,
 // drops the marks of the QSOs it deleted or asks to unmark and, if it
 // changed the QSOs, returns a command that reloads the index, keeping the
-// cursor on its QSO when it is still there. When the cursor's QSO was deleted, the cursor
-// moves on to the next QSO left, as d does, or else stays on the same row.
-// The pager fetches its QSO again, as its tags may have changed.
+// cursor on its QSO when it is still there. When the cursor's QSO was
+// deleted, the cursor moves on to the next QSO left, as d does, or else
+// stays on the same row. The pager fetches its QSO again, as its tags may
+// have changed.
 func (m Model) applyBulk(msg indexBulkMsg) (Model, tea.Cmd) {
 	if msg.err != nil {
 		m.idx.msg = msg.err.Error()
