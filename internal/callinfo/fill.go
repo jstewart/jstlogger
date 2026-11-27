@@ -30,9 +30,16 @@ type DXCCLookup interface {
 // The error reports a lookup that failed; the QSO returned is still q with
 // whatever was found, ready to store.
 func (l Looker) Fill(ctx context.Context, q logbook.QSO) (logbook.QSO, error) {
+	q, _, err := l.fill(ctx, q)
+	return q, err
+}
+
+// fill is Fill that also returns the details filled in, whose Source is ""
+// when nothing was found, including for a call that was not looked up.
+func (l Looker) fill(ctx context.Context, q logbook.QSO) (logbook.QSO, Details, error) {
 	call := strings.ToUpper(strings.TrimSpace(q.Call))
 	if callsign.Base(call) == "" {
-		return q, nil
+		return q, Details{}, nil
 	}
 	if l.DXCC != nil {
 		if ent, ok := l.DXCC.Lookup(call); ok {
@@ -43,9 +50,9 @@ func (l Looker) Fill(ctx context.Context, q logbook.QSO) (logbook.QSO, error) {
 	d, err := l.Details(ctx, call)
 	fillDetails(&q, d)
 	if err != nil {
-		return q, fmt.Errorf("look up %s: %w", call, err)
+		return q, d, fmt.Errorf("look up %s: %w", call, err)
 	}
-	return q, nil
+	return q, d, nil
 }
 
 // fillEntity fills ent's DXCC code, continent and zones into the fields of
