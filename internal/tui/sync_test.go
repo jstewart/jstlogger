@@ -1,7 +1,9 @@
 package tui
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -185,17 +187,31 @@ func TestSyncNotFoundStaysMarked(t *testing.T) {
 }
 
 func TestSyncStopsWhenUnreachable(t *testing.T) {
-	l := cbmock.NewMockLooker(gomock.NewController(t))
 	netErr := &callbook.NetworkError{Service: callbook.ServiceQRZ, Err: errors.New("connection refused")}
-	l.EXPECT().Lookup(gomock.Any(), gomock.Any()).Return(callbook.Result{}, netErr).Times(1)
-	m, _ := newSyncModel(t, 5, l)
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"unreachable", netErr, "callbook unreachable"},
+		{"timeout", fmt.Errorf("qrz: %w", context.DeadlineExceeded), "callbook unreachable"},
+		{"login failed", fmt.Errorf("qrz: %w", callbook.ErrAuth), "callbook login failed"},
+		{"lookup limit", fmt.Errorf("qrz: %w", callbook.ErrRateLimit), "lookup limit reached"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := cbmock.NewMockLooker(gomock.NewController(t))
+			l.EXPECT().Lookup(gomock.Any(), gomock.Any()).Return(callbook.Result{}, tt.err).Times(1)
+			m, _ := newSyncModel(t, 5, l)
 
-	m, cmd := startSync(t, m)
-	m = runSync(t, m, cmd)
+			m, cmd := startSync(t, m)
+			m = runSync(t, m, cmd)
 
-	assert.Nil(t, m.sync)
-	assert.Len(t, m.idx.marks, 2, "both stay marked")
-	assert.Equal(t, "QSO 3/5 · 2 marked · stopped: callbook unreachable", statusLine(t, m))
+			assert.Nil(t, m.sync)
+			assert.Len(t, m.idx.marks, 2, "both stay marked")
+			assert.Equal(t, "QSO 3/5 · 2 marked · stopped: "+tt.want, statusLine(t, m))
+		})
+	}
 }
 
 func TestSyncOtherFailureContinues(t *testing.T) {
