@@ -78,8 +78,13 @@ type Model struct {
 	dxcc DXCCLookup
 
 	// callbook looks up the details of the call typed into the New QSO
-	// screen; nil fills them in from the logbook alone.
+	// screen, and of the marked QSOs on ;c; nil fills them in from the
+	// logbook alone, and disables ;c.
 	callbook callbook.Looker
+	// sync is the running sync of the marked QSOs with the callbook, or nil
+	// when none runs, and syncGen numbers the runs.
+	sync    *callbookSync
+	syncGen int
 
 	// eqsl looks up the pager QSO's eQSL AG membership; nil shows none.
 	eqsl EQSLLookup
@@ -148,6 +153,10 @@ func New(opts ...Option) Model {
 	m.idx.lotw.now = m.now
 	m.keys = defaultKeys(m.rig != nil)
 	m.indexKeys = defaultIndexKeys(m.logbook != nil)
+	if m.callbook == nil {
+		// Copied into the pager's keys below, so neither help lists it.
+		m.indexKeys.BulkSync.SetEnabled(false)
+	}
 	m.pagerKeys = defaultPagerKeys(m.openURL != nil, m.indexKeys)
 	if m.logbook != nil {
 		m.markedFuncs = m.bulkFuncs()
@@ -213,6 +222,10 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		if m.pager.lookupPrefix {
 			return m.updateLookup(msg)
 		}
+		// esc stops a running sync before it closes the pager.
+		if m.sync != nil && key.Matches(msg, syncStop) {
+			return m.stopSync(), nil
+		}
 		keys := m.globalKeys()
 		switch {
 		case key.Matches(msg, keys.Quit):
@@ -272,6 +285,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case indexBulkMsg:
 		return m.applyBulk(msg)
+
+	case callbookSyncStepMsg:
+		return m.applySyncStep(msg)
 
 	case entryTagsMsg:
 		m.entry.applyTags(msg)

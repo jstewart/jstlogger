@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"slices"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -79,7 +80,8 @@ func runListener(ctx context.Context, name string, cfg config.Listener, store lo
 // fields it leaves empty filled in by info, and tells the UI when it was
 // added, or logs a packet the listener dropped. Each field the listener
 // left out of the QSO, and a lookup that failed, is logged as a warning;
-// the QSO is stored with what was found. A QSO already in the logbook is
+// the QSO is stored with what was found, and tagged callinfo.PendingTag
+// when the callbook could not be reached. A QSO already in the logbook is
 // skipped as a duplicate.
 func handleListenerEvent(ctx context.Context, logger *slog.Logger, store logbook.Store, info callinfo.Looker, tags []string, send func(tea.Msg), event any) {
 	switch ev := event.(type) {
@@ -94,6 +96,11 @@ func handleListenerEvent(ctx context.Context, logger *slog.Logger, store logbook
 		q, err := info.Fill(ctx, q)
 		if err != nil {
 			logger.Warn("listener qso lookup failed", append(attrs, "err", err)...)
+		}
+		if callinfo.Unreachable(err) {
+			// Tagged so it can be found and synced with the callbook
+			// once it can be reached.
+			tags = append(slices.Clone(tags), callinfo.PendingTag)
 		}
 		// The sender already counts the QSO as logged, so a QSO that
 		// arrives as the app quits is still stored.

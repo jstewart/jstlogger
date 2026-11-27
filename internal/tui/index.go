@@ -104,6 +104,10 @@ type index struct {
 	// shows.
 	lotw indexLoTW
 
+	// progress is the progress of a long operation, such as a sync of the
+	// marked QSOs with the callbook, shown on the status line until it
+	// finishes, key presses or not.
+	progress string
 	// msg is shown on the status line until the next key press.
 	msg string
 	// err is the last load error, shown until a reload succeeds.

@@ -181,6 +181,7 @@ type indexKeyMap struct {
 	BulkSave   key.Binding
 	BulkTag    key.Binding
 	BulkUntag  key.Binding
+	BulkSync   key.Binding
 }
 
 // defaultIndexKeys returns the index keybindings, disabled, and so hidden
@@ -328,6 +329,10 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("Y"),
 			key.WithHelp(";Y", "untag marked"),
 		),
+		BulkSync: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp(";c", "sync marked with callbook"),
+		),
 	}
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
@@ -335,7 +340,7 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 		&k.First, &k.Last, &k.Jump, &k.Open, &k.NewQSO, &k.Edit, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
 		&k.Limit, &k.Sort, &k.SortReverse, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
 		&k.SearchOpposite, &k.Delete, &k.MarkPrefix, &k.PrefixCancel,
-		&k.BulkDelete, &k.BulkSave, &k.BulkTag, &k.BulkUntag,
+		&k.BulkDelete, &k.BulkSave, &k.BulkTag, &k.BulkUntag, &k.BulkSync,
 	} {
 		b.SetEnabled(enabled)
 	}
@@ -361,7 +366,7 @@ func (k indexKeyMap) sections() []helpSection {
 		{"search", []key.Binding{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite}},
 		{"marks", []key.Binding{
 			k.Mark, k.MarkPattern, k.UnmarkPattern, k.MarkPrefix,
-			k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag,
+			k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag, k.BulkSync,
 		}},
 	}
 }

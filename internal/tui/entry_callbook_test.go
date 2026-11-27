@@ -14,6 +14,7 @@ import (
 
 	"jstlogger/internal/callbook"
 	cbmock "jstlogger/internal/callbook/mock"
+	"jstlogger/internal/callinfo"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/qsoentry"
 )
@@ -391,6 +392,72 @@ func TestEntryCallbookFailureStillSaves(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, n)
 	assert.NotContains(t, entryCallLine(t, m), "callbook login failed", "the next QSO starts clean")
+}
+
+func TestEntryCallbookTagsUnreachableQSO(t *testing.T) {
+	netErr := &callbook.NetworkError{Service: callbook.ServiceQRZ, Err: errors.New("connection refused")}
+	tests := []struct {
+		name string
+		err  error
+		want []string
+	}{
+		{"unreachable", netErr, []string{callinfo.PendingTag}},
+		{"timeout", fmt.Errorf("qrz: %w", context.DeadlineExceeded), []string{callinfo.PendingTag}},
+		{"login failed", callbook.ErrAuth, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newWorkedStore(t)
+			m, ticks := newCallbookModel(t, s, failingLooker(t, tt.err))
+			m = fill(t, m, map[qsoentry.Field]string{
+				qsoentry.Date: "2026-11-09", qsoentry.TimeOn: "1405", qsoentry.Mode: "cw", qsoentry.Freq: "7030",
+			})
+			m = editAppend(t, m, qsoentry.Call, "W1AW")
+			m = lookUp(t, m, *ticks)
+
+			m = press(t, m, saveKey)
+
+			require.Contains(t, m.entry.msg, "Saved QSO with W1AW")
+			got := savedQSO(t, s, "W1AW")
+			if tt.want == nil {
+				assert.NotContains(t, got.Tags, callinfo.PendingTag)
+			} else {
+				assert.Subset(t, got.Tags, tt.want)
+			}
+		})
+	}
+}
+
+func TestEntryCallbookDoesNotTagFoundQSO(t *testing.T) {
+	s := newWorkedStore(t)
+	m, ticks := newCallbookModel(t, s, newLooker(t, map[string]callbook.Result{"W1AW": w1awResult}))
+	m = fill(t, m, map[qsoentry.Field]string{
+		qsoentry.Date: "2026-11-09", qsoentry.TimeOn: "1405", qsoentry.Mode: "cw", qsoentry.Freq: "7030",
+	})
+	m = editAppend(t, m, qsoentry.Call, "W1AW")
+	m = lookUp(t, m, *ticks)
+
+	m = press(t, m, saveKey)
+
+	require.Contains(t, m.entry.msg, "Saved QSO with W1AW")
+	assert.NotContains(t, savedQSO(t, s, "W1AW").Tags, callinfo.PendingTag)
+}
+
+// savedQSO returns the newest stored QSO with call, with its tags.
+func savedQSO(t *testing.T, s logbook.Store, call string) logbook.QSO {
+	t.Helper()
+	qsos, err := s.Index(t.Context(), nil, logbook.Sort{}, 0, 100)
+	require.NoError(t, err)
+	var id int64
+	for _, q := range qsos {
+		if q.Call == call && q.ID > id {
+			id = q.ID
+		}
+	}
+	require.NotZero(t, id, "a QSO with %s is stored", call)
+	q, err := s.Get(t.Context(), id)
+	require.NoError(t, err)
+	return q
 }
 
 func TestEditDoesNotLookUpCallbook(t *testing.T) {
