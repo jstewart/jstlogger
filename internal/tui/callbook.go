@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -86,6 +87,18 @@ type callbookStatus struct {
 type callbookDetails struct {
 	values [6]string
 	source string
+}
+
+// tagPending returns q tagged callinfo.PendingTag when the lookup of its
+// call found the callbook unreachable, so it can be synced with the
+// callbook later.
+func (c callbookLookup) tagPending(q logbook.QSO) logbook.QSO {
+	if !callinfo.Unreachable(c.status.err) || c.status.call != callbookCall(q.Call) ||
+		slices.Contains(q.Tags, callinfo.PendingTag) {
+		return q
+	}
+	q.Tags = append(slices.Clone(q.Tags), callinfo.PendingTag)
+	return q
 }
 
 // entryCallbookTickMsg ends the wait before the callbook lookup asked for

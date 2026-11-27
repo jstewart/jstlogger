@@ -1210,9 +1210,11 @@ func (m *Model) revalidateEntry() {
 
 // saveEntry saves the form as a new QSO, then clears it for the next QSO or,
 // when close is true, closes the screen. While editing, it saves the form
-// over the stored QSO instead, keeping what the form doesn't show. A form
-// that fails validation shows its errors, with focus on the first field in
-// error, on its tab, and is not saved.
+// over the stored QSO instead, keeping what the form doesn't show. A new
+// QSO whose call the callbook could not be reached for is tagged
+// callinfo.PendingTag, to sync with the callbook later. A form that fails
+// validation shows its errors, with focus on the first field in error, on
+// its tab, and is not saved.
 func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 	e := &m.entry
 	if e.saving {
@@ -1253,7 +1255,7 @@ func (m Model) saveEntry(close bool) (Model, tea.Cmd) {
 	if e.editing {
 		return m, updateQSOCmd(m.logbook, q, close)
 	}
-	return m, addQSOCmd(m.logbook, q, close)
+	return m, addQSOCmd(m.logbook, e.callbook.tagPending(q), close)
 }
 
 // updateQSOCmd returns a command that saves q over the stored QSO with its
