@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"image/color"
 	"log/slog"
@@ -266,6 +267,39 @@ func TestHandleListenerEventStoresAfterFailedLookup(t *testing.T) {
 	got, err := store.Get(t.Context(), qsos[0].ID)
 	require.NoError(t, err)
 	assert.Equal(t, 291, got.DXCC.V, "the QSO is stored with what was found")
+}
+
+func TestHandleListenerEventTagsUnreachableLookup(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want []string
+	}{
+		{"unreachable", &callbook.NetworkError{Service: "QRZ", Err: errors.New("no route to host")}, []string{"pota", callinfo.PendingTag}},
+		{"timeout", fmt.Errorf("qrz: %w", context.DeadlineExceeded), []string{"pota", callinfo.PendingTag}},
+		{"login failed", fmt.Errorf("qrz: %w", callbook.ErrAuth), []string{"pota"}},
+		{"not found", callbook.ErrNotFound, []string{"pota"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := openTestLogbook(t)
+			send, _ := recordSends()
+			cb := cbmock.NewMockLooker(gomock.NewController(t))
+			cb.EXPECT().Lookup(gomock.Any(), "K1AB").Return(callbook.Result{}, tc.err)
+			info := callinfo.Looker{Callbook: cb, Logbook: store}
+			tags := []string{"pota"}
+
+			q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
+			handleListenerEvent(t.Context(), slog.New(slog.DiscardHandler), store, info, tags, send, listener.QSOReceived{Source: "WSJT-X", QSO: q})
+
+			qsos, err := store.Index(t.Context(), nil, logbook.Sort{}, 0, 10)
+			require.NoError(t, err)
+			require.Len(t, qsos, 1)
+			got, err := store.Get(t.Context(), qsos[0].ID)
+			require.NoError(t, err)
+			assert.ElementsMatch(t, tc.want, got.Tags)
+			assert.Equal(t, []string{"pota"}, tags, "the configured tags are not changed")
+		})
+	}
 }
 
 // wsjtxStatus returns a WSJT-X Status (type 1) packet, cut after the mode.

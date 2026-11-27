@@ -10,6 +10,10 @@ import (
 	"jstlogger/internal/logbook"
 )
 
+// PendingTag is the tag given to QSOs saved while the callbook was
+// unreachable, so they can be found and synced with it later.
+const PendingTag = "callbook-pending"
+
 // SyncOutcome is what syncing a QSO with the callbook did.
 type SyncOutcome int
 
