@@ -769,6 +769,50 @@ This recipe has been tested on macOS only. On Linux, the loopback interface
 is `lo`, which doesn't carry multicast by default (`ip link show lo` lacks
 the `MULTICAST` flag), so it needs more setup there.
 
+#### Highlighting worked-before calls
+
+A listener can also highlight the calls WSJT-X decodes in its Band
+Activity window, by whether they're in your logbook, as GridTracker2
+does. Turn it on with `highlight = true`:
+
+```toml
+[listeners.wsjtx]
+protocol  = "wsjtx"
+address   = "224.0.0.1:2237"
+interface = "lo0"
+highlight = true
+
+[listeners.wsjtx.colors.worked]            # worked, but not on this band and mode
+background = "#fff59d"
+
+[listeners.wsjtx.colors.worked_band_mode]  # worked on this band and mode
+foreground = "#9e9e9e"
+
+[listeners.wsjtx.colors.new]               # never worked
+background = ""
+foreground = ""
+```
+
+Each color is `"#rrggbb"`, or `""` to keep WSJT-X's own. The colors
+above are the defaults, which are filled in for any you leave out. New
+calls aren't highlighted by default, since WSJT-X can mark them itself
+(**Settings → Colors**).
+
+For each decode, jstlogger picks the calling station (the call after
+`CQ`, or the second call in a reply such as `W9XYZ K1ABC -10`) and looks
+up its base callsign, so `K1ABC/P` counts as `K1ABC`. The band and mode
+come from the dial frequency and mode WSJT-X reports, so a call isn't
+marked as worked on this band and mode until WSJT-X has sent its status
+once. When you log a QSO, the call's highlight updates on its next
+decode. Lookups are cached for two minutes, so a busy band doesn't query
+the logbook for every decode; a QSO you enter in jstlogger itself shows
+in the highlights within that time.
+
+The highlight is sent back to the WSJT-X that sent the decode, from the
+listener's port. Highlighting is off unless you turn it on, so if
+GridTracker2 already highlights calls for you, leave it off and the two
+won't fight over the colors.
+
 ## Development
 
 ```sh
@@ -806,8 +850,9 @@ internal/config/   config file loading, validation and session overrides
 internal/dxcc/     DXCC entity lookup from callsign prefixes (AD1C Big CTY)
 internal/eqsl/     eQSL AG member list download, storage and lookup
 internal/feed/     conditional download and sync metadata shared by the lists
+internal/highlight/ which decoded calls to highlight in WSJT-X, and in what colors
 internal/indexfmt/ QSO index format parsing and column values
-internal/listener/ UDP listeners that decode QSOs other programs log (WSJT-X)
+internal/listener/ UDP listeners for other programs (WSJT-X): logged QSOs, decodes, replies
 internal/logbook/  QSO storage: SQLite store, filtering, paging and tags
 internal/lotw/     LoTW user activity feed download, storage and recency
 internal/rig/      rigctld client: polls the rig and sends it commands

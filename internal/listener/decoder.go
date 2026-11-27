@@ -25,6 +25,9 @@ var (
 	ErrTruncated = errors.New("listener: truncated packet")
 	// ErrForeignSender means a packet came from a host other than this one.
 	ErrForeignSender = errors.New("listener: sender is not local")
+	// ErrNotRunning means Send was called while the Listener was not
+	// running.
+	ErrNotRunning = errors.New("listener: not running")
 )
 
 // NewDecoder returns the decoder for protocol. Unknown protocols return an

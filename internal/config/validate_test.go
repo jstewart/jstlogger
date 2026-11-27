@@ -410,6 +410,26 @@ func TestValidateListeners(t *testing.T) {
 			listener: Listener{Protocol: ProtocolWSJTX, Address: "239.255.0.1:2237", Tags: []string{"wsjtx"}},
 		},
 		{
+			name: "highlight colors",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:2237", Highlight: true, Colors: HighlightColors{
+				New:            HighlightColor{Background: "#00ff00", Foreground: "#ABCDEF"},
+				WorkedBandMode: HighlightColor{Foreground: "#808080"},
+			}},
+		},
+		{
+			name: "bad highlight colors",
+			listener: Listener{Protocol: ProtocolWSJTX, Address: "127.0.0.1:2237", Highlight: true, Colors: HighlightColors{
+				New:            HighlightColor{Background: "green"},
+				Worked:         HighlightColor{Foreground: "#12345"},
+				WorkedBandMode: HighlightColor{Background: "#gggggg"},
+			}},
+			wantKeys: []string{
+				"listeners.wsjtx.colors.new.background",
+				"listeners.wsjtx.colors.worked.foreground",
+				"listeners.wsjtx.colors.worked_band_mode.background",
+			},
+		},
+		{
 			name:     "unknown protocol",
 			listener: Listener{Protocol: "js8call", Address: "127.0.0.1:2237"},
 			wantKeys: []string{"listeners.wsjtx.protocol"},

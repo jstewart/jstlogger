@@ -174,9 +174,10 @@ func parsePagerIndexLines(raw any) (int, error) {
 // applyEntryDefaults fills per-entry defaults that viper cannot express
 // (the table key is dynamic), recovers empty tables that viper drops from
 // Unmarshal (including listener tables, whose address defaults to
-// DefaultListenerAddress), lowercases values that refer to station or
-// profile names, and normalizes logbook.distance_unit, callbook.services
-// and ui.background.
+// DefaultListenerAddress, and whose colors default to
+// DefaultHighlightColors when they highlight), lowercases values that
+// refer to station or profile names, and normalizes
+// logbook.distance_unit, callbook.services and ui.background.
 func applyEntryDefaults(v *viper.Viper, c *Config) {
 	c.DefaultStation = strings.ToLower(c.DefaultStation)
 	c.Rig.Profile = strings.ToLower(c.Rig.Profile)
@@ -236,9 +237,35 @@ func applyEntryDefaults(v *viper.Viper, c *Config) {
 		}
 	}
 	for name, l := range c.Listeners {
-		if !v.IsSet("listeners." + name + ".address") {
+		key := "listeners." + name + "."
+		if !v.IsSet(key + "address") {
 			l.Address = DefaultListenerAddress
 		}
+		if l.Highlight {
+			applyHighlightDefaults(v, key+"colors.", &l.Colors)
+		}
 		c.Listeners[name] = l
+	}
+}
+
+// applyHighlightDefaults fills in DefaultHighlightColors for each color
+// under key, such as "listeners.wsjtx.colors.", that the config leaves
+// unset. A color set to "" is kept.
+func applyHighlightDefaults(v *viper.Viper, key string, c *HighlightColors) {
+	for _, s := range []struct {
+		name     string
+		c        *HighlightColor
+		defaults HighlightColor
+	}{
+		{"new", &c.New, DefaultHighlightColors.New},
+		{"worked", &c.Worked, DefaultHighlightColors.Worked},
+		{"worked_band_mode", &c.WorkedBandMode, DefaultHighlightColors.WorkedBandMode},
+	} {
+		if !v.IsSet(key + s.name + ".background") {
+			s.c.Background = s.defaults.Background
+		}
+		if !v.IsSet(key + s.name + ".foreground") {
+			s.c.Foreground = s.defaults.Foreground
+		}
 	}
 }

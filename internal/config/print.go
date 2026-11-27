@@ -24,13 +24,17 @@ type tomlConfig struct {
 }
 
 // tomlListener mirrors Listener for encoding. It must stay convertible to
-// and from Listener; it differs only in omitting an unset interface and
-// tags, as tomlStation omits pota_references.
+// and from Listener; it differs only in omitting an unset interface, tags,
+// highlight and colors, as tomlStation omits pota_references. Colors are
+// written whole when any is set, so an empty one loads back empty rather
+// than as its default; see WriteTOML for when none is set.
 type tomlListener struct {
-	Protocol  string   `toml:"protocol"`
-	Address   string   `toml:"address"`
-	Interface string   `toml:"interface,omitempty"`
-	Tags      []string `toml:"tags,omitempty"`
+	Protocol  string          `toml:"protocol"`
+	Address   string          `toml:"address"`
+	Interface string          `toml:"interface,omitempty"`
+	Tags      []string        `toml:"tags,omitempty"`
+	Highlight bool            `toml:"highlight,omitempty"`
+	Colors    HighlightColors `toml:"colors,omitempty"`
 }
 
 // tomlCallbook mirrors Callbook for encoding, with cache_ttl as a duration
@@ -78,9 +82,11 @@ type tomlRig struct {
 
 // WriteTOML writes c to w as TOML that Load accepts, with rig.poll_interval
 // and callbook.cache_ttl as duration strings (e.g. "1s"). Absent [spawn]
-// tables, an empty logbook.path, and unset listener interfaces and tags are
-// omitted. Non-empty callbook passwords are written as "********", so a
-// config holding passwords does not round trip.
+// tables, an empty logbook.path, and unset listener interfaces, tags,
+// highlight and colors are omitted. Non-empty callbook passwords are
+// written as "********", so a config holding passwords does not round
+// trip. Nor does a highlighting listener with every color empty: its
+// colors are omitted, and load back as the defaults.
 func WriteTOML(w io.Writer, c Config) error {
 	tc := tomlConfig{
 		DefaultStation: c.DefaultStation,

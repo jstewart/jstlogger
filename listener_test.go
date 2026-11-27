@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"image/color"
 	"log/slog"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ import (
 	"jstlogger/internal/callinfo"
 	"jstlogger/internal/config"
 	"jstlogger/internal/dxcc"
+	"jstlogger/internal/highlight"
 	"jstlogger/internal/listener"
 	"jstlogger/internal/logbook"
 	"jstlogger/internal/tui"
@@ -263,4 +266,203 @@ func TestHandleListenerEventStoresAfterFailedLookup(t *testing.T) {
 	got, err := store.Get(t.Context(), qsos[0].ID)
 	require.NoError(t, err)
 	assert.Equal(t, 291, got.DXCC.V, "the QSO is stored with what was found")
+}
+
+// wsjtxStatus returns a WSJT-X Status (type 1) packet, cut after the mode.
+func wsjtxStatus(id string, dialHz uint64, mode string) []byte {
+	b := wsjtxHeader(1, id)
+	b = binary.BigEndian.AppendUint64(b, dialHz)
+	return appendQString(b, mode)
+}
+
+// wsjtxDecode returns a WSJT-X Decode (type 2) packet for message.
+func wsjtxDecode(id, message string) []byte {
+	b := wsjtxHeader(2, id)
+	b = append(b, 1)                        // new
+	b = append(b, make([]byte, 4+4+8+4)...) // time, SNR, delta time, delta frequency
+	b = appendQString(b, "~")               // mode
+	b = appendQString(b, message)
+	return append(b, 0, 0) // low confidence, off air
+}
+
+// wsjtxHeader starts a WSJT-X packet of msgType from id.
+func wsjtxHeader(msgType uint32, id string) []byte {
+	var b []byte
+	b = binary.BigEndian.AppendUint32(b, 0xADBCCBDA)
+	b = binary.BigEndian.AppendUint32(b, 3)
+	b = binary.BigEndian.AppendUint32(b, msgType)
+	return appendQString(b, id)
+}
+
+// appendQString appends s as a QByteArray.
+func appendQString(b []byte, s string) []byte {
+	b = binary.BigEndian.AppendUint32(b, uint32(len(s)))
+	return append(b, s...)
+}
+
+// fakeWSJTX is a WSJT-X instance on loopback that sends to a listener and
+// reads its replies.
+type fakeWSJTX struct {
+	t    *testing.T
+	conn *net.UDPConn
+}
+
+// newFakeWSJTX returns a fakeWSJTX sending to addr.
+func newFakeWSJTX(t *testing.T, addr string) fakeWSJTX {
+	t.Helper()
+	raddr, err := net.ResolveUDPAddr("udp", addr)
+	require.NoError(t, err)
+	conn, err := net.DialUDP("udp", nil, raddr)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	return fakeWSJTX{t: t, conn: conn}
+}
+
+// send sends packet, ignoring a refusal while the listener is not yet
+// bound.
+func (w fakeWSJTX) send(packet []byte) {
+	_, _ = w.conn.Write(packet)
+}
+
+// read returns the next packet sent back, or nil after wait.
+func (w fakeWSJTX) read(wait time.Duration) []byte {
+	require.NoError(w.t, w.conn.SetReadDeadline(time.Now().Add(wait)))
+	buf := make([]byte, 1024)
+	n, err := w.conn.Read(buf)
+	if err != nil {
+		return nil
+	}
+	return buf[:n]
+}
+
+func TestRunListenerHighlightsWorkedCalls(t *testing.T) {
+	store := openTestLogbook(t)
+	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
+	_, err := store.Import(t.Context(), []logbook.QSO{q}, nil)
+	require.NoError(t, err)
+	addr := freeUDPAddr(t)
+	send, _ := recordSends()
+	cfg := config.Listener{Protocol: "wsjtx", Address: addr, Highlight: true, Colors: config.DefaultHighlightColors}
+	startListener(t, "wsjtx", cfg, store, callinfo.Looker{}, slog.New(slog.DiscardHandler), send)
+
+	wsjtx := newFakeWSJTX(t, addr)
+	var reply []byte
+	require.Eventually(t, func() bool {
+		wsjtx.send(wsjtxStatus("WSJT-X", 14_074_000, "FT8"))
+		wsjtx.send(wsjtxDecode("WSJT-X", "CQ K1AB FN42"))
+		reply = wsjtx.read(50 * time.Millisecond)
+		return reply != nil
+	}, 3*time.Second, 10*time.Millisecond)
+
+	gray, err := config.ParseColor(config.DefaultHighlightColors.WorkedBandMode.Foreground)
+	require.NoError(t, err)
+	assert.Equal(t, listener.WSJTXHighlightCallsign("WSJT-X", "K1AB", nil, gray, false), reply)
+
+	// A call worked on another band is highlighted as worked.
+	wsjtx.send(wsjtxStatus("WSJT-X", 7_074_000, "FT8"))
+	wsjtx.send(wsjtxDecode("WSJT-X", "W9XYZ K1AB -10"))
+	yellow, err := config.ParseColor(config.DefaultHighlightColors.Worked.Background)
+	require.NoError(t, err)
+	assert.Equal(t, listener.WSJTXHighlightCallsign("WSJT-X", "K1AB", yellow, nil, false), wsjtx.read(3*time.Second))
+}
+
+func TestRunListenerHighlightsLoggedCall(t *testing.T) {
+	store := openTestLogbook(t)
+	addr := freeUDPAddr(t)
+	send, _ := recordSends()
+	cfg := config.Listener{Protocol: "wsjtx", Address: addr, Highlight: true, Colors: config.DefaultHighlightColors}
+	startListener(t, "wsjtx", cfg, store, callinfo.Looker{DXCC: dxcc.Default(), Logbook: store}, slog.New(slog.DiscardHandler), send)
+
+	wsjtx := newFakeWSJTX(t, addr)
+	// A new call isn't highlighted by default, so nothing comes back
+	// until the QSO is logged.
+	require.Eventually(t, func() bool {
+		wsjtx.send(wsjtxStatus("WSJT-X", 14_074_000, "FT8"))
+		wsjtx.send(wsjtxDecode("WSJT-X", "CQ K1AB FN42"))
+		wsjtx.send(wsjtxLoggedADIF("WSJT-X", testWSJTXADIF))
+		wsjtx.send(wsjtxDecode("WSJT-X", "W1XYZ K1AB RR73"))
+		return wsjtx.read(50*time.Millisecond) != nil
+	}, 3*time.Second, 10*time.Millisecond)
+}
+
+func TestRunListenerWithoutHighlightDoesNotReply(t *testing.T) {
+	store := openTestLogbook(t)
+	q := logbook.QSO{Call: "K1AB", StartUTC: time.Date(2026, 11, 23, 13, 1, 2, 0, time.UTC), Band: "20m", Mode: "FT8"}
+	_, err := store.Import(t.Context(), []logbook.QSO{q}, nil)
+	require.NoError(t, err)
+	addr := freeUDPAddr(t)
+	send, sent := recordSends()
+	startListener(t, "wsjtx", config.Listener{Protocol: "wsjtx", Address: addr}, store, callinfo.Looker{}, slog.New(slog.DiscardHandler), send)
+
+	wsjtx := newFakeWSJTX(t, addr)
+	// Logging a QSO shows the listener is up.
+	require.Eventually(t, func() bool {
+		wsjtx.send(wsjtxDecode("WSJT-X", "CQ K1AB FN42"))
+		wsjtx.send(wsjtxLoggedADIF("WSJT-X", strings.Replace(testWSJTXADIF, "130102", "140102", 1)))
+		return len(sent()) > 0
+	}, 3*time.Second, 10*time.Millisecond)
+	assert.Nil(t, wsjtx.read(100*time.Millisecond))
+}
+
+func TestHighlightScheme(t *testing.T) {
+	scheme, err := highlightScheme(config.HighlightColors{
+		New:            config.HighlightColor{Background: "#00ff00", Foreground: "#000000"},
+		WorkedBandMode: config.HighlightColor{Foreground: "#808080"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, highlight.Scheme{
+		highlight.StatusNew:            {Background: color.RGBA{G: 0xff, A: 0xff}, Foreground: color.RGBA{A: 0xff}},
+		highlight.StatusWorked:         {},
+		highlight.StatusWorkedBandMode: {Foreground: color.RGBA{R: 0x80, G: 0x80, B: 0x80, A: 0xff}},
+	}, scheme)
+
+	_, err = highlightScheme(config.HighlightColors{Worked: config.HighlightColor{Background: "yellow"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "worked")
+}
+
+func TestRunListenerBadHighlightColorsStillLogs(t *testing.T) {
+	store := openTestLogbook(t)
+	addr := freeUDPAddr(t)
+	var logs lockedBuffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	send, sent := recordSends()
+	cfg := config.Listener{Protocol: "wsjtx", Address: addr, Highlight: true, Colors: config.HighlightColors{Worked: config.HighlightColor{Background: "yellow"}}}
+	startListener(t, "wsjtx", cfg, store, callinfo.Looker{}, logger, send)
+
+	require.Eventually(t, func() bool {
+		sendUDP(t, addr, wsjtxLoggedADIF("WSJT-X", testWSJTXADIF))
+		return len(sent()) > 0
+	}, 3*time.Second, 20*time.Millisecond)
+	assert.Contains(t, logs.String(), "highlighting off")
+}
+
+func TestHighlightListenerEventQuietOnQuit(t *testing.T) {
+	store := openTestLogbook(t)
+	scheme, err := highlightScheme(config.DefaultHighlightColors)
+	require.NoError(t, err)
+	hl := highlight.New(store, scheme, highlightTTL)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	reply := func(context.Context, netip.AddrPort, []byte) error { return ctx.Err() }
+	ev := listener.DecodeReceived{Source: "WSJT-X", From: netip.MustParseAddrPort("127.0.0.1:50000"), Message: "CQ K1AB FN42"}
+	highlightListenerEvent(ctx, logger, hl, reply, ev)
+	assert.Empty(t, logs.String(), "a lookup cut short as the app quits is not a failure")
+}
+
+func TestHighlightListenerEventLogsFailures(t *testing.T) {
+	store, err := logbook.Open(t.Context(), filepath.Join(t.TempDir(), "logbook.db"), logbook.Options{})
+	require.NoError(t, err)
+	require.NoError(t, store.Close(), "lookups in a closed logbook fail")
+	hl := highlight.New(store, highlight.Scheme{}, highlightTTL)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	ev := listener.DecodeReceived{Source: "WSJT-X", From: netip.MustParseAddrPort("127.0.0.1:50000"), Message: "CQ K1AB FN42"}
+	highlightListenerEvent(t.Context(), logger, hl, nil, ev)
+	assert.Contains(t, logs.String(), "level=WARN")
+	assert.Contains(t, logs.String(), "lookup failed")
 }
