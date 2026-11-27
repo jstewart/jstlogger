@@ -205,8 +205,9 @@ question as the index, and `t` marks or unmarks it; both then move on to
 the next QSO, so you can work through the log while reading it. On the
 last QSO, `t` stays put and `d` shows the new last QSO; deleting the only
 QSO closes the pager. The mark-prefix works too: `;d` deletes, `;s`
-saves, `;y` tags and `;Y` untags the marked QSOs, with the same prompts
-as in the index, and the pager shows the result. Marking by pattern
+saves, `;y` tags and `;Y` untags the marked QSOs, and `;c` looks them up
+in the [callbook](#callbook-lookup) when one is configured, with the same
+prompts as in the index, and the pager shows the result. Marking by pattern
 (`T`, `ctrl+t`), limiting (`l`), searching (`/`) and jumping (`1`–`9`)
 stay in the index, since they change which QSOs are listed or where the
 cursor is.
@@ -641,6 +642,19 @@ name and email always, and the QTH, grid, state and county only when that
 QSO was with exactly the same call. A failure also shows why: `callbook
 login failed`, `lookup limit reached`, `callbook unreachable` or `lookup
 failed`. A failed lookup never stops you saving the QSO.
+
+To fill in QSOs logged offline or imported, mark them and press `;c`.
+After a y/N question, jstlogger looks each marked QSO up in the callbook
+alone, never in the logbook, and fills in its empty fields, as the New QSO
+screen does; a value the QSO already has is never overwritten. It looks
+up one QSO at a time, showing its progress on the status line, such as
+`Looking up 37/120… esc to stop`, and `esc` stops it. It stops by itself
+when the callbook is unreachable, the login fails or the lookup limit is
+reached, since every QSO left would fail the same way. The status line
+then sums it up, such as `84 updated, 12 unchanged, 3 not found, stopped:
+callbook unreachable`. The QSOs it updated or found unchanged are
+unmarked; the rest stay marked, so pressing `;c` again retries them. `;c`
+is only available when a callbook is configured.
 
 The passwords live in the config file, so keep it private with
 `chmod 600`; jstlogger warns at startup when the file holds a password and

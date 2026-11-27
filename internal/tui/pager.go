@@ -184,6 +184,7 @@ type pagerKeyMap struct {
 	BulkSave   key.Binding
 	BulkTag    key.Binding
 	BulkUntag  key.Binding
+	BulkSync   key.Binding
 }
 
 // defaultPagerKeys returns the pager's keybindings, with the lookup keys
@@ -199,6 +200,7 @@ func defaultPagerKeys(lookup bool, ik indexKeyMap) pagerKeyMap {
 		BulkSave:   ik.BulkSave,
 		BulkTag:    ik.BulkTag,
 		BulkUntag:  ik.BulkUntag,
+		BulkSync:   ik.BulkSync,
 		Next: key.NewBinding(
 			key.WithKeys("j", "down"),
 			key.WithHelp("j/↓", "next QSO"),
@@ -300,7 +302,7 @@ func (k pagerKeyMap) sections() []helpSection {
 		{"scrolling", []key.Binding{k.PageDown, k.PageUp, k.Top, k.Bottom}},
 		{"layout", []key.Binding{k.Grow, k.Shrink, k.ResetSize}},
 		{"lookup", []key.Binding{k.LookupPrefix, k.LookupQRZ, k.LookupHamQTH, k.LookupEQSL}},
-		{"marks", []key.Binding{k.Mark, k.MarkPrefix, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag}},
+		{"marks", []key.Binding{k.Mark, k.MarkPrefix, k.BulkDelete, k.BulkSave, k.BulkTag, k.BulkUntag, k.BulkSync}},
 	}
 }
 

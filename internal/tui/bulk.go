@@ -36,20 +36,21 @@ type pendingConfirm struct {
 
 // indexBulkMsg reports the outcome of a bulk operation on the marked QSOs,
 // or of deleting the QSO under the cursor: a status message, the IDs of
-// the QSOs it deleted, whose marks are dropped, and whether the index must
-// reload.
+// the QSOs it deleted, whose marks are dropped, the IDs of the QSOs to
+// unmark, and whether the index must reload.
 type indexBulkMsg struct {
 	status  string
 	deleted []int64
+	unmark  []int64
 	reload  bool
 	err     error
 }
 
 // bulkFuncs returns the bulk operations on the marked QSOs, which the
-// mark-prefix runs.
+// mark-prefix runs. The sync with the callbook needs a callbook.
 func (m Model) bulkFuncs() []markedFunc {
 	k := m.indexKeys
-	return []markedFunc{
+	funcs := []markedFunc{
 		{keys: k.BulkDelete, run: Model.askDelete},
 		{keys: k.BulkSave, run: func(m Model, _ []int64) (Model, tea.Cmd) {
 			return m.openPrompt(promptSave)
@@ -61,6 +62,10 @@ func (m Model) bulkFuncs() []markedFunc {
 			return m.openPrompt(promptUntag)
 		}},
 	}
+	if m.callbook != nil {
+		funcs = append(funcs, markedFunc{keys: k.BulkSync, run: Model.askSync})
+	}
+	return funcs
 }
 
 // markedIDs returns the IDs of the marked QSOs in ascending order.
@@ -258,9 +263,9 @@ func saveQSOsCmd(s logbook.Store, ids []int64, path, version string) tea.Cmd {
 }
 
 // applyBulk reports the outcome of a bulk operation on the status line,
-// drops the marks of the QSOs it deleted and, if it changed the QSOs,
-// returns a command that reloads the index, keeping the cursor on its QSO
-// when it is still there. When the cursor's QSO was deleted, the cursor
+// drops the marks of the QSOs it deleted or asks to unmark and, if it
+// changed the QSOs, returns a command that reloads the index, keeping the
+// cursor on its QSO when it is still there. When the cursor's QSO was deleted, the cursor
 // moves on to the next QSO left, as d does, or else stays on the same row.
 // The pager fetches its QSO again, as its tags may have changed.
 func (m Model) applyBulk(msg indexBulkMsg) (Model, tea.Cmd) {
@@ -268,7 +273,7 @@ func (m Model) applyBulk(msg indexBulkMsg) (Model, tea.Cmd) {
 		m.idx.msg = msg.err.Error()
 		return m, nil
 	}
-	for _, id := range msg.deleted {
+	for _, id := range slices.Concat(msg.deleted, msg.unmark) {
 		delete(m.idx.marks, id)
 	}
 	m.idx.msg = msg.status
