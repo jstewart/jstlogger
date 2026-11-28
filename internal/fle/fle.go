@@ -90,27 +90,42 @@ type state struct {
 	hour, minute int
 }
 
-// Parse reads text, one line at a time, into QSOs.
+// Parse reads text, one line at a time, into QSOs. Each line is either a
+// line of operators or a QSO line.
 //
-// A line of operators sets what the QSOs after it share: a band such as
-// 20m, which clears the frequency; a frequency in MHz such as 14.074, which
-// sets the band; an ADIF mode or submode such as cw or ft4; "date
-// YYYY-MM-DD"; or "day +", one day forward for each +. Every token on the
-// line must be an operator, or the line changes nothing.
+// Operators set what the QSOs after them share. Every token on the line
+// must be one, or the line changes nothing:
 //
-// A QSO line starts with a time: HHMM; or two digits, the minute, in the
-// hour of the QSO before; or one digit, the last digit of the minute,
-// keeping the tens of the QSO before. A time lower than the QSO before's
-// moves on to the next hour, or the next ten minutes for one digit, and
-// past midnight to the next day; a full HHMM never changes the date. A
-// callsign comes next, then optionally the report sent and the report received, which
-// default to the mode's usual report and may be just the signal digit.
-// After those come, in any order, a grid (optionally after #), a POTA,
-// WWFF, SOTA or IOTA reference, the name after @, a comment in <> and a
-// QSL message in []. Each QSO is built with qsoentry.Build.
+//   - a band, such as 20m, which clears the frequency
+//   - a frequency in MHz, such as 14.074, which sets the band
+//   - an ADIF mode or submode, such as cw or ft4
+//   - "date YYYY-MM-DD"
+//   - "day +", which moves the date forward a day for each +
 //
-// Blank lines are skipped. A line that can't be read, or whose QSO Build
-// rejects, is Ignored and changes nothing that carries to later lines.
+// A QSO line starts with a time, in one of three forms:
+//
+//   - HHMM, the full time
+//   - two digits, the minute, in the hour of the QSO before
+//   - one digit, the last digit of the minute, keeping the tens of the
+//     QSO before
+//
+// A two- or one-digit time earlier than the QSO before moves on to the
+// next hour, or to the next ten minutes for one digit, and past midnight
+// to the next day. A full HHMM never changes the date.
+//
+// The callsign comes next, then optionally the report sent and the report
+// received. A missing report is the mode's usual one, and a single digit
+// is the signal part of it. After those come, in any order:
+//
+//   - a grid, optionally after #
+//   - a POTA, WWFF, SOTA or IOTA reference
+//   - the name, after @
+//   - a comment, in <>
+//   - a QSL message, in []
+//
+// Each QSO is built with qsoentry.Build. Blank lines are skipped. A line
+// that can't be read, or whose QSO Build rejects, is Ignored and changes
+// nothing that carries to later lines.
 func Parse(text string, opts Options) Result {
 	var r Result
 	st := state{date: opts.Now.UTC().Truncate(oneDay)}
