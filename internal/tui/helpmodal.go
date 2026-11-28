@@ -350,12 +350,15 @@ func (h helpModal) view(st styles, width, height int) string {
 }
 
 // contextKeys returns the keybindings in effect, which the footer and the
-// help modal show: the open rig modal's, or else the open prompt's, or
-// else the New QSO screen's or its open pick list's, or else the global
-// keys and the pager's or the index's.
+// help modal show: the open rig modal's, or else the open FLE dialog's, or
+// else the open prompt's, or else the New QSO screen's or its open pick
+// list's, or else the global keys and the pager's or the index's.
 func (m Model) contextKeys() helpKeyMap {
 	if m.rigModal.open {
 		return m.rigModal.keys()
+	}
+	if m.fle.open {
+		return m.fle.keys()
 	}
 	if m.promptOpen() {
 		if isKeyPrompt(m.prompt) {
