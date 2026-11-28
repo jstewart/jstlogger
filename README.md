@@ -358,6 +358,7 @@ The index keys follow NeoMutt's generic menu.
 | `ctrl+l`                  | Reload the index and redraw the screen             |
 | `enter`                   | [Show the QSO](#showing-a-qso) in the pager        |
 | `e`                       | [Edit the QSO](#editing-a-qso)                     |
+| `A`                       | [Enter QSOs as FLE](#fast-log-entry) in `$EDITOR`  |
 | `r`                       | [Set the rig](#rig-control)                        |
 | `?` / `F1`                | [Show every key](#help)                            |
 | `q` / `ctrl+c`            | Quit                                               |
@@ -514,6 +515,55 @@ them. The rig never changes an edited QSO, and live mode is off while
 editing. The worked-before panel leaves out the QSO being edited, and
 never marks its call as new.
 
+### Fast Log Entry
+
+`A` in the index opens your editor (`$VISUAL`, then `$EDITOR`, then `vi`)
+on an empty buffer, to enter a batch of QSOs at once, such as from a paper
+log, in [Fast Log Entry](https://df3cb.com/fle/documentation/) text. The
+syntax is [Wavelog's Simple
+FLE](https://docs.wavelog.org/user-guide/logbook/simple-fle/): each line
+is one QSO, and the date, band, frequency and mode carry over from line to
+line until changed.
+
+```
+date 2026-11-27
+20m ssb
+1734 4W7EST
+5 HB9HIL 57 55
+cw
+1800 DJ7NT #JO31
+13 dn5ce @Anne <fun qso> k-0003
+```
+
+- **Date, band, frequency and mode** lines set what follows: `date
+  YYYY-MM-DD`, `day +` (one day forward per `+`), a band such as `20m`, a
+  frequency in MHz such as `14.074`, which sets the band too, and a mode
+  such as `ssb`, `cw` or `ft8`. Several can share a line, as in `20m ssb`.
+  Without a `date` line, the date is today (UTC).
+- **QSO lines** start with the UTC time and the call. The first QSO gives
+  the full time, `1734`; after that, two digits give the minute and one
+  digit its last digit, so `5` means 17:35 and `52` means 17:52. A time
+  earlier than the last moves forward into the next hour, and past
+  midnight into the next day. A full time never changes the date; use
+  `day +` for that.
+- **Signal reports** follow the call: sent, then received. A missing
+  report is the mode's usual one (59, 599 or -10), one value is the sent
+  report, and a single digit is the signal, so `7 3` on SSB means 57 sent
+  and 53 received. Digital modes take dB values such as `-4 -12`.
+- **Then, in any order:** a grid (`JO31` or `#JO31`), a POTA, WWFF, SOTA
+  or IOTA reference (`k-0003`, comma-separated for several parks), `@Name`,
+  a `<comment>` and a `[QSL message]`.
+
+Lines that don't parse are ignored. When the editor exits, a dialog lists
+the QSOs read, and the ignored lines with why. `s` saves them, `e` reopens
+the editor on the same text to fix a mistake, and `esc` discards
+everything. The QSOs are saved with the station chosen by `--station` or
+`default_station`, and filled in
+from the [callbook](#callbook-lookup) as the New QSO screen does, without
+overwriting what you entered; when the callbook is unreachable they are
+tagged `callbook-pending`. QSOs already in the logbook are skipped, and
+the status line says how many were added and skipped.
+
 ### Rig control
 
 jstlogger talks to your radio through Hamlib's `rigctld`. It shows the
@@ -656,9 +706,9 @@ callbook unreachable`. The QSOs it updated or found unchanged are
 unmarked; the rest stay marked, so pressing `;c` again retries them. `;c`
 is only available when a callbook is configured.
 
-A QSO saved from the New QSO screen or received by a listener while the
-callbook is unreachable, or too slow to answer, is tagged
-`callbook-pending`. Back online, mark them with `T ~y callbook-pending`
+A QSO saved from the New QSO screen or [FLE](#fast-log-entry), or
+received by a listener, while the callbook is unreachable, or too slow to
+answer, is tagged `callbook-pending`. Back online, mark them with `T ~y callbook-pending`
 and press `;c`: each QSO the callbook finds loses the tag, and the rest
 keep it for next time.
 

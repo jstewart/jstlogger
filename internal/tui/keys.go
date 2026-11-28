@@ -157,6 +157,8 @@ type indexKeyMap struct {
 	Jump       key.Binding
 	Open       key.Binding
 	NewQSO     key.Binding
+	// FLE opens the editor to enter QSOs as Fast Log Entry text.
+	FLE key.Binding
 	// Edit opens the QSO under the cursor in the QSO form.
 	Edit           key.Binding
 	Mark           key.Binding
@@ -252,6 +254,10 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 			key.WithKeys("a"),
 			key.WithHelp("a", "new QSO"),
 		),
+		FLE: key.NewBinding(
+			key.WithKeys("A"),
+			key.WithHelp("A", "enter QSOs as FLE"),
+		),
 		Edit: key.NewBinding(
 			key.WithKeys("e"),
 			key.WithHelp("e", "edit"),
@@ -337,7 +343,7 @@ func defaultIndexKeys(enabled bool) indexKeyMap {
 	for _, b := range []*key.Binding{
 		&k.Next, &k.Prev, &k.NextPage, &k.PrevPage, &k.HalfDown, &k.HalfUp,
 		&k.NextLine, &k.PrevLine, &k.TopPage, &k.MiddlePage, &k.BottomPage,
-		&k.First, &k.Last, &k.Jump, &k.Open, &k.NewQSO, &k.Edit, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
+		&k.First, &k.Last, &k.Jump, &k.Open, &k.NewQSO, &k.FLE, &k.Edit, &k.Mark, &k.MarkPattern, &k.UnmarkPattern,
 		&k.Limit, &k.Sort, &k.SortReverse, &k.Reload, &k.Search, &k.SearchReverse, &k.SearchNext,
 		&k.SearchOpposite, &k.Delete, &k.MarkPrefix, &k.PrefixCancel,
 		&k.BulkDelete, &k.BulkSave, &k.BulkTag, &k.BulkUntag, &k.BulkSync,
@@ -361,7 +367,7 @@ func (k indexKeyMap) sections() []helpSection {
 			k.Next, k.Prev, k.NextLine, k.PrevLine, k.NextPage, k.PrevPage, k.HalfDown, k.HalfUp,
 			k.TopPage, k.MiddlePage, k.BottomPage, k.First, k.Last, k.Jump,
 		}},
-		{"QSOs", []key.Binding{k.Open, k.NewQSO, k.Edit, k.Delete}},
+		{"QSOs", []key.Binding{k.Open, k.NewQSO, k.FLE, k.Edit, k.Delete}},
 		{"view", []key.Binding{k.Limit, k.Sort, k.SortReverse, k.Reload}},
 		{"search", []key.Binding{k.Search, k.SearchReverse, k.SearchNext, k.SearchOpposite}},
 		{"marks", []key.Binding{

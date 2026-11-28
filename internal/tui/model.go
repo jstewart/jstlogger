@@ -108,6 +108,10 @@ type Model struct {
 	// entry is the New QSO screen, shown in the body in place of the index
 	// while open.
 	entry entry
+	// fle shows the QSOs entered as Fast Log Entry text, over the body,
+	// while open, and fleSaving is true while they are saved.
+	fle       fleDialog
+	fleSaving bool
 	// stations are the station profiles the New QSO screen picks our side
 	// of each QSO from, the first by default.
 	stations []qsoentry.Station
@@ -202,6 +206,9 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 		}
 		if m.rigModal.open {
 			return m.updateRigModal(msg)
+		}
+		if m.fle.open {
+			return m.updateFLE(msg)
 		}
 		if m.promptOpen() {
 			return m.updatePrompt(msg)
@@ -303,6 +310,12 @@ func (m Model) update(msg tea.Msg) (Model, tea.Cmd) {
 
 	case entryEditedMsg:
 		return m.applyEdited(msg)
+
+	case fleEditedMsg:
+		return m.applyFLEEdited(msg)
+
+	case fleSavedMsg:
+		return m.applyFLESaved(msg)
 
 	case entryWorkedTickMsg:
 		return m, m.tickWorked(msg)
@@ -417,9 +430,12 @@ func (m Model) View() tea.View {
 	case m.logbook != nil:
 		content = m.idx.view(m.styles, m.bodyWidth(), bodyHeight, m.prompt == promptJump)
 	}
-	// The help modal opens over the rig modal.
+	// The help modal opens over the rig modal and the FLE dialog.
 	if m.rigModal.open {
 		content = overlay(content, m.rigModalView(m.bodyWidth(), bodyHeight), m.bodyWidth(), bodyHeight)
+	}
+	if m.fle.open {
+		content = overlay(content, m.fleView(m.bodyWidth(), bodyHeight), m.bodyWidth(), bodyHeight)
 	}
 	if m.helpModal.open {
 		content = m.overlayHelp(content, m.bodyWidth(), bodyHeight)
@@ -557,6 +573,8 @@ func (m Model) updateIndex(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.openPager(), nil
 	case key.Matches(msg, k.NewQSO):
 		return m.openEntry()
+	case key.Matches(msg, k.FLE):
+		return m.startFLE()
 	case key.Matches(msg, k.Edit):
 		return m, m.editCurrent()
 	case key.Matches(msg, k.Mark):
