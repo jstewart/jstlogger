@@ -102,8 +102,8 @@ type state struct {
 // hour of the QSO before; or one digit, the last digit of the minute,
 // keeping the tens of the QSO before. A time lower than the QSO before's
 // moves on to the next hour, or the next ten minutes for one digit, and
-// past midnight to the next day. A callsign comes
-// next, then optionally the report sent and the report received, which
+// past midnight to the next day; a full HHMM never changes the date. A
+// callsign comes next, then optionally the report sent and the report received, which
 // default to the mode's usual report and may be just the signal digit.
 // After those come, in any order, a grid (optionally after #), a POTA,
 // WWFF, SOTA or IOTA reference, the name after @, a comment in <> and a

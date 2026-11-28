@@ -323,6 +323,13 @@ func TestParseRolledDateCarries(t *testing.T) {
 	assert.Equal(t, "2026-11-27 10:00", r.QSOs[2].QSO.StartUTC.Format("2006-01-02 15:04"))
 }
 
+func TestParseFullTimeKeepsDate(t *testing.T) {
+	r := Parse("date 2026-11-26\n20m cw\n2350 K1ABC\n0010 K1ABD", Options{Now: testNow})
+	require.Empty(t, r.Ignored)
+	require.Len(t, r.QSOs, 2)
+	assert.Equal(t, "2026-11-26 00:10", r.QSOs[1].QSO.StartUTC.Format("2006-01-02 15:04"))
+}
+
 func TestParseStation(t *testing.T) {
 	st := qsoentry.Station{
 		Name:     "home",
